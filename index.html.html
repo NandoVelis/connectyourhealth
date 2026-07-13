@@ -1383,8 +1383,17 @@ function lastMonthDates(baseDate){
   return monthDates(d);
 }
 async function loadWeight(dateStr){
-  const bundle = await loadDayBundle(dateStr);
-  return bundle.weight || null;
+const { data, error } = await supabaseClient
+.from('weight')
+.select('*')
+.eq('weight_date', dateStr)
+.single();
+if(error || !data){
+return null;
+}
+return {
+kg: data.kg
+};
 }
 async function saveWeight(dateStr, kg){
   return saveDayBundle(dateStr, {weight: {kg}});
