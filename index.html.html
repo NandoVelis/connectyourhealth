@@ -1383,11 +1383,13 @@ function lastMonthDates(baseDate){
   return monthDates(d);
 }
 async function loadWeight(dateStr){
+console.log("LOAD WEIGHT", dateStr);
 const { data, error } = await supabaseClient
 .from('weight')
 .select('*')
 .eq('weight_date', dateStr)
 .single();
+console.log("WEIGHT RESULT", data, error);
 if(error || !data){
 return null;
 }
