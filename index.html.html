@@ -765,10 +765,12 @@ async function saveMeals(dateStr, meals){
   return saveDayBundle(dateStr, {meals});
 }
 async function loadTraining(dateStr){
+console.log("LOAD TRAINING", dateStr);
 const { data, error } = await supabaseClient
 .from('training')
 .select('*')
 .eq('training_date', dateStr);
+console.log("TRAINING RESULT", data, error);
 if(error || !data || data.length === 0){
 return null;
 }
