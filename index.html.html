@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <title>InFood = Output Dashboard</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
@@ -579,9 +580,34 @@
 </div>
 
 <script>
+// =====================
+// SUPABASE
+// =====================
+const SUPABASE_URL = "https://mhvduufxeqyxgkkvwimx.supabase.co";
+const SUPABASE_KEY = "sb_publishable_Oy2NNm-yMP358eH3NPHl1A_d24-72WS";
+const supabaseClient = window.supabase.createClient(
+  SUPABASE_URL,
+  SUPABASE_KEY
+);
+console.log("Supabase verbonden");
+  async function testSupabase() {
+const { data, error } = await supabaseClient
+.from("daily_data")
+.insert([
+{
+user_name: "Nando",
+data_date: new Date().toISOString().split("T")[0],
+hrv: 85,
+hr_rest: 36,
+sleep_minutes: 475
+}
+]);
+console.log("Supabase data:", data);
+console.log("Supabase error:", error);
+}
+testSupabase();
 const state = { currentDate: new Date(), tab: 'dashboard' };
-
-function extractJson(text){
+  function extractJson(text){
   const clean = text.replace(/```json|```/g,'').trim();
   const start = clean.indexOf('{');
   const end = clean.lastIndexOf('}');
