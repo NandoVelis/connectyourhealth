@@ -765,8 +765,23 @@ async function saveMeals(dateStr, meals){
   return saveDayBundle(dateStr, {meals});
 }
 async function loadTraining(dateStr){
-  const bundle = await loadDayBundle(dateStr);
-  return bundle.training || null;
+const { data, error } = await supabaseClient
+.from('training')
+.select('*')
+.eq('training_date', dateStr);
+if(error || !data || data.length === 0){
+return null;
+}
+return {
+activities: data.map(item => ({
+name: item.activity_name,
+kcal: item.kcal,
+km: item.km,
+type: item.activity_type
+})),
+restKcal: data[0].rest_kcal,
+totalKcal: data[0].total_kcal
+};
 }
 async function saveTraining(dateStr, data){
   return saveDayBundle(dateStr, {training: data});
