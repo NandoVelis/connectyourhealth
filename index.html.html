@@ -773,8 +773,19 @@ async function saveTraining(dateStr, data){
 }
 function vitalsKey(dateStr){ return 'vitals-'+dateStr; }
 async function loadVitals(dateStr){
-  const bundle = await loadDayBundle(dateStr);
-  return bundle.vitals || null;
+const { data, error } = await supabaseClient
+.from('vitals')
+.select('*')
+.eq('vital_date', dateStr)
+.single();
+if(error || !data){
+return null;
+}
+return {
+hrRest: data.hr_rest,
+hrv: data.hrv,
+sleepMinutes: data.sleep_minutes
+};
 }
 async function saveVitals(dateStr, data){
   return saveDayBundle(dateStr, {vitals: data});
