@@ -1,0 +1,2165 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>InFood = Output Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#F2F1EA;
+    --card:#FCFBF7;
+    --ink:#1F2A24;
+    --ink-soft:#5B6660;
+    --line:#DBD6C8;
+    --amber:#B8863B;
+    --amber-soft:#EFE1C6;
+    --pine:#3E6259;
+    --pine-soft:#DCE7E1;
+    --clay:#A44A3F;
+    --clay-soft:#F0DAD5;
+    --radius:14px;
+  }
+  html.dark{
+    --paper:#181D1A;
+    --card:#20261F;
+    --ink:#EDEFEA;
+    --ink-soft:#9AA69E;
+    --line:#38423C;
+    --amber:#D9A85C;
+    --amber-soft:#3A311F;
+    --pine:#7FA695;
+    --pine-soft:#1F2E28;
+    --clay:#D98577;
+    --clay-soft:#3A2320;
+  }
+  html.dark body{background:var(--paper);}
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--paper);
+    color:var(--ink);
+    font-family:'Inter',sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:920px;margin:0 auto;padding:28px 20px 80px;}
+  header.top{
+    display:flex;justify-content:space-between;align-items:flex-end;
+    margin-bottom:22px;flex-wrap:wrap;gap:12px;
+  }
+  .brand-eyebrow{
+    font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.14em;
+    text-transform:uppercase;color:var(--pine);margin:0 0 4px;
+  }
+  h1{
+    font-family:'Fraunces',serif;font-weight:600;font-size:32px;margin:0;
+    letter-spacing:-0.01em;
+  }
+  .datenav{display:flex;align-items:center;gap:10px;}
+  .datenav button{
+    border:1px solid var(--line);background:var(--card);border-radius:8px;
+    width:32px;height:32px;font-size:16px;cursor:pointer;color:var(--ink);
+  }
+  .datenav button:hover{background:var(--amber-soft);}
+  .dateLabel{
+    font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--ink-soft);
+    min-width:120px;text-align:center;
+  }
+  nav.tabs{display:flex;gap:6px;margin-bottom:22px;border-bottom:1px solid var(--line);}
+  nav.tabs button{
+    border:none;background:none;padding:10px 4px;margin-right:18px;
+    font-family:'Inter',sans-serif;font-weight:600;font-size:14px;color:var(--ink-soft);
+    cursor:pointer;border-bottom:2px solid transparent;
+  }
+  nav.tabs button.active{color:var(--ink);border-bottom-color:var(--amber);}
+
+  .grid{display:grid;grid-template-columns:1.3fr 1fr;gap:16px;margin-bottom:16px;}
+  @media(max-width:680px){.grid{grid-template-columns:1fr;}}
+
+  .card{
+    background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+    padding:20px;
+  }
+  .card h3{
+    margin:0 0 14px;font-family:'Inter',sans-serif;font-size:12px;font-weight:700;
+    text-transform:uppercase;letter-spacing:.08em;color:var(--ink-soft);
+  }
+  .balans-number{
+    font-family:'Fraunces',serif;font-size:58px;font-weight:600;line-height:1;
+    letter-spacing:-0.02em;
+  }
+  .balans-sub{font-size:13px;color:var(--ink-soft);margin-top:8px;}
+  .balans-pos{color:var(--pine);}
+  .balans-neg{color:var(--clay);}
+
+  .stat-row{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--line);}
+  .stat-row:last-child{border-bottom:none;}
+  .stat-label{font-size:13px;color:var(--ink-soft);}
+  .stat-val{font-family:'JetBrains Mono',monospace;font-size:15px;font-weight:700;}
+
+  .macro-bars{display:flex;flex-direction:column;gap:10px;}
+  .macro-line{display:flex;align-items:center;gap:10px;}
+  .macro-name{width:70px;font-size:12px;color:var(--ink-soft);}
+  .macro-track{flex:1;height:8px;background:var(--line);border-radius:4px;overflow:hidden;}
+  .macro-fill{height:100%;border-radius:4px;}
+  .macro-val{width:52px;text-align:right;font-family:'JetBrains Mono',monospace;font-size:12px;}
+
+  .meal-item{
+    display:flex;justify-content:space-between;align-items:center;
+    padding:12px 0;border-bottom:1px solid var(--line);
+  }
+  .meal-item:last-child{border-bottom:none;}
+  .meal-desc{font-size:14px;font-weight:500;}
+  .meal-meta{font-size:12px;color:var(--ink-soft);margin-top:2px;}
+  .meal-kcal{font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:700;white-space:nowrap;margin-left:12px;}
+  .meal-del{background:none;border:none;color:var(--clay);cursor:pointer;font-size:12px;margin-left:10px;}
+  .empty{color:var(--ink-soft);font-size:13px;font-style:italic;padding:8px 0;}
+
+  .refresh-btn{
+    font-family:'JetBrains Mono',monospace;font-size:11px;border:1px solid var(--line);
+    background:var(--pine-soft);color:var(--pine);border-radius:7px;padding:5px 10px;cursor:pointer;
+  }
+  .refresh-btn:hover{filter:brightness(0.96);}
+  .refresh-btn:disabled{opacity:.5;cursor:default;}
+
+  /* Invoeren tab */
+  .form-card{padding:24px;}
+  .form-row{margin-bottom:14px;}
+  label{display:block;font-size:12px;font-weight:600;color:var(--ink-soft);margin-bottom:6px;text-transform:uppercase;letter-spacing:.04em;}
+  input[type=text],input[type=number],select,textarea{
+    width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:8px;
+    font-family:'Inter',sans-serif;font-size:14px;background:var(--card);color:var(--ink);
+  }
+  .form-grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+  .form-grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;}
+  .photo-drop{
+    border:2px dashed var(--line);border-radius:12px;padding:24px;text-align:center;
+    cursor:pointer;color:var(--ink-soft);font-size:13px;margin-bottom:16px;
+  }
+  .photo-drop:hover{border-color:var(--amber);background:var(--amber-soft);}
+  .photo-preview{max-width:100%;max-height:220px;border-radius:10px;margin-bottom:12px;display:none;}
+  .btn-primary{
+    background:var(--pine);color:#fff;border:none;border-radius:9px;padding:12px 20px;
+    font-family:'Inter',sans-serif;font-weight:600;font-size:14px;cursor:pointer;
+  }
+  .btn-primary:hover{background:#345048;}
+  .btn-primary:disabled{opacity:.5;cursor:default;}
+  .btn-secondary{
+    background:none;border:1px solid var(--line);border-radius:9px;padding:12px 20px;
+    font-family:'Inter',sans-serif;font-weight:600;font-size:14px;cursor:pointer;color:var(--ink);
+  }
+  .status-msg{font-size:13px;color:var(--pine);margin-top:10px;}
+  .status-err{color:var(--clay);}
+
+  /* Geschiedenis */
+  table{width:100%;border-collapse:collapse;}
+  th{
+    text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.06em;
+    color:var(--ink-soft);padding:8px 10px;border-bottom:1px solid var(--line);
+  }
+  td{padding:10px;font-size:13px;border-bottom:1px solid var(--line);font-family:'JetBrains Mono',monospace;}
+  td.desc-cell{font-family:'Inter',sans-serif;}
+  tr:hover td{background:var(--amber-soft);}
+
+  .footer-note{font-size:11px;color:var(--ink-soft);text-align:center;margin-top:36px;}
+
+  .table-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;}
+  .table-scroll th, .table-scroll td{padding:7px 6px;font-size:11.5px;}
+
+  .vitals-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;}
+
+  @media(max-width:600px){
+    .wrap{padding:18px 14px 60px;}
+    header.top{align-items:flex-start;}
+    h1{font-size:24px;}
+    .brand-eyebrow{font-size:10px;}
+    .datenav{width:100%;justify-content:space-between;}
+    .datenav button{width:40px;height:40px;font-size:18px;}
+    nav.tabs{overflow-x:auto;-webkit-overflow-scrolling:touch;flex-wrap:nowrap;white-space:nowrap;padding-bottom:2px;}
+    nav.tabs button{margin-right:12px;font-size:13px;padding:8px 2px;flex-shrink:0;}
+    .card{padding:16px;}
+    .balans-number{font-size:40px;}
+    .form-grid4{grid-template-columns:1fr 1fr;}
+    .vitals-grid{grid-template-columns:1fr 1fr;}
+    .macro-name{width:56px;font-size:11px;}
+    th,td{padding:8px 6px;font-size:12px;}
+    .btn-primary,.btn-secondary{padding:12px 16px;}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div>
+      <p class="brand-eyebrow">ConnectYourHealth</p>
+      <h1>InFood = Output</h1>
+    </div>
+    <div class="datenav">
+      <button id="darkModeToggle" title="Donkere modus aan/uit">&#9789;</button>
+      <button id="prevDay">&larr;</button>
+      <span class="dateLabel" id="dateLabel">-</span>
+      <button id="nextDay">&rarr;</button>
+    </div>
+  </header>
+
+  <nav class="tabs">
+    <button data-tab="dashboard" class="active">Persoonlijk Dashboard</button>
+    <button data-tab="invoer">InFood</button>
+    <button data-tab="week">Week</button>
+    <button data-tab="maand">Maand</button>
+    <button data-tab="geschiedenis">Geschiedenis</button>
+    <button data-tab="team">Team</button>
+  </nav>
+
+  <!-- DASHBOARD -->
+  <section id="tab-dashboard">
+    <div class="card" style="margin-bottom:16px;">
+      <h3>Tredict-data bijwerken via chat</h3>
+      <div class="meal-meta" style="margin-bottom:10px;">
+        Typ onderstaande tekst in dezelfde chat waar dit dashboard open staat. Claude haalt dan je training, rusthartslag, HRV en slaap op en geeft je een stukje tekst terug &mdash; plak dat hieronder, of upload het als .json-bestand, en klik op Verwerken.
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--amber-soft);border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin-bottom:12px;">
+        <code id="tredictPromptText" style="font-family:'JetBrains Mono',monospace;font-size:13px;flex:1;min-width:200px;">werk mijn Tredict data bij</code>
+        <button class="btn-secondary" id="copyPromptBtn" type="button">Kopieer</button>
+      </div>
+      <textarea id="importJson" rows="4" style="width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:8px;font-family:'JetBrains Mono',monospace;font-size:12px;background:var(--card);color:var(--ink);" placeholder='{"vitals":[{"date":"2026-07-08","hrRest":36,"hrv":85,"sleepMinutes":475}],"training":[{"date":"2026-07-08","activities":[{"name":"Groningen Hardlopen","kcal":693,"km":12.02,"type":"hardlopen"}],"restKcal":2114,"totalKcal":2807}]}'></textarea>
+      <div style="margin-top:10px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+        <button class="btn-primary" id="importBtn">Verwerken</button>
+        <button class="btn-secondary" id="importFileBtn" type="button">Of upload .json-bestand</button>
+        <input type="file" id="importFileInput" accept="application/json,.json" style="display:none;">
+        <div class="status-msg" id="importStatus"></div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:16px;">
+      <h3>Back-up (voorkomt dataverlies bij een nieuwe chat)</h3>
+      <div class="meal-meta" style="margin-bottom:10px;">
+        Opslag zit vast aan dit specifieke dashboard-venster. Open je dit bestand in een nieuwe chat, dan begint de opslag leeg. Exporteer daarom regelmatig een back-up, en zet die terug via het importvak hierboven zodra je een nieuw venster start.
+      </div>
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+        <button class="btn-primary" id="exportBtn">Exporteer alle data</button>
+        <div class="status-msg" id="exportStatus"></div>
+      </div>
+    </div>
+
+    <div class="grid">
+      <div class="card">
+        <h3>Balans vandaag</h3>
+        <div class="balans-number" id="balansNum">0</div>
+        <div class="balans-sub" id="balansSub">kcal ingenomen &minus; verbrand</div>
+      </div>
+      <div class="card">
+        <h3>Training</h3>
+        <div id="trainingDetail">
+          <div class="empty">Nog niet opgehaald voor deze dag.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:16px;">
+      <h3>Herstel</h3>
+      <div id="vitalsDetail" class="vitals-grid">
+        <div class="stat-row" style="border-bottom:none;flex-direction:column;align-items:flex-start;">
+          <span class="stat-label">Rusthartslag</span>
+          <span class="stat-val" id="vitalHrRest">&mdash;</span>
+          <span class="meal-meta" id="vitalHrRestWeek">week gem. &mdash;</span>
+        </div>
+        <div class="stat-row" style="border-bottom:none;flex-direction:column;align-items:flex-start;">
+          <span class="stat-label">HRV</span>
+          <span class="stat-val" id="vitalHrv">&mdash;</span>
+          <span class="meal-meta" id="vitalHrvWeek">week gem. &mdash;</span>
+        </div>
+        <div class="stat-row" style="border-bottom:none;flex-direction:column;align-items:flex-start;">
+          <span class="stat-label">Slaap</span>
+          <span class="stat-val" id="vitalSleep">&mdash;</span>
+          <span class="meal-meta" id="vitalSleepWeek">week gem. &mdash;</span>
+        </div>
+        <div class="stat-row" style="border-bottom:none;flex-direction:column;align-items:flex-start;">
+          <span class="stat-label">Gewicht</span>
+          <span class="stat-val" id="vitalWeight">&mdash;</span>
+          <span class="meal-meta" id="vitalWeightWeek">week gem. &mdash;</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid">
+      <div class="card">
+        <h3>Macro's</h3>
+        <div class="macro-bars" id="macroBars"></div>
+        <div style="margin-top:16px;">
+          <div class="stat-row"><span class="stat-label">Totaal kcal ingenomen</span><span class="stat-val" id="consumedVal">0</span></div>
+        </div>
+      </div>
+      <div class="card">
+        <h3>Dagscore</h3>
+        <div class="balans-number" id="dagscoreNum">&mdash;</div>
+        <div class="balans-sub">automatisch: balans + herstel + trainingsinspanning</div>
+        <div id="dagscoreBreakdown" style="margin-top:12px;"></div>
+      </div>
+    </div>
+
+    <div class="grid">
+      <div class="card">
+        <h3>Maaltijden</h3>
+        <div id="mealList"><div class="empty">Nog geen maaltijden ingevoerd voor deze dag.</div></div>
+      </div>
+      <div class="card">
+        <h3>Subtotalen per onderdeel</h3>
+        <div id="subtotalsList"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- INVOEREN -->
+  <section id="tab-invoer" style="display:none;">
+    <div class="card form-card">
+      <h3>Snel toevoegen</h3>
+      <div class="stat-row" style="border-bottom:1px solid var(--line);padding-top:0;">
+        <div>
+          <div class="meal-desc">Havermout + magere kwark</div>
+          <div class="meal-meta">250ml magere kwark vast &middot; havermout aanpasbaar</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <input type="number" id="oatsGrams" value="40" min="1" style="width:56px;padding:6px 8px;">
+          <span style="font-size:11px;color:var(--ink-soft);">g</span>
+          <button class="btn-secondary" id="quickAddOats">+ Toevoegen</button>
+        </div>
+      </div>
+      <div class="stat-row" style="border-bottom:1px solid var(--line);">
+        <div>
+          <div class="meal-desc">Gekookte eieren</div>
+          <div class="meal-meta">~78 kcal per ei</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <input type="number" id="eggQty" value="2" min="1" style="width:56px;padding:6px 8px;">
+          <span style="font-size:11px;color:var(--ink-soft);">stuks</span>
+          <button class="btn-secondary" id="quickAddEggs">+ Toevoegen</button>
+        </div>
+      </div>
+      <div class="stat-row" style="border-bottom:1px solid var(--line);">
+        <div>
+          <div class="meal-desc">Broodje kipfilet</div>
+          <div class="meal-meta">1 volkoren broodje + 1 plakje kipfilet &middot; ~140 kcal per stuk</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <input type="number" id="lunchQty" value="4" min="1" style="width:56px;padding:6px 8px;">
+          <button class="btn-secondary" id="quickAddLunch">+ Toevoegen</button>
+        </div>
+      </div>
+      <div class="stat-row" style="border-bottom:1px solid var(--line);">
+        <div>
+          <div class="meal-desc">Banaan</div>
+          <div class="meal-meta">1 middelgrote banaan &middot; ~105 kcal</div>
+        </div>
+        <button class="btn-secondary" id="quickAddBanana">+ Toevoegen</button>
+      </div>
+      <div class="stat-row" style="border-bottom:1px solid var(--line);">
+        <div>
+          <div class="meal-desc">Eiwitshake</div>
+          <div class="meal-meta">1 scoop whey (~30g) met water &middot; ~120 kcal</div>
+        </div>
+        <button class="btn-secondary" id="quickAddShake">+ Toevoegen</button>
+      </div>
+      <div class="stat-row" style="border-bottom:1px solid var(--line);">
+        <div>
+          <div class="meal-desc">Leffe Blond 0.0</div>
+          <div class="meal-meta">1 blikje (330ml), alcoholvrij &middot; ~86 kcal</div>
+        </div>
+        <button class="btn-secondary" id="quickAddLeffe">+ Toevoegen</button>
+      </div>
+      <div id="customQuickAddList"></div>
+      <div class="status-msg" id="quickAddStatus"></div>
+    </div>
+
+    <div class="card form-card" style="margin-top:16px;">
+      <h3>Foto van je maaltijd</h3>
+      <div class="photo-drop" id="photoDrop">
+        <span id="photoDropText">Klik om een foto te kiezen &mdash; ik schat de voeding in</span>
+        <input type="file" id="photoInput" accept="image/*" style="display:none;">
+      </div>
+      <img id="photoPreview" class="photo-preview">
+      <div id="photoStatus"></div>
+    </div>
+
+    <div class="card form-card" style="margin-top:16px;">
+      <h3>Maaltijd invoeren</h3>
+      <div class="form-row">
+        <label>Omschrijving</label>
+        <input type="text" id="fDesc" placeholder="bijv. Havermout met banaan en pindakaas">
+      </div>
+      <div class="form-grid2">
+        <div class="form-row">
+          <label>Moment</label>
+          <select id="fMeal">
+            <option>Ontbijt</option>
+            <option>Lunch</option>
+            <option>Diner</option>
+            <option>Snack</option>
+            <option>Sportvoeding</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <label>Kcal</label>
+          <input type="number" id="fKcal" placeholder="0">
+        </div>
+      </div>
+      <div class="form-grid4">
+        <div class="form-row">
+          <label>Eiwit (g)</label>
+          <input type="number" id="fProtein" placeholder="0">
+        </div>
+        <div class="form-row">
+          <label>Koolh. (g)</label>
+          <input type="number" id="fCarbs" placeholder="0">
+        </div>
+        <div class="form-row">
+          <label>Vet (g)</label>
+          <input type="number" id="fFat" placeholder="0">
+        </div>
+        <div class="form-row">
+          <label>Tijd</label>
+          <input type="text" id="fTime" placeholder="12:30">
+        </div>
+      </div>
+      <div class="form-row" style="display:flex;align-items:center;gap:8px;margin-top:4px;">
+        <input type="checkbox" id="fSaveAsQuickAdd" style="width:auto;">
+        <label for="fSaveAsQuickAdd" style="margin:0;text-transform:none;letter-spacing:normal;font-weight:400;color:var(--ink);">Ook bewaren bij "Snel toevoegen" voor volgende keer</label>
+      </div>
+      <button class="btn-primary" id="saveMeal">Opslaan</button>
+      <div class="status-msg" id="saveStatus"></div>
+    </div>
+  </section>
+
+  <!-- WEEK -->
+  <section id="tab-week" style="display:none;">
+    <div class="card">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:4px;">
+        <h3 id="weekLabel" style="margin:0;">Deze week</h3>
+        <select id="weekSelect" style="padding:8px 10px;border:1px solid var(--line);border-radius:8px;font-family:'Inter',sans-serif;font-size:13px;"></select>
+      </div>
+      <div class="empty" style="margin:10px 0 14px;">Data bijwerken doe je op het Persoonlijk Dashboard-tabblad via de chat-import (geldt ook voor deze weektabel, want ze delen dezelfde opslag).</div>
+      <div class="table-scroll">
+      <table>
+        <thead><tr><th>Dag</th><th>Gewicht</th><th>Rusthartslag</th><th>HRV</th><th>Slaap</th><th>Kcal in</th><th>Eiwit</th><th>Vet</th><th>Verbrand</th><th>Balans</th><th>Score</th></tr></thead>
+        <tbody id="weekBody"></tbody>
+      </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- MAAND (persoonlijk) -->
+  <section id="tab-maand" style="display:none;">
+    <div class="card">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:4px;">
+        <h3 id="maandLabel" style="margin:0;">Deze maand</h3>
+        <select id="maandSelect" style="padding:8px 10px;border:1px solid var(--line);border-radius:8px;font-family:'Inter',sans-serif;font-size:13px;"></select>
+      </div>
+      <div class="empty" style="margin:10px 0 14px;">Zelfde data als de Week-tab, maar dan voor de hele maand &mdash; handig voor een compleet overzicht van je eigen invoer.</div>
+      <div class="table-scroll">
+      <table>
+        <thead><tr><th>Dag</th><th>Gewicht</th><th>Rusthartslag</th><th>HRV</th><th>Slaap</th><th>Kcal in</th><th>Eiwit</th><th>Vet</th><th>Verbrand</th><th>Balans</th><th>Score</th></tr></thead>
+        <tbody id="maandBody"></tbody>
+      </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- GESCHIEDENIS -->
+  <section id="tab-geschiedenis" style="display:none;">
+    <div class="card">
+      <h3>Per dag</h3>
+      <div class="table-scroll">
+      <table>
+        <thead><tr><th>Datum</th><th>Maaltijden</th><th>Kcal in</th><th>Kcal verbrand</th><th>Balans</th></tr></thead>
+        <tbody id="historyBody"></tbody>
+      </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- TEAM -->
+  <section id="tab-team" style="display:none;">
+    <div class="meal-meta" style="margin-bottom:14px;">Het teambord toont alleen data die automatisch via Tredict binnenkomt (training, HRV, rust-HR, slaap) — geen voeding, kcal-inname of balans, want die vul je zelf handmatig in en horen niet gedeeld te worden. Bij de week-, maand- en kwartaaloverzichten: dagscore/HRV/rust-HR/slaap zijn gemiddelden per dag, km per sport is een opgeteld totaal over de periode.</div>
+    <div class="card" style="margin-bottom:16px;">
+      <h3>Vul hier je naam in</h3>
+      <div class="meal-meta" style="margin-bottom:10px;">
+        Deze naam wordt gebruikt op het gedeelde teambord hieronder. Je automatisch opgehaalde Tredict-data (afstand, dagscore, HRV, hartslag, slaap) wordt vanaf dat moment zichtbaar voor collega's die dit dashboard ook gebruiken &mdash; je maaltijden, kcal-inname en overige persoonlijke gegevens blijven priv&eacute;.
+      </div>
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+        <input type="text" id="teamNameInput" placeholder="Jouw naam" style="max-width:220px;padding:10px 12px;border:1px solid var(--line);border-radius:8px;">
+        <button class="btn-primary" id="teamNameSaveBtn">Opslaan</button>
+        <div class="status-msg" id="teamNameStatus"></div>
+      </div>
+      <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--line);">
+        <div class="meal-meta" style="margin-bottom:8px;">
+          Ontbreken er dagen op het teambord terwijl ze wel bij jou (Week/Geschiedenis) staan? Dat kan gebeuren als een import gedeeltelijk tegen een tijdelijke opslaglimiet aanliep. Zet dan alsnog al je lokaal opgeslagen dagen van deze maand door naar het teambord:
+        </div>
+        <button class="btn-secondary" id="teamResyncBtn" type="button">Synchroniseer deze maand opnieuw naar teambord</button>
+        <div class="status-msg" id="teamResyncStatus" style="margin-top:8px;"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Teambord &mdash; vandaag</h3>
+      <div class="table-scroll">
+      <table>
+        <thead><tr>
+          <th>Naam</th><th>Dagscore</th><th>🏃 km</th><th>🚴 km</th><th>🏊 km</th><th>HRV</th><th>Rust-HR</th><th>Slaap</th>
+        </tr></thead>
+        <tbody id="teamBoardBody"><tr><td colspan="8" class="empty">Nog geen teamdata voor vandaag.</td></tr></tbody>
+      </table>
+      </div>
+      <div class="meal-meta" style="margin-top:10px;">Bijgewerkt zodra iemand het dashboard opent met een ingevulde teamnaam.</div>
+    </div>
+
+    <div class="card" style="margin-top:16px;">
+      <h3>Teambord &mdash; deze week</h3>
+      <div class="table-scroll">
+      <table>
+        <thead><tr>
+          <th>Naam</th><th>Dagen</th><th>Dagscore</th><th>🏃 km</th><th>🚴 km</th><th>🏊 km</th><th>HRV</th><th>Rust-HR</th><th>Slaap</th>
+        </tr></thead>
+        <tbody id="teamWeekBody"><tr><td colspan="9" class="empty">Nog geen teamdata deze week.</td></tr></tbody>
+      </table>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:16px;">
+      <h3>Teambord &mdash; vorige week</h3>
+      <div class="table-scroll">
+      <table>
+        <thead><tr>
+          <th>Naam</th><th>Dagen</th><th>Dagscore</th><th>🏃 km</th><th>🚴 km</th><th>🏊 km</th><th>HRV</th><th>Rust-HR</th><th>Slaap</th>
+        </tr></thead>
+        <tbody id="teamLastWeekBody"><tr><td colspan="9" class="empty">Nog geen teamdata voor vorige week.</td></tr></tbody>
+      </table>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:16px;">
+      <h3>Teambord &mdash; deze maand</h3>
+      <div class="table-scroll">
+      <table>
+        <thead><tr>
+          <th>Naam</th><th>Dagen</th><th>Dagscore</th><th>🏃 km</th><th>🚴 km</th><th>🏊 km</th><th>HRV</th><th>Rust-HR</th><th>Slaap</th>
+        </tr></thead>
+        <tbody id="teamMonthBody"><tr><td colspan="9" class="empty">Nog geen teamdata deze maand.</td></tr></tbody>
+      </table>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:16px;">
+      <h3>Teambord &mdash; vorige maand</h3>
+      <div class="table-scroll">
+      <table>
+        <thead><tr>
+          <th>Naam</th><th>Dagen</th><th>Dagscore</th><th>🏃 km</th><th>🚴 km</th><th>🏊 km</th><th>HRV</th><th>Rust-HR</th><th>Slaap</th>
+        </tr></thead>
+        <tbody id="teamLastMonthBody"><tr><td colspan="9" class="empty">Nog geen teamdata voor vorige maand.</td></tr></tbody>
+      </table>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:16px;">
+      <h3>Teambord &mdash; dit kwartaal</h3>
+      <div class="table-scroll">
+      <table>
+        <thead><tr>
+          <th>Naam</th><th>Dagen</th><th>Dagscore</th><th>🏃 km</th><th>🚴 km</th><th>🏊 km</th><th>HRV</th><th>Rust-HR</th><th>Slaap</th>
+        </tr></thead>
+        <tbody id="teamQuarterBody"><tr><td colspan="9" class="empty">Nog geen teamdata dit kwartaal.</td></tr></tbody>
+      </table>
+      </div>
+    </div>
+  </section>
+
+
+  <p class="footer-note">Data blijft lokaal in je account opgeslagen &middot; foto-analyse en trainingsdata via Claude</p>
+</div>
+
+<script>
+const state = { currentDate: new Date(), tab: 'dashboard' };
+
+function extractJson(text){
+  const clean = text.replace(/```json|```/g,'').trim();
+  const start = clean.indexOf('{');
+  const end = clean.lastIndexOf('}');
+  if(start!==-1 && end!==-1 && end>start){
+    return JSON.parse(clean.substring(start, end+1));
+  }
+  return JSON.parse(clean);
+}
+
+async function fetchWithTimeout(url, options, timeoutMs=45000){
+  let timer;
+  const timeoutPromise = new Promise((_, reject)=>{
+    timer = setTimeout(()=>reject(new Error('Timeout \u2014 geen antwoord binnen '+(timeoutMs/1000)+'s, probeer opnieuw.')), timeoutMs);
+  });
+  try{
+    const res = await Promise.race([fetch(url, options), timeoutPromise]);
+    return res;
+  }finally{
+    clearTimeout(timer);
+  }
+}
+
+function fmtDate(d){
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+function fmtDateLabel(d){
+  return d.toLocaleDateString('nl-NL',{weekday:'short',day:'numeric',month:'short'});
+}
+function mealKey(dateStr){ return 'meals-'+dateStr; }
+function trainingKey(dateStr){ return 'training-'+dateStr; }
+
+// Retry-wrapper rond window.storage: de opslag-backend geeft af en toe een
+// tijdelijke "Internal server error" terug bij snel opeenvolgende aanroepen.
+// Probeer het daarom een paar keer met oplopende pauze voordat we het opgeven.
+// Bij een échte rate limit ("te veel verzoeken") is direct opnieuw proberen
+// juist averechts — dan wachten we veel langer en proberen het maar één keer.
+function sleep(ms){ return new Promise(r=>setTimeout(r, ms)); }
+function isRateLimitError(e){
+  return /rate limit/i.test(e && e.message || '');
+}
+function isReloadRequiredError(e){
+  return /reload/i.test(e && e.message || '');
+}
+// Logt systemische opslagfouten (rate limit / reload required) maar één keer
+// per sessie in de console, i.p.v. bij elke losse dag/veld opnieuw — voorkomt
+// dat een Maand-overzicht 100+ identieke meldingen genereert.
+const _loggedStorageIssues = new Set();
+function logStorageError(context, e){
+  const key = isReloadRequiredError(e) ? 'RELOAD_REQUIRED' : (isRateLimitError(e) ? 'RATE_LIMIT' : context+':'+(e&&e.message));
+  if(_loggedStorageIssues.has(key)) return;
+  _loggedStorageIssues.add(key);
+  if(isReloadRequiredError(e) || isRateLimitError(e)){
+    console.warn(`Opslag-sessielimiet actief — verdere gelijksoortige meldingen worden onderdrukt tot de pagina ververst wordt. (eerst gezien bij: ${context})`, e);
+  } else {
+    console.error(context, e);
+  }
+}
+let _rateLimitUntil = 0;
+let _reloadRequired = false;
+function rateLimitSecondsLeft(){
+  return Math.max(0, Math.ceil((_rateLimitUntil - Date.now())/1000));
+}
+function storageErrorMessage(){
+  if(_reloadRequired) return 'Opslag zit aan een sessielimiet — ververs de pagina (F5) om verder te gaan.';
+  if(rateLimitSecondsLeft()>0) return `Opslag zit even aan een limiet, wacht ${rateLimitSecondsLeft()}s en probeer opnieuw.`;
+  return null;
+}
+async function withStorageRetry(fn, retries=2){
+  if(_reloadRequired){
+    throw new Error('RELOAD_REQUIRED');
+  }
+  if(Date.now() < _rateLimitUntil){
+    throw new Error('RATE_LIMIT_COOLDOWN');
+  }
+  let lastErr;
+  for(let i=0;i<retries;i++){
+    try{
+      return await fn();
+    }catch(e){
+      lastErr = e;
+      if(isReloadRequiredError(e)){
+        _reloadRequired = true; // harde sessielimiet: pas op te lossen door de pagina te verversen
+        break;
+      }
+      if(isRateLimitError(e)){
+        _rateLimitUntil = Date.now() + 8000; // hele app kort pauzeren met opslaan
+        break; // niet blijven hameren op een actieve rate limit
+      }
+      if(i<retries-1) await sleep(300*(i+1));
+    }
+  }
+  throw lastErr;
+}
+async function storageSet(key, value, shared, retries=2){
+  return withStorageRetry(()=>window.storage.set(key, value, shared), retries);
+}
+async function storageGet(key, shared, retries=2){
+  return withStorageRetry(()=>window.storage.get(key, shared), retries);
+}
+async function storageList(prefix, shared, retries=2){
+  return withStorageRetry(()=>window.storage.list(prefix, shared), retries);
+}
+
+function dayKey(dateStr){ return 'day-'+dateStr; }
+
+// In-memory cache van dagbundels binnen deze paginasessie: voorkomt dat
+// meals/training/vitals/gewicht voor dezelfde dag 4x apart worden opgehaald.
+const _dayBundleCache = new Map();
+
+async function loadDayBundle(dateStr){
+  if(_dayBundleCache.has(dateStr)) return _dayBundleCache.get(dateStr);
+  const p = (async ()=>{
+    try{
+      const res = await storageGet(dayKey(dateStr));
+      if(res) return JSON.parse(res.value);
+    }catch(e){
+      logStorageError('Laden dag-data', e);
+      return {};
+    }
+    // Nog geen gecombineerde sleutel voor deze dag (oudere data, vóór deze
+    // update opgeslagen) — val terug op de losse sleutels. Geen schrijfactie
+    // hier, om leesintensieve schermen (Maand-overzicht) niet extra te belasten;
+    // migratie naar de gecombineerde sleutel gebeurt vanzelf bij de eerstvolgende save.
+    const bundle = {};
+    try{ const r = await storageGet(mealKey(dateStr)); if(r) bundle.meals = JSON.parse(r.value); }catch(e){}
+    try{ const r = await storageGet(trainingKey(dateStr)); if(r) bundle.training = JSON.parse(r.value); }catch(e){}
+    try{ const r = await storageGet(vitalsKey(dateStr)); if(r) bundle.vitals = JSON.parse(r.value); }catch(e){}
+    try{ const r = await storageGet('weight-'+dateStr); if(r) bundle.weight = JSON.parse(r.value); }catch(e){}
+    return bundle;
+  })();
+  _dayBundleCache.set(dateStr, p);
+  return p;
+}
+async function saveDayBundle(dateStr, patch){
+  try{
+    const current = await loadDayBundle(dateStr);
+    const updated = {...current, ...patch};
+    await storageSet(dayKey(dateStr), JSON.stringify(updated));
+    _dayBundleCache.set(dateStr, Promise.resolve(updated));
+    return true;
+  }catch(e){
+    logStorageError('Opslaan dag-data', e);
+    return false;
+  }
+}
+
+async function loadMeals(dateStr){
+  const bundle = await loadDayBundle(dateStr);
+  return bundle.meals || [];
+}
+async function saveMeals(dateStr, meals){
+  return saveDayBundle(dateStr, {meals});
+}
+async function loadTraining(dateStr){
+  const bundle = await loadDayBundle(dateStr);
+  return bundle.training || null;
+}
+async function saveTraining(dateStr, data){
+  return saveDayBundle(dateStr, {training: data});
+}
+function vitalsKey(dateStr){ return 'vitals-'+dateStr; }
+async function loadVitals(dateStr){
+  const bundle = await loadDayBundle(dateStr);
+  return bundle.vitals || null;
+}
+async function saveVitals(dateStr, data){
+  return saveDayBundle(dateStr, {vitals: data});
+}
+// Dagscore = automatisch overzichtscijfer (1-10), geen handmatige invoer.
+// Combinatie van: kcal-balans, herstel (HRV/slaap/rust-HR) en trainingsinspanning.
+function computeDagscore(consumedKcal, training, vitals){
+  // Geen voeding ingevoerd? Dan geen "beloning" voor niet-invullen — vaste,
+  // lage score ongeacht training/herstel. Wél training die dag = 8, geen
+  // training = 6 (neutraal, geen straf voor een rustdag).
+  if(!consumedKcal || consumedKcal===0){
+    const hadActivity = !!(training && training.activities && training.activities.some(a=>Number(a.kcal)>0));
+    const score = hadActivity ? 8 : 6;
+    return {
+      score,
+      parts: [{ label: hadActivity ? 'Geen voeding ingevoerd (wel training)' : 'Geen voeding of training ingevoerd', score }]
+    };
+  }
+
+  const parts = [];
+
+  // Balans: hoe dichter bij 0 (of licht tekort), hoe hoger. Vlak tot 200 kcal afwijking, daarna lineair dalend tot 1500.
+  let balansScore = null;
+  if(training && training.totalKcal){
+    const balans = consumedKcal - training.totalKcal;
+    const absB = Math.abs(balans);
+    balansScore = absB<=200 ? 10 : Math.max(0, 10 - (absB-200)/144.4);
+    parts.push({label:'Balans', score: balansScore});
+  }
+
+  // Herstel: slaap (ideaal ~480 min), rust-HR (lager is beter voor duursporter), HRV (hoger doorgaans beter).
+  let herstelScores = [];
+  if(vitals && vitals.sleepMinutes){
+    const s = Math.max(0, 10 - Math.abs(vitals.sleepMinutes-480)/30);
+    herstelScores.push(s);
+  }
+  if(vitals && vitals.hrRest!=null){
+    const s = Math.max(0, Math.min(10, 10 - (vitals.hrRest-35)/2));
+    herstelScores.push(s);
+  }
+  if(vitals && vitals.hrv!=null){
+    const s = Math.max(0, Math.min(10, vitals.hrv/10));
+    herstelScores.push(s);
+  }
+  let herstelScore = null;
+  if(herstelScores.length){
+    herstelScore = herstelScores.reduce((a,b)=>a+b,0)/herstelScores.length;
+    parts.push({label:'Herstel', score: herstelScore});
+  }
+
+  // Trainingsinspanning: kcal verbrand tijdens activiteiten die dag (0 kcal = rustdag = neutraal 5).
+  let inspanningScore = null;
+  const actKcal = (training && training.activities) ? training.activities.reduce((a,x)=>a+(Number(x.kcal)||0),0) : 0;
+  if(training){
+    inspanningScore = actKcal===0 ? 5 : Math.min(10, actKcal/60);
+    parts.push({label:'Trainingsinspanning', score: inspanningScore});
+  }
+
+  if(parts.length===0) return {score: null, parts: []};
+  const total = parts.reduce((a,p)=>a+p.score,0)/parts.length;
+  return {score: Math.round(total*10)/10, parts};
+}
+
+function macroKcal(meals){
+  const totals = meals.reduce((acc,m)=>{
+    acc.kcal += Number(m.kcal)||0;
+    acc.protein += Number(m.protein)||0;
+    acc.carbs += Number(m.carbs)||0;
+    acc.fat += Number(m.fat)||0;
+    return acc;
+  },{kcal:0,protein:0,carbs:0,fat:0});
+  return {
+    kcal: Math.round(totals.kcal),
+    protein: Math.round(totals.protein),
+    carbs: Math.round(totals.carbs),
+    fat: Math.round(totals.fat)
+  };
+}
+
+async function renderDashboard(){
+  const dateStr = fmtDate(state.currentDate);
+  document.getElementById('dateLabel').textContent = fmtDateLabel(state.currentDate);
+
+  const meals = await loadMeals(dateStr);
+  const totals = macroKcal(meals);
+  const training = await loadTraining(dateStr);
+  const burned = training ? training.totalKcal : null;
+
+  document.getElementById('consumedVal').textContent = totals.kcal + ' kcal';
+
+  const detailEl = document.getElementById('trainingDetail');
+  const distanceKm = trainingDistanceKm(training);
+  const sportKm = trainingDistanceByType(training);
+  const sportIcon = {hardlopen:'\u{1F3C3}', fietsen:'\u{1F6B4}', zwemmen:'\u{1F3CA}'};
+  if(!training){
+    detailEl.innerHTML = '<div class="empty">Nog niet opgehaald voor deze dag.</div>';
+  } else {
+    const actRows = (training.activities && training.activities.length>0)
+      ? training.activities.map(a=>{
+          const t = (a.type||'').toLowerCase();
+          const icon = sportIcon[t] ? sportIcon[t]+' ' : '';
+          return `
+          <div class="stat-row">
+            <span class="stat-label">${icon}${escapeHtml(a.name)}${a.km ? ' ('+Number(a.km).toFixed(1)+' km)' : ''}</span>
+            <span class="stat-val">${a.kcal} kcal</span>
+          </div>`;
+        }).join('')
+      : '<div class="stat-row"><span class="stat-label">Geen training</span><span class="stat-val">0 kcal</span></div>';
+    detailEl.innerHTML = actRows + `
+      <div class="stat-row">
+        <span class="stat-label">Rust / dagelijks verbruik</span>
+        <span class="stat-val">${training.restKcal ?? 0} kcal</span>
+      </div>
+      <div class="stat-row" style="border-bottom:none;">
+        <span class="stat-label" style="font-weight:700;">Totaal verbrand</span>
+        <span class="stat-val">${training.totalKcal ?? 0} kcal</span>
+      </div>`;
+  }
+
+  const balans = totals.kcal - (burned||0);
+  const balansEl = document.getElementById('balansNum');
+  balansEl.textContent = (balans>=0?'+':'') + balans;
+  balansEl.className = 'balans-number ' + (balans>0 ? 'balans-neg' : 'balans-pos');
+  document.getElementById('balansSub').textContent = burned!==null
+    ? 'kcal ingenomen \u2212 verbrand (training)'
+    : 'kcal ingenomen (training nog niet opgehaald)';
+
+  // herstel (vitale waarden)
+  const vitals = await loadVitals(dateStr);
+  document.getElementById('vitalHrRest').textContent = (vitals && vitals.hrRest!=null) ? vitals.hrRest+' bpm' : '\u2014';
+  document.getElementById('vitalHrv').textContent = (vitals && vitals.hrv!=null) ? vitals.hrv+' ms' : '\u2014';
+  document.getElementById('vitalSleep').textContent = (vitals && vitals.sleepMinutes) ? (Math.floor(vitals.sleepMinutes/60)+'u'+String(vitals.sleepMinutes%60).padStart(2,'0')+'m') : '\u2014';
+
+  // weekgemiddelden voor herstel (huidige week vs vorige week, i.p.v. losse dagen — die verschillen te veel per dag)
+  const weekDays = weekDates(state.currentDate);
+  const weekVitals = await Promise.all(weekDays.map(d=>loadVitals(fmtDate(d))));
+  const prevWeekDaysForVitals = lastWeekDates(state.currentDate);
+  const prevWeekVitals = await Promise.all(prevWeekDaysForVitals.map(d=>loadVitals(fmtDate(d))));
+
+  const wAvg = arr => arr.length ? Math.round(arr.reduce((a,b)=>a+b,0)/arr.length) : null;
+  const avgOfField = (list, field) => wAvg(list.filter(v=>v && v[field]!=null).map(v=>v[field]));
+
+  const hrRestWeekAvg = avgOfField(weekVitals, 'hrRest');
+  const hrvWeekAvg = avgOfField(weekVitals, 'hrv');
+  const sleepWeekAvg = avgOfField(weekVitals, 'sleepMinutes');
+  const hrRestPrevWeekAvg = avgOfField(prevWeekVitals, 'hrRest');
+  const hrvPrevWeekAvg = avgOfField(prevWeekVitals, 'hrv');
+  const sleepPrevWeekAvg = avgOfField(prevWeekVitals, 'sleepMinutes');
+
+  const hrRestDelta = pctDelta(hrRestWeekAvg, hrRestPrevWeekAvg);
+  const hrvDelta = pctDelta(hrvWeekAvg, hrvPrevWeekAvg);
+  const sleepDelta = pctDelta(sleepWeekAvg, sleepPrevWeekAvg);
+
+  // Lagere rust-HR is doorgaans beter (net als gewicht) → omgekeerde kleurlogica.
+  document.getElementById('vitalHrRestWeek').innerHTML = 'week gem. ' + (hrRestWeekAvg!=null ? hrRestWeekAvg+' bpm' : '\u2014') + deltaBadgeInverted(hrRestDelta);
+  document.getElementById('vitalHrvWeek').innerHTML = 'week gem. ' + (hrvWeekAvg!=null ? hrvWeekAvg+' ms' : '\u2014') + deltaBadge(hrvDelta);
+  document.getElementById('vitalSleepWeek').innerHTML = 'week gem. ' + (sleepWeekAvg!=null ? (Math.floor(sleepWeekAvg/60)+'u'+String(sleepWeekAvg%60).padStart(2,'0')+'m') : '\u2014') + deltaBadge(sleepDelta);
+
+  // gewicht: huidige waarde, weekgemiddelde, en vergelijking met vorige week (gemiddelde tegen gemiddelde)
+  const weightEntryForInput = await loadWeight(dateStr);
+  document.getElementById('vitalWeight').textContent = weightEntryForInput ? weightEntryForInput.kg+' kg' : '\u2014';
+
+  const weekWeights = await Promise.all(weekDays.map(d=>loadWeight(fmtDate(d))));
+  const prevWeekWeights = await Promise.all(prevWeekDaysForVitals.map(d=>loadWeight(fmtDate(d))));
+  const avgWeightOf = list => { const vals = list.filter(w=>w && w.kg).map(w=>w.kg); return vals.length ? Math.round((vals.reduce((a,b)=>a+b,0)/vals.length)*10)/10 : null; };
+  const weekWeightAvg = avgWeightOf(weekWeights);
+  const prevWeekWeightAvg = avgWeightOf(prevWeekWeights);
+  const weightDelta = pctDelta(weekWeightAvg, prevWeekWeightAvg);
+
+  document.getElementById('vitalWeightWeek').innerHTML = 'week gem. ' + (weekWeightAvg!=null ? weekWeightAvg+' kg' : '\u2014') + deltaBadgeInverted(weightDelta);
+
+  // dagscore (automatisch berekend)
+  const {score: dagscoreVal, parts: dagscoreParts} = computeDagscore(totals.kcal, training, vitals);
+  const dagscoreNumEl = document.getElementById('dagscoreNum');
+  dagscoreNumEl.textContent = dagscoreVal!=null ? dagscoreVal.toFixed(1) : '\u2014';
+  const breakdownEl = document.getElementById('dagscoreBreakdown');
+  breakdownEl.innerHTML = dagscoreParts.length ? dagscoreParts.map(p=>`
+      <div class="stat-row">
+        <span class="stat-label">${escapeHtml(p.label)}</span>
+        <span class="stat-val">${p.score.toFixed(1)}</span>
+      </div>`).join('') : '<div class="empty">Nog onvoldoende data voor deze dag.</div>';
+
+  // macro-doelen (eiwit 1.8-2.7g/kg afh. van trainingsvolume, vet 1.0g/kg vast, koolh. = restant van dagtarget) — nodig voor macrobars én teamsync
+  const weightEntry = await loadWeight(dateStr);
+  let targetProtein = null, targetFat = null, targetCarbs = null;
+  if(weightEntry && weightEntry.kg){
+    let proteinFactor = 1.8;
+    if(training && training.restKcal && burned){
+      const scaleFactor = Math.min(1.5, Math.max(1, burned/training.restKcal));
+      proteinFactor = 1.8*scaleFactor;
+    }
+    targetProtein = Math.round(weightEntry.kg*proteinFactor);
+    targetFat = Math.round(weightEntry.kg*1.0);
+    const targetKcal = burned || null;
+    if(targetKcal){
+      targetCarbs = Math.max(0, Math.round((targetKcal - targetProtein*4 - targetFat*9)/4));
+    }
+  }
+  const pctOf = (actual, target) => target ? Math.round(actual/target*100) : null;
+  const pctProteinVal = pctOf(totals.protein, targetProtein);
+  const pctCarbsVal = pctOf(totals.carbs, targetCarbs);
+  const pctFatVal = pctOf(totals.fat, targetFat);
+  const pctLabel = (actual, target) => target ? ` <span style="color:var(--ink-soft);font-weight:400;">(${Math.round(actual/target*100)}%)</span>` : '';
+
+  // sync naar gedeeld teambord (voor de bekeken dag, alleen als er een teamnaam is ingesteld)
+  // Alleen automatisch via Tredict opgehaalde data wordt gedeeld — geen kcal/voeding/balans.
+  syncTeamEntry(dateStr, {
+    dagscore: dagscoreVal,
+    kmHardlopen: sportKm.hardlopen,
+    kmFietsen: sportKm.fietsen,
+    kmZwemmen: sportKm.zwemmen,
+    hrv: vitals ? vitals.hrv : null,
+    hrRest: vitals ? vitals.hrRest : null,
+    sleepMinutes: vitals ? vitals.sleepMinutes : null
+  });
+
+  // meal list
+  const listEl = document.getElementById('mealList');
+  if(meals.length===0){
+    listEl.innerHTML = '<div class="empty">Nog geen maaltijden ingevoerd voor deze dag.</div>';
+  } else {
+    listEl.innerHTML = meals.map((m,i)=>`
+      <div class="meal-item">
+        <div>
+          <div class="meal-desc">${escapeHtml(m.desc)}</div>
+          <div class="meal-meta">
+            <select class="mealTypeSelect" data-idx="${i}" style="font-size:12px;padding:3px 6px;border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--ink-soft);font-family:'Inter',sans-serif;">
+              ${['Ontbijt','Lunch','Diner','Snack','Sportvoeding'].map(opt=>`<option value="${opt}" ${m.mealType===opt?'selected':''}>${opt}</option>`).join('')}
+            </select>
+            ${m.time?(' &middot; '+escapeHtml(m.time)):''}
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;">
+          <span class="meal-kcal">${m.kcal} kcal</span>
+          <button class="meal-del" data-idx="${i}">verwijder</button>
+        </div>
+      </div>
+    `).join('');
+    listEl.querySelectorAll('.mealTypeSelect').forEach(sel=>{
+      sel.addEventListener('change', async (e)=>{
+        const idx = Number(e.target.dataset.idx);
+        const current = await loadMeals(dateStr);
+        current[idx].mealType = e.target.value;
+        await saveMeals(dateStr, current);
+      });
+    });
+    listEl.querySelectorAll('.meal-del').forEach(btn=>{
+      btn.addEventListener('click', async (e)=>{
+        const idx = Number(e.target.dataset.idx);
+        const current = await loadMeals(dateStr);
+        current.splice(idx,1);
+        await saveMeals(dateStr, current);
+        renderDashboard();
+      });
+    });
+  }
+
+  // subtotalen per onderdeel
+  const subtotalEl = document.getElementById('subtotalsList');
+  const order = ['Ontbijt','Lunch','Diner','Snack','Sportvoeding'];
+  const byType = {};
+  order.forEach(t=>byType[t]={kcal:0,count:0});
+  meals.forEach(m=>{
+    const t = order.includes(m.mealType) ? m.mealType : 'Snack';
+    byType[t].kcal += Number(m.kcal)||0;
+    byType[t].count += 1;
+  });
+  const rowsWithData = order.filter(t=>byType[t].count>0);
+  if(rowsWithData.length===0){
+    subtotalEl.innerHTML = '<div class="empty">Nog geen maaltijden ingevoerd voor deze dag.</div>';
+  } else {
+    subtotalEl.innerHTML = order.map(t=>`
+      <div class="stat-row">
+        <span class="stat-label">${t}${byType[t].count>0 ? ' ('+byType[t].count+'x)' : ''}</span>
+        <span class="stat-val">${byType[t].kcal} kcal</span>
+      </div>
+    `).join('');
+  }
+
+  // macro bars, met % van dagdoel
+  const maxMacro = Math.max(totals.protein, totals.carbs, totals.fat, 1);
+  const macroEl = document.getElementById('macroBars');
+  macroEl.innerHTML = `
+    <div class="macro-line">
+      <span class="macro-name">Eiwit</span>
+      <div class="macro-track"><div class="macro-fill" style="width:${(totals.protein/maxMacro*100)}%;background:var(--pine)"></div></div>
+      <span class="macro-val">${totals.protein}g${pctLabel(totals.protein, targetProtein)}</span>
+    </div>
+    <div class="macro-line">
+      <span class="macro-name">Koolh.</span>
+      <div class="macro-track"><div class="macro-fill" style="width:${(totals.carbs/maxMacro*100)}%;background:var(--amber)"></div></div>
+      <span class="macro-val">${totals.carbs}g${pctLabel(totals.carbs, targetCarbs)}</span>
+    </div>
+    <div class="macro-line">
+      <span class="macro-name">Vet</span>
+      <div class="macro-track"><div class="macro-fill" style="width:${(totals.fat/maxMacro*100)}%;background:var(--clay)"></div></div>
+      <span class="macro-val">${totals.fat}g${pctLabel(totals.fat, targetFat)}</span>
+    </div>
+  `;
+}
+
+async function syncDateToTeamBoard(dateStr, preloadedTraining, preloadedVitals){
+  const meals = await loadMeals(dateStr);
+  const totals = macroKcal(meals);
+  const training = preloadedTraining !== undefined ? preloadedTraining : await loadTraining(dateStr);
+  const byType = trainingDistanceByType(training);
+  const vitals = preloadedVitals !== undefined ? preloadedVitals : await loadVitals(dateStr);
+  const {score: dagscoreVal} = computeDagscore(totals.kcal, training, vitals);
+
+  // Alleen automatisch via Tredict opgehaalde data wordt gedeeld — geen kcal/voeding/balans.
+  await syncTeamEntry(dateStr, {
+    dagscore: dagscoreVal,
+    kmHardlopen: byType.hardlopen,
+    kmFietsen: byType.fietsen,
+    kmZwemmen: byType.zwemmen,
+    hrv: vitals ? vitals.hrv : null,
+    hrRest: vitals ? vitals.hrRest : null,
+    sleepMinutes: vitals ? vitals.sleepMinutes : null
+  });
+}
+
+let _importInProgress = false;
+async function processImportJson(){
+  const statusEl = document.getElementById('importStatus');
+  if(_importInProgress){
+    statusEl.innerHTML = '<span class="status-err">Er loopt al een verwerking, even geduld...</span>';
+    return;
+  }
+  const raw = document.getElementById('importJson').value.trim();
+  if(!raw){
+    statusEl.innerHTML = '<span class="status-err">Plak eerst het JSON-antwoord van Claude.</span>';
+    return;
+  }
+  let parsed;
+  try{
+    parsed = extractJson(raw);
+  }catch(e){
+    statusEl.innerHTML = '<span class="status-err">Kon de tekst niet als JSON lezen. Check of je alles hebt gekopieerd.</span>';
+    return;
+  }
+  _importInProgress = true;
+  document.getElementById('importBtn').disabled = true;
+  document.getElementById('importFileBtn').disabled = true;
+  statusEl.textContent = 'Bezig met verwerken...';
+  statusEl.classList.remove('status-err');
+
+  let vitalsCount = 0, trainingCount = 0, mealsCount = 0, weightCount = 0;
+  const touchedDates = new Set();
+  const failedDates = new Set();
+  const savedVitalsByDate = {};
+  const savedTrainingByDate = {};
+  try{
+  for(const v of (parsed.vitals||[])){
+    if(v.date){
+      const vitalsObj = {hrRest: v.hrRest ?? null, hrv: v.hrv ?? null, sleepMinutes: v.sleepMinutes ?? null};
+      const ok = await saveVitals(v.date, vitalsObj);
+      if(ok){ vitalsCount++; touchedDates.add(v.date); savedVitalsByDate[v.date] = vitalsObj; } else { failedDates.add(v.date); }
+      await sleep(250);
+    }
+  }
+  for(const t of (parsed.training||[])){
+    if(t.date){
+      const trainingObj = {activities: t.activities||[], restKcal: t.restKcal||0, totalKcal: t.totalKcal||0};
+      const ok = await saveTraining(t.date, trainingObj);
+      if(ok){ trainingCount++; touchedDates.add(t.date); savedTrainingByDate[t.date] = trainingObj; } else { failedDates.add(t.date); }
+      await sleep(250);
+    }
+  }
+  // Herstel van een eerder geëxporteerde back-up (meals per datum + gewicht per datum)
+  for(const m of (parsed.meals||[])){
+    if(m.date && Array.isArray(m.entries)){
+      const ok = await saveMeals(m.date, m.entries);
+      if(ok){ mealsCount++; touchedDates.add(m.date); } else { failedDates.add(m.date); }
+      await sleep(250);
+    }
+  }
+  for(const w of (parsed.weight||[])){
+    if(w.date && w.kg){
+      const ok = await saveWeight(w.date, w.kg);
+      if(ok){ weightCount++; touchedDates.add(w.date); } else { failedDates.add(w.date); }
+      await sleep(250);
+    }
+  }
+  let quickAddCount = 0;
+  for(const qa of (parsed.quickAdds||[])){
+    if(qa.desc && qa.kcal!=null){
+      await addCustomQuickAdd({
+        desc: qa.desc,
+        mealType: qa.mealType || 'Snack',
+        kcal: Number(qa.kcal)||0,
+        protein: Number(qa.protein)||0,
+        carbs: Number(qa.carbs)||0,
+        fat: Number(qa.fat)||0
+      });
+      quickAddCount++;
+      await sleep(250);
+    }
+  }
+  for(const d of touchedDates){
+    if(_reloadRequired || Date.now() < _rateLimitUntil){
+      console.warn('Teamsync overgeslagen voor', d, '(rate limit actief)');
+      continue;
+    }
+    try{
+      // Training/vitals die we net zelf opgeslagen hebben hergebruiken we direct,
+      // zodat de sync niet nog eens dezelfde data hoeft op te halen.
+      await syncDateToTeamBoard(d, savedTrainingByDate[d], savedVitalsByDate[d]);
+    }catch(e){
+      logStorageError('Teamsync per dag', e);
+    }
+    await sleep(250);
+  }
+  const parts = [];
+  if(vitalsCount) parts.push(`${vitalsCount} dag(en) vitale waarden`);
+  if(trainingCount) parts.push(`${trainingCount} dag(en) training`);
+  if(mealsCount) parts.push(`${mealsCount} dag(en) maaltijden`);
+  if(weightCount) parts.push(`${weightCount} dag(en) gewicht`);
+  if(quickAddCount) parts.push(`${quickAddCount} snel-toevoegen-item(s)`);
+  let msg = parts.length ? `Verwerkt: ${parts.join(', ')}.` : 'Niets herkend om te verwerken.';
+  if(failedDates.size>0){
+    const rateLimited = _reloadRequired || Date.now() < _rateLimitUntil;
+    msg += rateLimited
+      ? ` Mislukt voor: ${[...failedDates].join(', ')} — ${_reloadRequired ? 'de opslag zit aan een sessielimiet, ververs de pagina (F5) en probeer daarna opnieuw.' : `de opslag zit tijdelijk aan een limiet, wacht ${Math.max(5,rateLimitSecondsLeft())} seconden en klik dan nog een keer op Verwerken.`}`
+      : ` Mislukt voor: ${[...failedDates].join(', ')} — klik nog een keer op Verwerken om alleen deze dag(en) opnieuw te proberen.`;
+    statusEl.innerHTML = `<span class="status-err">${msg}</span>`;
+  } else {
+    statusEl.textContent = msg;
+    statusEl.classList.remove('status-err');
+  }
+  document.getElementById('importJson').value = '';
+  renderDashboard();
+  renderWeek();
+  }finally{
+    _importInProgress = false;
+    document.getElementById('importBtn').disabled = false;
+    document.getElementById('importFileBtn').disabled = false;
+  }
+}
+document.getElementById('importBtn').addEventListener('click', processImportJson);
+
+document.getElementById('copyPromptBtn').addEventListener('click', async (e)=>{
+  const text = document.getElementById('tredictPromptText').textContent;
+  const btn = e.target;
+  const originalLabel = btn.textContent;
+  try{
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      await navigator.clipboard.writeText(text);
+    } else {
+      // Fallback voor omgevingen zonder Clipboard API
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+    }
+    btn.textContent = 'Gekopieerd!';
+  }catch(e){
+    btn.textContent = 'Kon niet kopiëren, selecteer handmatig';
+  }
+  setTimeout(()=>{ btn.textContent = originalLabel; }, 2000);
+});
+
+document.getElementById('importFileBtn').addEventListener('click', ()=>{
+  document.getElementById('importFileInput').click();
+});
+document.getElementById('importFileInput').addEventListener('change', async (e)=>{
+  const file = e.target.files[0];
+  const statusEl = document.getElementById('importStatus');
+  if(!file) return;
+  if(!file.name.toLowerCase().endsWith('.json') && file.type !== 'application/json'){
+    statusEl.innerHTML = '<span class="status-err">Kies een .json-bestand.</span>';
+    e.target.value = '';
+    return;
+  }
+  try{
+    const text = await file.text();
+    document.getElementById('importJson').value = text;
+    await processImportJson();
+  }catch(err){
+    console.error(err);
+    statusEl.innerHTML = '<span class="status-err">Kon het bestand niet lezen.</span>';
+  }
+  e.target.value = ''; // zelfde bestand nogmaals kunnen kiezen
+});
+
+async function exportAllData(){
+  const statusEl = document.getElementById('exportStatus');
+  statusEl.textContent = 'Bezig met verzamelen...';
+  try{
+    // Combineert zowel de nieuwe gecombineerde dag-sleutels als eventuele
+    // nog niet-gemigreerde oude losse sleutels, samengevoegd per datum.
+    const byDate = {};
+    const ensure = d => byDate[d] || (byDate[d] = {});
+
+    const dayKeys = await storageList('day-');
+    for(const k of (dayKeys?.keys||[])){
+      const res = await storageGet(k, false);
+      if(res) Object.assign(ensure(k.replace('day-','')), JSON.parse(res.value));
+    }
+    const mealKeys = await storageList('meals-');
+    for(const k of (mealKeys?.keys||[])){
+      const d = k.replace('meals-','');
+      if(byDate[d] && byDate[d].meals) continue;
+      const res = await storageGet(k, false);
+      if(res) ensure(d).meals = JSON.parse(res.value);
+    }
+    const trainingKeys = await storageList('training-');
+    for(const k of (trainingKeys?.keys||[])){
+      const d = k.replace('training-','');
+      if(byDate[d] && byDate[d].training) continue;
+      const res = await storageGet(k, false);
+      if(res) ensure(d).training = JSON.parse(res.value);
+    }
+    const vitalsKeys = await storageList('vitals-');
+    for(const k of (vitalsKeys?.keys||[])){
+      const d = k.replace('vitals-','');
+      if(byDate[d] && byDate[d].vitals) continue;
+      const res = await storageGet(k, false);
+      if(res) ensure(d).vitals = JSON.parse(res.value);
+    }
+    const weightKeys = await storageList('weight-');
+    for(const k of (weightKeys?.keys||[])){
+      const d = k.replace('weight-','');
+      if(byDate[d] && byDate[d].weight) continue;
+      const res = await storageGet(k, false);
+      if(res) ensure(d).weight = JSON.parse(res.value);
+    }
+
+    const backup = {meals: [], training: [], vitals: [], weight: []};
+    for(const [d, data] of Object.entries(byDate)){
+      if(data.meals) backup.meals.push({date: d, entries: data.meals});
+      if(data.training) backup.training.push({date: d, ...data.training});
+      if(data.vitals) backup.vitals.push({date: d, ...data.vitals});
+      if(data.weight) backup.weight.push({date: d, kg: data.weight.kg});
+    }
+
+    const blob = new Blob([JSON.stringify(backup, null, 2)], {type:'application/json'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'connectyourhealth-backup-' + fmtDate(new Date()) + '.json';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    statusEl.textContent = `Back-up gedownload: ${backup.meals.length} dag(en) maaltijden, ${backup.training.length} dag(en) training, ${backup.vitals.length} dag(en) vitals, ${backup.weight.length} dag(en) gewicht.`;
+  }catch(e){
+    console.error(e);
+    statusEl.textContent = 'Export mislukt, zie console.';
+  }
+}
+document.getElementById('exportBtn').addEventListener('click', exportAllData);
+
+function escapeHtml(str){
+  const d = document.createElement('div');
+  d.textContent = str||'';
+  return d.innerHTML;
+}
+
+// ---- Week overzicht ----
+function getMonday(d){
+  const date = new Date(d);
+  const day = date.getDay();
+  const diff = (day===0 ? -6 : 1-day);
+  date.setDate(date.getDate()+diff);
+  date.setHours(0,0,0,0);
+  return date;
+}
+function weekDates(baseDate){
+  const monday = getMonday(baseDate);
+  const days = [];
+  for(let i=0;i<7;i++){
+    const d = new Date(monday);
+    d.setDate(monday.getDate()+i);
+    days.push(d);
+  }
+  return days;
+}
+function monthDates(baseDate){
+  const year = baseDate.getFullYear(), month = baseDate.getMonth();
+  const daysInMonth = new Date(year, month+1, 0).getDate();
+  const days = [];
+  for(let i=1;i<=daysInMonth;i++) days.push(new Date(year, month, i));
+  return days;
+}
+function quarterDates(baseDate){
+  const year = baseDate.getFullYear();
+  const qStartMonth = Math.floor(baseDate.getMonth()/3)*3;
+  const days = [];
+  for(let m=qStartMonth; m<qStartMonth+3; m++){
+    const daysInMonth = new Date(year, m+1, 0).getDate();
+    for(let i=1;i<=daysInMonth;i++) days.push(new Date(year, m, i));
+  }
+  return days;
+}
+function lastWeekDates(baseDate){
+  const d = new Date(baseDate);
+  d.setDate(d.getDate()-7);
+  return weekDates(d);
+}
+function lastMonthDates(baseDate){
+  const d = new Date(baseDate.getFullYear(), baseDate.getMonth()-1, 1);
+  return monthDates(d);
+}
+async function loadWeight(dateStr){
+  const bundle = await loadDayBundle(dateStr);
+  return bundle.weight || null;
+}
+async function saveWeight(dateStr, kg){
+  return saveDayBundle(dateStr, {weight: {kg}});
+}
+
+function trainingDistanceKm(training){
+  if(!training || !training.activities) return 0;
+  return training.activities.reduce((a,x)=>a+(Number(x.km)||0),0);
+}
+
+const SPORT_TYPES = ['hardlopen','fietsen','zwemmen'];
+function trainingDistanceByType(training){
+  const out = {hardlopen:0, fietsen:0, zwemmen:0};
+  if(!training || !training.activities) return out;
+  for(const a of training.activities){
+    const t = (a.type||'').toLowerCase();
+    if(SPORT_TYPES.includes(t)) out[t] += Number(a.km)||0;
+  }
+  return out;
+}
+
+// ---- Team (gedeeld scorebord) ----
+async function loadTeamName(){
+  try{
+    const res = await storageGet('profile-name', false);
+    return res ? JSON.parse(res.value).name : null;
+  }catch(e){ return null; }
+}
+async function saveTeamName(name){
+  try{
+    await storageSet('profile-name', JSON.stringify({name}), false);
+  }catch(e){ logStorageError('Opslaan teamnaam', e); }
+}
+
+const _teamSyncCache = {};
+async function syncTeamEntry(dateStr, payload){
+  try{
+    const name = await loadTeamName();
+    if(!name) return;
+    const key = 'team-'+name+'-'+dateStr;
+    const serialized = JSON.stringify({name, ...payload});
+    if(_teamSyncCache[key] === serialized) return; // ongewijzigd t.o.v. vorige sync, geen nieuwe schrijfactie nodig
+    await storageSet(key, serialized, true, 2);
+    _teamSyncCache[key] = serialized;
+  }catch(e){
+    // Stille achtergrondsync: je eigen persoonlijke data is al opgeslagen,
+    // dus een mislukte teamsync hoeft de gebruiker niet te storen. Volgende
+    // render (of import) probeert het vanzelf opnieuw.
+    console.warn('Sync naar teambord mislukt, wordt bij volgende render opnieuw geprobeerd', e);
+  }
+}
+
+async function loadAllTeamEntries(){
+  const keysRes = await storageList('team-', true);
+  const keys = keysRes?.keys || [];
+  const entries = [];
+  for(const k of keys){
+    const res = await storageGet(k, true);
+    if(!res) continue;
+    try{
+      const entry = JSON.parse(res.value);
+      entry.date = k.slice(-10); // datum staat altijd als YYYY-MM-DD aan het eind van de key
+      entries.push(entry);
+    }catch(e){ /* corrupte entry overslaan */ }
+  }
+  return entries;
+}
+
+async function renderTeam(allEntries){
+  const nameEl = document.getElementById('teamNameInput');
+  const currentName = await loadTeamName();
+  if(currentName) nameEl.value = currentName;
+
+  const todayStr = fmtDate(new Date());
+  const bodyEl = document.getElementById('teamBoardBody');
+  try{
+    const entries = allEntries || await loadAllTeamEntries();
+    const rows = entries.filter(e=>e.date===todayStr);
+    if(rows.length===0){
+      bodyEl.innerHTML = '<tr><td colspan="8" class="empty">Nog geen teamdata voor vandaag.</td></tr>';
+      return;
+    }
+    rows.sort((a,b)=>(b.dagscore||0)-(a.dagscore||0));
+    const n = rows.length;
+    const sum = f => rows.reduce((a,r)=>a+(Number(f(r))||0),0);
+    const avgOf = f => { const vals = rows.map(f).filter(v=>v!=null); return vals.length ? vals.reduce((a,b)=>a+b,0)/vals.length : null; };
+    const totalRow = n>1 ? `
+      <tr style="font-weight:700;border-top:2px solid var(--line);">
+        <td>Totaal (${n})</td>
+        <td>${(()=>{const v=avgOf(r=>r.dagscore); return v!=null?v.toFixed(1)+' gem.':'\u2014';})()}</td>
+        <td>${sum(r=>r.kmHardlopen).toFixed(1)}</td>
+        <td>${sum(r=>r.kmFietsen).toFixed(1)}</td>
+        <td>${sum(r=>r.kmZwemmen).toFixed(1)}</td>
+        <td>\u2014</td>
+        <td>\u2014</td>
+        <td>\u2014</td>
+      </tr>` : '';
+    bodyEl.innerHTML = rows.map(r=>`
+      <tr>
+        <td>${escapeHtml(r.name||'\u2014')}</td>
+        <td>${r.dagscore!=null ? r.dagscore.toFixed(1) : '\u2014'}</td>
+        <td>${r.kmHardlopen ? r.kmHardlopen.toFixed(1) : '\u2014'}</td>
+        <td>${r.kmFietsen ? r.kmFietsen.toFixed(1) : '\u2014'}</td>
+        <td>${r.kmZwemmen ? r.kmZwemmen.toFixed(1) : '\u2014'}</td>
+        <td>${r.hrv!=null ? r.hrv+' ms' : '\u2014'}</td>
+        <td>${r.hrRest!=null ? r.hrRest+' bpm' : '\u2014'}</td>
+        <td>${r.sleepMinutes ? (Math.floor(r.sleepMinutes/60)+'u'+String(r.sleepMinutes%60).padStart(2,'0')+'m') : '\u2014'}</td>
+      </tr>`).join('') + totalRow;
+  }catch(e){
+    console.error(e);
+    bodyEl.innerHTML = '<tr><td colspan="8" class="empty">Teambord kon niet geladen worden.</td></tr>';
+  }
+}
+
+// Berekent team-brede totalen/gemiddelden voor een reeks dagen (voor de %-vergelijking). Werkt synchroon op een al opgehaalde entries-array.
+function computePeriodTotals(days, allEntries){
+  const dateStrs = new Set(days.map(d=>fmtDate(d)));
+  const relevant = allEntries.filter(e=>dateStrs.has(e.date));
+  const dagscores=[], kcalIns=[], balansArr=[];
+  let burnedTotal=0, kmHardlopenTotal=0, kmFietsenTotal=0, kmZwemmenTotal=0;
+  for(const entry of relevant){
+    if(entry.dagscore!=null) dagscores.push(entry.dagscore);
+    if(entry.consumedKcal!=null) kcalIns.push(entry.consumedKcal);
+    if(entry.balans!=null) balansArr.push(entry.balans);
+    burnedTotal += entry.burnedKcal||0;
+    kmHardlopenTotal += entry.kmHardlopen||0;
+    kmFietsenTotal += entry.kmFietsen||0;
+    kmZwemmenTotal += entry.kmZwemmen||0;
+  }
+  const avg = arr => arr.length ? arr.reduce((a,b)=>a+b,0)/arr.length : null;
+  return {
+    dagscoreAvg: avg(dagscores), kcalInAvg: avg(kcalIns), balansAvg: avg(balansArr),
+    burnedTotal, kmHardlopenTotal, kmFietsenTotal, kmZwemmenTotal
+  };
+}
+function pctDelta(current, previous){
+  if(current==null || previous==null || previous===0) return null;
+  return Math.round(((current-previous)/Math.abs(previous))*100);
+}
+function deltaBadge(pct){
+  if(pct==null) return '';
+  const sign = pct>0 ? '+' : '';
+  const color = pct>0 ? 'var(--pine)' : (pct<0 ? 'var(--clay)' : 'var(--ink-soft)');
+  return ` <span style="color:${color};font-weight:600;">(${sign}${pct}%)</span>`;
+}
+// Zelfde als deltaBadge, maar met omgekeerde kleuren voor metrics waar een
+// daling wenselijk is (zoals gewicht): daling = groen, stijging = rood.
+function deltaBadgeInverted(pct){
+  if(pct==null) return '';
+  const sign = pct>0 ? '+' : '';
+  const color = pct>0 ? 'var(--clay)' : (pct<0 ? 'var(--pine)' : 'var(--ink-soft)');
+  return ` <span style="color:${color};font-weight:600;">(${sign}${pct}%)</span>`;
+}
+function computePeriodRows(days, allEntries){
+  const dateStrs = new Set(days.map(d=>fmtDate(d)));
+  const relevant = allEntries.filter(e=>dateStrs.has(e.date));
+  const byName = {};
+  for(const entry of relevant){
+    const name = entry.name || '\u2014';
+    if(!byName[name]) byName[name] = { days:0, dagscores:[], kcalIns:[], burnedTotal:0, kmHardlopenTotal:0, kmFietsenTotal:0, kmZwemmenTotal:0, balansArr:[], hrvs:[], hrRests:[], sleepMins:[] };
+    const agg = byName[name];
+    agg.days++;
+    if(entry.dagscore!=null) agg.dagscores.push(entry.dagscore);
+    if(entry.consumedKcal!=null) agg.kcalIns.push(entry.consumedKcal);
+    if(entry.burnedKcal!=null) agg.burnedTotal += entry.burnedKcal;
+    agg.kmHardlopenTotal += entry.kmHardlopen||0;
+    agg.kmFietsenTotal += entry.kmFietsen||0;
+    agg.kmZwemmenTotal += entry.kmZwemmen||0;
+    if(entry.balans!=null) agg.balansArr.push(entry.balans);
+    if(entry.hrv!=null) agg.hrvs.push(entry.hrv);
+    if(entry.hrRest!=null) agg.hrRests.push(entry.hrRest);
+    if(entry.sleepMinutes) agg.sleepMins.push(entry.sleepMinutes);
+  }
+  const avg = arr => arr.length ? Math.round(arr.reduce((a,b)=>a+b,0)/arr.length) : null;
+  const byNameRows = {};
+  for(const [name, agg] of Object.entries(byName)){
+    byNameRows[name] = {
+      name,
+      days: agg.days,
+      dagscoreAvg: agg.dagscores.length ? Math.round((agg.dagscores.reduce((a,b)=>a+b,0)/agg.dagscores.length)*10)/10 : null,
+      kcalInAvg: avg(agg.kcalIns),
+      burnedTotal: agg.burnedTotal,
+      kmHardlopenTotal: agg.kmHardlopenTotal,
+      kmFietsenTotal: agg.kmFietsenTotal,
+      kmZwemmenTotal: agg.kmZwemmenTotal,
+      balansAvg: avg(agg.balansArr),
+      hrvAvg: avg(agg.hrvs),
+      hrRestAvg: avg(agg.hrRests),
+      sleepAvg: avg(agg.sleepMins)
+    };
+  }
+  return byNameRows;
+}
+
+function renderTeamPeriod(days, bodyElId, emptyLabel, errorLabel, previousDays, allEntries){
+  const bodyEl = document.getElementById(bodyElId);
+  try{
+    const byNameRows = computePeriodRows(days, allEntries);
+    let rows = Object.values(byNameRows);
+    if(rows.length===0){
+      bodyEl.innerHTML = `<tr><td colspan="9" class="empty">${emptyLabel}</td></tr>`;
+      return;
+    }
+    // Optioneel: per persoon vergelijken met de vorige periode
+    let prevByNameRows = null;
+    if(previousDays){
+      try{ prevByNameRows = computePeriodRows(previousDays, allEntries); }catch(e){ prevByNameRows = null; }
+    }
+    if(prevByNameRows){
+      rows = rows.map(r=>{
+        const p = prevByNameRows[r.name];
+        if(!p) return r;
+        return {
+          ...r,
+          dDagscore: pctDelta(r.dagscoreAvg, p.dagscoreAvg),
+          dHardlopen: pctDelta(r.kmHardlopenTotal, p.kmHardlopenTotal),
+          dFietsen: pctDelta(r.kmFietsenTotal, p.kmFietsenTotal),
+          dZwemmen: pctDelta(r.kmZwemmenTotal, p.kmZwemmenTotal)
+        };
+      });
+    }
+    rows.sort((a,b)=>(b.dagscoreAvg||0)-(a.dagscoreAvg||0));
+    const n = rows.length;
+    const sum = f => rows.reduce((a,r)=>a+(Number(f(r))||0),0);
+    const avgOf = f => { const vals = rows.map(f).filter(v=>v!=null); return vals.length ? vals.reduce((a,b)=>a+b,0)/vals.length : null; };
+    let totalDDagscore=null, totalDHardlopen=null, totalDFietsen=null, totalDZwemmen=null;
+    if(previousDays){
+      const curTotals = computePeriodTotals(days, allEntries);
+      const prevTotals = computePeriodTotals(previousDays, allEntries);
+      totalDDagscore = pctDelta(curTotals.dagscoreAvg, prevTotals.dagscoreAvg);
+      totalDHardlopen = pctDelta(curTotals.kmHardlopenTotal, prevTotals.kmHardlopenTotal);
+      totalDFietsen = pctDelta(curTotals.kmFietsenTotal, prevTotals.kmFietsenTotal);
+      totalDZwemmen = pctDelta(curTotals.kmZwemmenTotal, prevTotals.kmZwemmenTotal);
+    }
+    const totalRow = n>=1 ? `
+      <tr style="font-weight:700;border-top:2px solid var(--line);">
+        <td>Totaal (${n})</td>
+        <td>\u2014</td>
+        <td>${(()=>{const v=avgOf(r=>r.dagscoreAvg); return v!=null?v.toFixed(1)+' gem.':'\u2014';})()}${deltaBadge(totalDDagscore)}</td>
+        <td>${sum(r=>r.kmHardlopenTotal).toFixed(1)}${deltaBadge(totalDHardlopen)}</td>
+        <td>${sum(r=>r.kmFietsenTotal).toFixed(1)}${deltaBadge(totalDFietsen)}</td>
+        <td>${sum(r=>r.kmZwemmenTotal).toFixed(1)}${deltaBadge(totalDZwemmen)}</td>
+        <td>\u2014</td>
+        <td>\u2014</td>
+        <td>\u2014</td>
+      </tr>` : '';
+    bodyEl.innerHTML = rows.map(r=>`
+      <tr>
+        <td>${escapeHtml(r.name)}</td>
+        <td>${r.days}</td>
+        <td>${r.dagscoreAvg!=null ? r.dagscoreAvg.toFixed(1) : '\u2014'}${deltaBadge(r.dDagscore)}</td>
+        <td>${r.kmHardlopenTotal ? r.kmHardlopenTotal.toFixed(1) : '\u2014'}${deltaBadge(r.dHardlopen)}</td>
+        <td>${r.kmFietsenTotal ? r.kmFietsenTotal.toFixed(1) : '\u2014'}${deltaBadge(r.dFietsen)}</td>
+        <td>${r.kmZwemmenTotal ? r.kmZwemmenTotal.toFixed(1) : '\u2014'}${deltaBadge(r.dZwemmen)}</td>
+        <td>${r.hrvAvg!=null ? r.hrvAvg+' ms' : '\u2014'}</td>
+        <td>${r.hrRestAvg!=null ? r.hrRestAvg+' bpm' : '\u2014'}</td>
+        <td>${r.sleepAvg ? (Math.floor(r.sleepAvg/60)+'u'+String(r.sleepAvg%60).padStart(2,'0')+'m') : '\u2014'}</td>
+      </tr>`).join('') + totalRow;
+  }catch(e){
+    console.error(e);
+    bodyEl.innerHTML = `<tr><td colspan="9" class="empty">${errorLabel}</td></tr>`;
+  }
+}
+// Eén centrale functie die alle teamdata precies één keer ophaalt, en daarna
+// alle zes overzichten (+ de twee vergelijkingsregels) lokaal berekent.
+// Dit voorkomt dat elk overzicht apart de opslag bevraagt (dat was de oorzaak
+// van de rate-limit-meldingen bij het openen van tab Team).
+async function renderAllTeamViews(){
+  let allEntries = [];
+  try{
+    allEntries = await loadAllTeamEntries();
+  }catch(e){
+    logStorageError('Ophalen teamdata', e);
+  }
+  await renderTeam(allEntries);
+  renderTeamPeriod(weekDates(new Date()), 'teamWeekBody', 'Nog geen teamdata deze week.', 'Teamweekoverzicht kon niet geladen worden.', lastWeekDates(new Date()), allEntries);
+  renderTeamPeriod(lastWeekDates(new Date()), 'teamLastWeekBody', 'Nog geen teamdata voor vorige week.', 'Teamoverzicht vorige week kon niet geladen worden.', undefined, allEntries);
+  renderTeamPeriod(monthDates(new Date()), 'teamMonthBody', 'Nog geen teamdata deze maand.', 'Teammaandoverzicht kon niet geladen worden.', lastMonthDates(new Date()), allEntries);
+  renderTeamPeriod(lastMonthDates(new Date()), 'teamLastMonthBody', 'Nog geen teamdata voor vorige maand.', 'Teamoverzicht vorige maand kon niet geladen worden.', undefined, allEntries);
+  renderTeamPeriod(quarterDates(new Date()), 'teamQuarterBody', 'Nog geen teamdata dit kwartaal.', 'Teamkwartaaloverzicht kon niet geladen worden.', undefined, allEntries);
+}
+
+document.getElementById('teamNameSaveBtn').addEventListener('click', async ()=>{
+  const statusEl = document.getElementById('teamNameStatus');
+  const name = document.getElementById('teamNameInput').value.trim();
+  if(!name){
+    statusEl.innerHTML = '<span class="status-err">Vul een naam in.</span>';
+    return;
+  }
+  await saveTeamName(name);
+  statusEl.textContent = 'Opgeslagen. Je data wordt gesynchroniseerd.';
+  statusEl.classList.remove('status-err');
+  renderDashboard();
+  renderAllTeamViews();
+});
+
+let _resyncInProgress = false;
+document.getElementById('teamResyncBtn').addEventListener('click', async ()=>{
+  const btn = document.getElementById('teamResyncBtn');
+  const statusEl = document.getElementById('teamResyncStatus');
+  if(_resyncInProgress) return;
+  const name = await loadTeamName();
+  if(!name){
+    statusEl.innerHTML = '<span class="status-err">Vul en sla eerst je teamnaam op.</span>';
+    return;
+  }
+  _resyncInProgress = true;
+  btn.disabled = true;
+  const days = monthDates(new Date()).filter(d=>d<=new Date());
+  let synced = 0, skippedEmpty = 0, skippedRateLimit = 0;
+  for(const d of days){
+    const dateStr = fmtDate(d);
+    statusEl.textContent = `Bezig: ${dateStr} (${synced+skippedEmpty+skippedRateLimit+1}/${days.length})...`;
+    if(_reloadRequired || Date.now() < _rateLimitUntil){
+      skippedRateLimit++;
+      continue;
+    }
+    const [meals, training, vitals] = await Promise.all([loadMeals(dateStr), loadTraining(dateStr), loadVitals(dateStr)]);
+    const hasData = (meals && meals.length>0) || training || (vitals && (vitals.hrRest!=null||vitals.hrv!=null||vitals.sleepMinutes));
+    if(!hasData){ skippedEmpty++; continue; }
+    try{
+      await syncDateToTeamBoard(dateStr, training||null, vitals||null);
+      synced++;
+    }catch(e){
+      logStorageError('Resync per dag', e);
+      skippedRateLimit++;
+    }
+    await sleep(300);
+  }
+  btn.disabled = false;
+  _resyncInProgress = false;
+  let msg = `Klaar: ${synced} dag(en) gesynchroniseerd.`;
+  if(skippedRateLimit>0) msg += _reloadRequired
+    ? ` ${skippedRateLimit} dag(en) overgeslagen — de opslag zit aan een sessielimiet, ververs de pagina (F5) en klik daarna nog eens op deze knop.`
+    : ` ${skippedRateLimit} dag(en) overgeslagen door een tijdelijke limiet — klik over ~30s nog eens op deze knop om die alsnog te doen.`;
+  statusEl.innerHTML = skippedRateLimit>0 ? `<span class="status-err">${msg}</span>` : msg;
+  renderAllTeamViews();
+});
+
+async function renderPersonalPeriod(days, labelElId, bodyElId, label){
+  document.getElementById(labelElId).textContent = label;
+
+  const dayNames = ['zo','ma','di','wo','do','vr','za'];
+  const agg = { weights:[], hrRests:[], hrvs:[], sleepMins:[], kcalIns:0, proteins:0, fats:0, burnedTotal:0, scores:[] };
+  let rows = '';
+  for(const d of days){
+    const dateStr = fmtDate(d);
+    const w = await loadWeight(dateStr);
+    const c = (await loadVitals(dateStr)) || {};
+    const meals = await loadMeals(dateStr);
+    const macros = macroKcal(meals);
+    const training = await loadTraining(dateStr);
+    const burned = training ? (training.totalKcal||0) : 0;
+    const balans = macros.kcal - burned;
+    const {score} = computeDagscore(macros.kcal, training, c);
+
+    if(w && w.kg) agg.weights.push(w.kg);
+    if(c.hrRest!=null) agg.hrRests.push(c.hrRest);
+    if(c.hrv!=null) agg.hrvs.push(c.hrv);
+    if(c.sleepMinutes) agg.sleepMins.push(c.sleepMinutes);
+    agg.kcalIns += macros.kcal||0;
+    agg.proteins += macros.protein||0;
+    agg.fats += macros.fat||0;
+    agg.burnedTotal += burned||0;
+    if(score!==null) agg.scores.push(score);
+
+    const sleepLabel = c.sleepMinutes ? (Math.floor(c.sleepMinutes/60)+'u'+String(c.sleepMinutes%60).padStart(2,'0')+'m') : '\u2014';
+
+    let kcalCell = macros.kcal || '\u2014';
+    let proteinCell = macros.protein ? macros.protein+'g' : '\u2014';
+    let fatCell = macros.fat ? macros.fat+'g' : '\u2014';
+    if(w && w.kg){
+      let proteinFactor = 1.8;
+      if(training && training.restKcal && burned){
+        const scaleFactor = Math.min(1.5, Math.max(1, burned/training.restKcal));
+        proteinFactor = 1.8*scaleFactor;
+      }
+      const targetProtein = Math.round(w.kg*proteinFactor);
+      const targetFat = Math.round(w.kg*1.0);
+      if(macros.kcal && training){
+        const pctKcal = Math.round(macros.kcal/burned*100);
+        kcalCell = `${macros.kcal} <span style="color:var(--ink-soft);">(${pctKcal}%)</span>`;
+      }
+      if(macros.protein){
+        const pctProtein = Math.round(macros.protein/targetProtein*100);
+        proteinCell = `${macros.protein}g <span style="color:var(--ink-soft);">(${pctProtein}%)</span>`;
+      }
+      if(macros.fat){
+        const pctFat = Math.round(macros.fat/targetFat*100);
+        fatCell = `${macros.fat}g <span style="color:var(--ink-soft);">(${pctFat}%)</span>`;
+      }
+    }
+
+    rows += `<tr>
+      <td class="desc-cell">${dayNames[d.getDay()]} ${dateStr}</td>
+      <td>${w && w.kg ? w.kg+' kg' : '\u2014'}</td>
+      <td>${c.hrRest!=null ? c.hrRest+' bpm' : '\u2014'}</td>
+      <td>${c.hrv!=null ? c.hrv+' ms' : '\u2014'}</td>
+      <td>${sleepLabel}</td>
+      <td>${kcalCell}</td>
+      <td>${proteinCell}</td>
+      <td>${fatCell}</td>
+      <td>${training ? burned+' kcal' : '\u2014'}</td>
+      <td style="color:${balans>0 ? 'var(--clay)' : 'var(--pine)'};font-weight:700;">${training ? (balans>=0?'+':'')+balans : '\u2014'}</td>
+      <td style="font-weight:700;">${score!==null ? score.toFixed(1) : '\u2014'}</td>
+    </tr>`;
+  }
+  const avg = arr => arr.length ? Math.round((arr.reduce((a,b)=>a+b,0)/arr.length)*10)/10 : null;
+  const avgWeight = avg(agg.weights);
+  const avgHrRest = avg(agg.hrRests);
+  const avgHrv = avg(agg.hrvs);
+  const avgSleepMin = agg.sleepMins.length ? Math.round(agg.sleepMins.reduce((a,b)=>a+b,0)/agg.sleepMins.length) : null;
+  const avgScore = avg(agg.scores);
+  const totalBalans = agg.kcalIns - agg.burnedTotal;
+
+  rows += `<tr style="border-top:2px solid var(--ink);font-weight:700;">
+    <td class="desc-cell">Totaal / gem.</td>
+    <td>${avgWeight!=null ? avgWeight+' kg' : '\u2014'}</td>
+    <td>${avgHrRest!=null ? avgHrRest+' bpm' : '\u2014'}</td>
+    <td>${avgHrv!=null ? avgHrv+' ms' : '\u2014'}</td>
+    <td>${avgSleepMin!=null ? Math.floor(avgSleepMin/60)+'u'+String(avgSleepMin%60).padStart(2,'0')+'m' : '\u2014'}</td>
+    <td>${agg.kcalIns || '\u2014'}</td>
+    <td>${agg.proteins ? agg.proteins+'g' : '\u2014'}</td>
+    <td>${agg.fats ? agg.fats+'g' : '\u2014'}</td>
+    <td>${agg.burnedTotal || '\u2014'}</td>
+    <td style="color:${totalBalans>0 ? 'var(--clay)' : 'var(--pine)'};">${(totalBalans>=0?'+':'')+totalBalans}</td>
+    <td>${avgScore!==null ? avgScore.toFixed(1) : '\u2014'}</td>
+  </tr>`;
+
+  const bodyEl = document.getElementById(bodyElId);
+  bodyEl.innerHTML = rows;
+}
+
+function weekOptionList(count=12){
+  const opts = [];
+  const thisMonday = getMonday(new Date());
+  for(let i=0;i<count;i++){
+    const monday = new Date(thisMonday);
+    monday.setDate(monday.getDate() - 7*i);
+    const sunday = new Date(monday);
+    sunday.setDate(monday.getDate()+6);
+    const value = fmtDate(monday);
+    const range = monday.toLocaleDateString('nl-NL',{day:'numeric',month:'short'}) + ' \u2013 ' + sunday.toLocaleDateString('nl-NL',{day:'numeric',month:'short',year:'numeric'});
+    opts.push({value, label: i===0 ? `Deze week (${range})` : range});
+  }
+  return opts;
+}
+function monthOptionList(count=12){
+  const opts = [];
+  const now = new Date();
+  for(let i=0;i<count;i++){
+    const d = new Date(now.getFullYear(), now.getMonth()-i, 1);
+    const value = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+    let label = d.toLocaleDateString('nl-NL',{month:'long', year:'numeric'});
+    label = label.charAt(0).toUpperCase()+label.slice(1);
+    opts.push({value, label: i===0 ? `Deze maand (${label})` : label});
+  }
+  return opts;
+}
+function ensureWeekSelectPopulated(){
+  const sel = document.getElementById('weekSelect');
+  if(sel.options.length>0) return;
+  const opts = weekOptionList(12);
+  sel.innerHTML = opts.map(o=>`<option value="${o.value}">${o.label}</option>`).join('');
+  sel.value = opts[0].value;
+  sel.addEventListener('change', renderWeek);
+}
+function ensureMaandSelectPopulated(){
+  const sel = document.getElementById('maandSelect');
+  if(sel.options.length>0) return;
+  const opts = monthOptionList(12);
+  sel.innerHTML = opts.map(o=>`<option value="${o.value}">${o.label}</option>`).join('');
+  sel.value = opts[0].value;
+  sel.addEventListener('change', renderMaand);
+}
+
+async function renderWeek(){
+  ensureWeekSelectPopulated();
+  const sel = document.getElementById('weekSelect');
+  const monday = new Date(sel.value+'T00:00:00');
+  const days = weekDates(monday);
+  const mondayStr = fmtDate(days[0]);
+  const sundayStr = fmtDate(days[6]);
+  await renderPersonalPeriod(days, 'weekLabel', 'weekBody', mondayStr + ' t/m ' + sundayStr);
+}
+
+async function renderMaand(){
+  ensureMaandSelectPopulated();
+  const sel = document.getElementById('maandSelect');
+  const [y, m] = sel.value.split('-').map(Number);
+  const days = monthDates(new Date(y, m-1, 1));
+  let label = new Date(y, m-1, 1).toLocaleDateString('nl-NL', {month:'long', year:'numeric'});
+  await renderPersonalPeriod(days, 'maandLabel', 'maandBody', label.charAt(0).toUpperCase()+label.slice(1));
+}
+
+// ---- Tabs ----
+document.querySelectorAll('nav.tabs button').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    document.querySelectorAll('nav.tabs button').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    ['dashboard','invoer','week','maand','geschiedenis','team'].forEach(t=>{
+      document.getElementById('tab-'+t).style.display = (t===btn.dataset.tab)?'block':'none';
+    });
+    if(btn.dataset.tab==='geschiedenis') renderHistory();
+    if(btn.dataset.tab==='week') renderWeek();
+    if(btn.dataset.tab==='maand') renderMaand();
+    if(btn.dataset.tab==='team'){ renderAllTeamViews(); }
+  });
+});
+
+// ---- Date nav ----
+document.getElementById('prevDay').addEventListener('click', ()=>{
+  state.currentDate.setDate(state.currentDate.getDate()-1);
+  renderDashboard();
+});
+document.getElementById('nextDay').addEventListener('click', ()=>{
+  state.currentDate.setDate(state.currentDate.getDate()+1);
+  renderDashboard();
+});
+
+// ---- Invoeren: manual save ----
+document.getElementById('saveMeal').addEventListener('click', async ()=>{
+  const desc = document.getElementById('fDesc').value.trim();
+  const kcal = Number(document.getElementById('fKcal').value)||0;
+  if(!desc){
+    document.getElementById('saveStatus').innerHTML = '<span class="status-err">Vul een omschrijving in.</span>';
+    return;
+  }
+  const meal = {
+    desc,
+    mealType: document.getElementById('fMeal').value,
+    kcal,
+    protein: Number(document.getElementById('fProtein').value)||0,
+    carbs: Number(document.getElementById('fCarbs').value)||0,
+    fat: Number(document.getElementById('fFat').value)||0,
+    time: document.getElementById('fTime').value.trim()
+  };
+  const dateStr = fmtDate(state.currentDate);
+  const meals = await loadMeals(dateStr);
+  meals.push(meal);
+  const ok = await saveMeals(dateStr, meals);
+  if(ok){
+    document.getElementById('saveStatus').textContent = 'Opgeslagen bij ' + fmtDateLabel(state.currentDate) + '.';
+    document.getElementById('saveStatus').classList.remove('status-err');
+    if(document.getElementById('fSaveAsQuickAdd').checked){
+      await addCustomQuickAdd(meal);
+      document.getElementById('saveStatus').textContent += ' Toegevoegd aan Snel toevoegen.';
+    }
+    ['fDesc','fKcal','fProtein','fCarbs','fFat','fTime'].forEach(id=>document.getElementById(id).value='');
+    document.getElementById('fSaveAsQuickAdd').checked = false;
+  } else if(storageErrorMessage()){
+    document.getElementById('saveStatus').innerHTML = `<span class="status-err">${storageErrorMessage()}</span>`;
+  } else {
+    document.getElementById('saveStatus').innerHTML = '<span class="status-err">Opslaan mislukt (mogelijk tijdelijke serverdruk) — probeer het nog eens.</span>';
+  }
+  renderDashboard();
+});
+
+// ---- Snel toevoegen: vaste opties ----
+async function quickAdd(meal, statusEl, btn){
+  btn.disabled = true;
+  const dateStr = fmtDate(state.currentDate);
+  const meals = await loadMeals(dateStr);
+  meals.push(meal);
+  const ok = await saveMeals(dateStr, meals);
+  if(ok){
+    statusEl.innerHTML = meal.desc + ' toegevoegd bij ' + fmtDateLabel(state.currentDate) + '.';
+    statusEl.classList.remove('status-err');
+  } else if(storageErrorMessage()){
+    statusEl.innerHTML = `<span class="status-err">${storageErrorMessage()}</span>`;
+  } else {
+    statusEl.innerHTML = '<span class="status-err">Opslaan mislukt (mogelijk tijdelijke serverdruk) — probeer het nog eens.</span>';
+  }
+  btn.disabled = false;
+  renderDashboard();
+}
+
+// ---- Snel toevoegen: door de gebruiker zelf bewaarde opties ----
+async function loadCustomQuickAdds(){
+  try{
+    const res = await storageGet('custom-quickadds');
+    return res ? JSON.parse(res.value) : [];
+  }catch(e){ return []; }
+}
+async function saveCustomQuickAdds(list){
+  try{
+    await storageSet('custom-quickadds', JSON.stringify(list));
+    return true;
+  }catch(e){ logStorageError('Opslaan snel-toevoegen-lijst', e); return false; }
+}
+async function addCustomQuickAdd(meal){
+  const list = await loadCustomQuickAdds();
+  // Zelfde omschrijving? Dan de bestaande vervangen i.p.v. dupliceren.
+  const filtered = list.filter(m=>m.desc.toLowerCase()!==meal.desc.toLowerCase());
+  filtered.push(meal);
+  await saveCustomQuickAdds(filtered);
+  await renderCustomQuickAdds();
+}
+async function removeCustomQuickAdd(desc){
+  const list = await loadCustomQuickAdds();
+  await saveCustomQuickAdds(list.filter(m=>m.desc!==desc));
+  await renderCustomQuickAdds();
+}
+async function renderCustomQuickAdds(){
+  const list = await loadCustomQuickAdds();
+  const containerEl = document.getElementById('customQuickAddList');
+  if(list.length===0){ containerEl.innerHTML = ''; return; }
+  containerEl.innerHTML = list.map((m,i)=>{
+    const metaParts = [`${m.kcal} kcal`];
+    if(m.protein) metaParts.push(`${m.protein}g eiwit`);
+    if(m.carbs) metaParts.push(`${m.carbs}g koolh.`);
+    if(m.fat) metaParts.push(`${m.fat}g vet`);
+    const isLast = i===list.length-1;
+    return `
+      <div class="stat-row" style="border-bottom:${isLast?'none':'1px solid var(--line)'};">
+        <div>
+          <div class="meal-desc">${escapeHtml(m.desc)}</div>
+          <div class="meal-meta">${escapeHtml(metaParts.join(' &middot; '))} &middot; ${escapeHtml(m.mealType)}</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <button class="btn-secondary customQuickAddBtn" data-idx="${i}">+ Toevoegen</button>
+          <button class="btn-secondary customQuickAddRemove" data-desc="${escapeHtml(m.desc)}" title="Verwijderen uit Snel toevoegen" style="padding:6px 10px;">&times;</button>
+        </div>
+      </div>`;
+  }).join('');
+  containerEl.querySelectorAll('.customQuickAddBtn').forEach(btn=>{
+    btn.addEventListener('click', (e)=>{
+      const meal = list[Number(e.target.dataset.idx)];
+      quickAdd({...meal}, document.getElementById('quickAddStatus'), e.target);
+    });
+  });
+  containerEl.querySelectorAll('.customQuickAddRemove').forEach(btn=>{
+    btn.addEventListener('click', (e)=>{
+      removeCustomQuickAdd(e.target.dataset.desc);
+    });
+  });
+}
+renderCustomQuickAdds();
+
+document.getElementById('quickAddOats').addEventListener('click', (e)=>{
+  const grams = Math.max(1, Number(document.getElementById('oatsGrams').value)||40);
+  const oatKcal = Math.round(grams/100*375);
+  const oatProtein = Math.round(grams/100*13);
+  const oatCarbs = Math.round(grams/100*61);
+  const oatFat = Math.round(grams/100*7);
+  quickAdd({
+    desc: grams + 'g havermout + 250ml magere kwark',
+    mealType: 'Ontbijt',
+    kcal: oatKcal + 113,
+    protein: oatProtein + 25,
+    carbs: oatCarbs + 10,
+    fat: oatFat + 1,
+    time: ''
+  }, document.getElementById('quickAddStatus'), e.target);
+});
+
+document.getElementById('quickAddEggs').addEventListener('click', (e)=>{
+  const qty = Math.max(1, Number(document.getElementById('eggQty').value)||2);
+  quickAdd({
+    desc: qty + 'x gekookt ei',
+    mealType: 'Ontbijt', kcal: 78*qty, protein: 6*qty, carbs: 1*qty, fat: 5*qty, time: ''
+  }, document.getElementById('quickAddStatus'), e.target);
+});
+
+document.getElementById('quickAddLunch').addEventListener('click', (e)=>{
+  const qty = Math.max(1, Number(document.getElementById('lunchQty').value)||1);
+  quickAdd({
+    desc: qty + 'x broodje kipfilet (volkoren + kipfilet)',
+    mealType: 'Lunch', kcal: 140*qty, protein: 8*qty, carbs: 24*qty, fat: 2*qty, time: ''
+  }, document.getElementById('quickAddStatus'), e.target);
+});
+
+document.getElementById('quickAddBanana').addEventListener('click', (e)=>{
+  quickAdd({
+    desc: 'Banaan',
+    mealType: 'Snack', kcal: 105, protein: 1, carbs: 27, fat: 0, time: ''
+  }, document.getElementById('quickAddStatus'), e.target);
+});
+
+document.getElementById('quickAddShake').addEventListener('click', (e)=>{
+  quickAdd({
+    desc: 'Eiwitshake (whey, met water)',
+    mealType: 'Sportvoeding', kcal: 120, protein: 24, carbs: 3, fat: 1.5, time: ''
+  }, document.getElementById('quickAddStatus'), e.target);
+});
+
+document.getElementById('quickAddLeffe').addEventListener('click', (e)=>{
+  quickAdd({
+    desc: 'Leffe Blond 0.0 (blikje, 330ml)',
+    mealType: 'Snack', kcal: 86, protein: 0.7, carbs: 17, fat: 0, time: ''
+  }, document.getElementById('quickAddStatus'), e.target);
+});
+
+// ---- Photo upload & analysis ----
+const photoDrop = document.getElementById('photoDrop');
+const photoInput = document.getElementById('photoInput');
+photoDrop.addEventListener('click', ()=>photoInput.click());
+
+photoInput.addEventListener('change', async (e)=>{
+  const file = e.target.files[0];
+  if(!file) return;
+  const preview = document.getElementById('photoPreview');
+  const statusEl = document.getElementById('photoStatus');
+  const reader = new FileReader();
+  reader.onload = async ()=>{
+    const base64Full = reader.result;
+    const base64Data = base64Full.split(',')[1];
+    preview.src = base64Full;
+    preview.style.display = 'block';
+    statusEl.innerHTML = '<span class="status-msg">Foto wordt geanalyseerd...</span>';
+    try{
+      const response = await fetchWithTimeout("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-6",
+          max_tokens: 500,
+          messages: [{
+            role: "user",
+            content: [
+              { type: "image", source: { type: "base64", media_type: file.type||"image/jpeg", data: base64Data } },
+              { type: "text", text: "Schat de voedingswaarden van deze maaltijd in. Antwoord ALLEEN met geldige JSON, geen markdown: {\"desc\": \"korte omschrijving in het Nederlands\", \"kcal\": <getal>, \"protein\": <gram>, \"carbs\": <gram>, \"fat\": <gram>}" }
+            ]
+          }]
+        })
+      });
+      const data = await response.json();
+      const textBlocks = (data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('\n');
+      const parsed = extractJson(textBlocks);
+      document.getElementById('fDesc').value = parsed.desc||'';
+      document.getElementById('fKcal').value = parsed.kcal||'';
+      document.getElementById('fProtein').value = parsed.protein||'';
+      document.getElementById('fCarbs').value = parsed.carbs||'';
+      document.getElementById('fFat').value = parsed.fat||'';
+      statusEl.innerHTML = '<span class="status-msg">Schatting ingevuld hieronder \u2014 check en pas aan waar nodig, klik dan op Opslaan.</span>';
+    }catch(err){
+      console.error(err);
+      statusEl.innerHTML = '<span class="status-msg status-err">Analyse mislukt. Vul de velden handmatig in.</span>';
+    }
+  };
+  reader.readAsDataURL(file);
+});
+
+// ---- History ----
+async function renderHistory(){
+  const body = document.getElementById('historyBody');
+  body.innerHTML = '<tr><td colspan="5">Laden...</td></tr>';
+  try{
+    const [dayKeysRes, mealKeysRes] = await Promise.all([storageList('day-'), storageList('meals-')]);
+    const datesFromNew = (dayKeysRes?.keys||[]).map(k=>k.replace('day-',''));
+    const datesFromOld = (mealKeysRes?.keys||[]).map(k=>k.replace('meals-',''));
+    const dates = [...new Set([...datesFromNew, ...datesFromOld])].sort().reverse();
+    if(dates.length===0){
+      body.innerHTML = '<tr><td colspan="5" class="desc-cell">Nog geen data.</td></tr>';
+      return;
+    }
+    let rows = '';
+    for(const dateStr of dates){
+      const meals = await loadMeals(dateStr);
+      const totals = macroKcal(meals);
+      const training = await loadTraining(dateStr);
+      const burned = training ? (training.totalKcal||0) : 0;
+      const balans = totals.kcal - burned;
+      rows += `<tr>
+        <td class="desc-cell">${dateStr}</td>
+        <td>${meals.length}</td>
+        <td>${totals.kcal}</td>
+        <td>${burned}</td>
+        <td>${(balans>=0?'+':'')+balans}</td>
+      </tr>`;
+    }
+    body.innerHTML = rows;
+  }catch(e){
+    body.innerHTML = '<tr><td colspan="5" class="desc-cell">Geschiedenis laden mislukt.</td></tr>';
+  }
+}
+
+// ---- Dark mode ----
+async function loadDarkMode(){
+  try{
+    const res = await storageGet('dark-mode');
+    return res ? JSON.parse(res.value).enabled : true;
+  }catch(e){ return true; }
+}
+async function saveDarkMode(enabled){
+  try{ await storageSet('dark-mode', JSON.stringify({enabled})); }catch(e){ console.error('Donkere modus opslaan mislukt', e); }
+}
+function applyDarkMode(enabled){
+  document.documentElement.classList.toggle('dark', enabled);
+  const btn = document.getElementById('darkModeToggle');
+  if(btn) btn.textContent = enabled ? '\u2600' : '\u263D';
+}
+
+document.getElementById('darkModeToggle').addEventListener('click', async ()=>{
+  const nowDark = !document.documentElement.classList.contains('dark');
+  applyDarkMode(nowDark);
+  await saveDarkMode(nowDark);
+});
+(async ()=>{
+  const enabled = await loadDarkMode();
+  applyDarkMode(enabled);
+})();
+
+renderDashboard();
+</script>
+</body>
+</html>
