@@ -702,13 +702,16 @@ async function withStorageRetry(fn, retries=2){
   throw lastErr;
 }
 async function storageSet(key, value, shared, retries=2){
-  return withStorageRetry(()=>window.storage.set(key, value, shared), retries);
+console.log("SET", key);
+return true;
 }
 async function storageGet(key, shared, retries=2){
-  return withStorageRetry(()=>window.storage.get(key, shared), retries);
+console.log("GET", key);
+return null;
 }
 async function storageList(prefix, shared, retries=2){
-  return withStorageRetry(()=>window.storage.list(prefix, shared), retries);
+console.log("LIST", prefix);
+return { keys: [] };
 }
 
 function dayKey(dateStr){ return 'day-'+dateStr; }
