@@ -1,0 +1,18 @@
+export default async function handler(req, res) {
+
+  const token = process.env.TREDICT_TOKEN;
+
+  if (!token) {
+    return res.status(500).json({
+      success: false,
+      message: "TREDICT_TOKEN ontbreekt"
+    });
+  }
+
+  return res.status(200).json({
+    success: true,
+    message: "Tredict token gevonden",
+    tokenLength: token.length
+  });
+
+}
