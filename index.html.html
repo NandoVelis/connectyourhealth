@@ -758,8 +758,23 @@ async function saveDayBundle(dateStr, patch){
 }
 
 async function loadMeals(dateStr){
-  const bundle = await loadDayBundle(dateStr);
-  return bundle.meals || [];
+const { data, error } = await supabaseClient
+.from('meals')
+.select('*')
+.eq('meal_date', dateStr);
+console.log("MEALS", dateStr, data, error);
+if(error || !data){
+return [];
+}
+return data.map(item => ({
+desc: item.meal_description,
+mealType: item.meal_type,
+kcal: item.kcal,
+protein: item.protein,
+carbs: item.carbs,
+fat: item.fat,
+time: item.meal_time
+}));
 }
 async function saveMeals(dateStr, meals){
   return saveDayBundle(dateStr, {meals});
