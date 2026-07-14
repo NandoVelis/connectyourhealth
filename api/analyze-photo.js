@@ -9,7 +9,7 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'imageBase64 ontbreekt' });
     }
 
-    const GEMINI_MODEL = 'gemini-2.5-flash'; // gratis tier geschikt model
+    const GEMINI_MODEL = 'gemini-3.5-flash'; // actueel gratis-tier model (gemini-2.5-flash is uitgezet)
     const apiKey = process.env.GEMINI_API_KEY;
 
     const response = await fetch(
