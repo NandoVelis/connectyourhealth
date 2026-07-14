@@ -192,10 +192,18 @@
 <body>
 <div class="wrap">
   <header class="top">
-    <div>
-      <p class="brand-eyebrow">ConnectYourHealth</p>
-      <h1>InFood = Output</h1>
-    </div>
+   <div>
+  <p class="brand-eyebrow">ConnectYourHealth</p>
+  <h1>InFood = Output</h1>
+
+  <button
+    id="syncTredictBtn"
+    class="btn-primary"
+    style="margin-top:12px;"
+  >
+    🔄 Synchroniseer Tredict
+  </button>
+</div>
     <div class="datenav">
       <button id="darkModeToggle" title="Donkere modus aan/uit">&#9789;</button>
       <button id="prevDay">&larr;</button>
@@ -590,22 +598,7 @@ const supabaseClient = window.supabase.createClient(
   SUPABASE_KEY
 );
 console.log("Supabase verbonden");
-  async function testSupabase() {
-const { data, error } = await supabaseClient
-.from("daily_data")
-.insert([
-{
-user_name: "Nando",
-data_date: new Date().toISOString().split("T")[0],
-hrv: 85,
-hr_rest: 36,
-sleep_minutes: 475
-}
-]);
-console.log("Supabase data:", data);
-console.log("Supabase error:", error);
-}
-testSupabase();
+
 const state = { currentDate: new Date(), tab: 'dashboard' };
   function extractJson(text){
   const clean = text.replace(/```json|```/g,'').trim();
@@ -898,6 +891,7 @@ function macroKcal(meals){
 }
 
 async function renderDashboard(){
+
   const dateStr = fmtDate(state.currentDate);
   document.getElementById('dateLabel').textContent = fmtDateLabel(state.currentDate);
 
@@ -2243,6 +2237,56 @@ document.getElementById('darkModeToggle').addEventListener('click', async ()=>{
 })();
 
 renderDashboard();
+ document
+  .getElementById("syncTredictBtn")
+  ?.addEventListener("click", async () => {
+
+    const btn = document.getElementById("syncTredictBtn");
+
+    btn.disabled = true;
+    btn.innerText = "Synchroniseren...";
+
+    try {
+
+      await fetch(
+        "https://mhvduufxeqyxgkkvwimx.supabase.co/functions/v1/sync-tredict"
+      );
+
+      await renderDashboard();
+
+      alert("Tredict synchronisatie voltooid");
+
+    } catch (err) {
+
+      console.error(err);
+      alert("Synchronisatie mislukt");
+
+    } finally {
+
+      btn.disabled = false;
+      btn.innerText = "🔄 Synchroniseer Tredict";
+
+    }
+
+  });
+
+(async () => {
+
+  try {
+
+    await fetch(
+      "https://mhvduufxeqyxgkkvwimx.supabase.co/functions/v1/sync-tredict"
+    );
+
+  } catch (e) {
+
+    console.log("Tredict sync mislukt", e);
+
+  }
+
+  await renderDashboard();
+
+})();
 </script>
 </body>
 </html>
