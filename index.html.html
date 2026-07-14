@@ -802,7 +802,8 @@ const { data, error } = await supabaseClient
 .from('vitals')
 .select('*')
 .eq('vital_date', dateStr)
-.single();
+.maybeSingle();
+  
 if(error || !data){
 return null;
 }
@@ -1425,7 +1426,8 @@ const { data, error } = await supabaseClient
 .from('weight')
 .select('*')
 .eq('weight_date', dateStr)
-.single();
+.maybeSingle();
+  
 console.log("WEIGHT RESULT", data, error);
 if(error || !data){
 return null;
