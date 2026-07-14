@@ -1731,6 +1731,10 @@ document.getElementById('saveMeal').addEventListener('click', async ()=>{
     time: document.getElementById('fTime').value.trim()
   };
   const dateStr = fmtDate(state.currentDate);
+  if(!currentOwner()){
+    document.getElementById('saveStatus').innerHTML = '<span class="status-err">Vul eerst je naam in bij het tabblad Team.</span>';
+    return;
+  }
   const meals = await loadMeals(dateStr);
   meals.push(meal);
   const ok = await saveMeals(dateStr, meals);
@@ -1751,6 +1755,10 @@ document.getElementById('saveMeal').addEventListener('click', async ()=>{
 
 // ---- Snel toevoegen: vaste opties ----
 async function quickAdd(meal, statusEl, btn){
+  if(!currentOwner()){
+    statusEl.innerHTML = '<span class="status-err">Vul eerst je naam in bij het tabblad Team.</span>';
+    return;
+  }
   btn.disabled = true;
   const dateStr = fmtDate(state.currentDate);
   const meals = await loadMeals(dateStr);
@@ -1925,6 +1933,10 @@ photoInput.addEventListener('change', async (e)=>{
       });
 
       // Direct opslaan als maaltijd, i.p.v. alleen het formulier vullen
+      if(!currentOwner()){
+        statusEl.innerHTML = '<span class="status-msg status-err">Schatting ingevuld, maar vul eerst je naam in bij Team om op te slaan.</span>';
+        return;
+      }
       const uploadTime = new Date().toLocaleTimeString('nl-NL', {
         timeZone: 'Europe/Amsterdam', hour: '2-digit', minute: '2-digit'
       });
@@ -2020,7 +2032,23 @@ document.getElementById('darkModeToggle').addEventListener('click', ()=>{
 });
 applyDarkMode(loadDarkMode());
 
-renderDashboard();
+// Zonder ingevulde naam kan niemand per ongeluk andermans data zien of
+// bewerken: spring dan direct naar Team en vraag om de naam eerst in te vullen.
+if(!currentOwner()){
+  document.querySelectorAll('nav.tabs button').forEach(b=>b.classList.remove('active'));
+  const teamTabBtn = document.querySelector('nav.tabs button[data-tab="team"]');
+  if(teamTabBtn) teamTabBtn.classList.add('active');
+  ['dashboard','invoer','week','maand','geschiedenis','team'].forEach(t=>{
+    document.getElementById('tab-'+t).style.display = (t==='team')?'block':'none';
+  });
+  const teamNameStatusEl = document.getElementById('teamNameStatus');
+  if(teamNameStatusEl) teamNameStatusEl.innerHTML = '<span class="status-err">Vul hier eerst je naam in om het dashboard te gebruiken.</span>';
+  const nameInputEl = document.getElementById('teamNameInput');
+  if(nameInputEl) nameInputEl.focus();
+  renderAllTeamViews();
+} else {
+  renderDashboard();
+}
  document
   .getElementById("syncTredictBtn")
   ?.addEventListener("click", async () => {
