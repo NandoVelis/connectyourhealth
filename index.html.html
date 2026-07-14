@@ -1494,6 +1494,7 @@ document.getElementById('teamNameSaveBtn').addEventListener('click', async ()=>{
   statusEl.classList.remove('status-err');
   renderDashboard();
   renderAllTeamViews();
+  renderCustomQuickAdds();
 });
 
 let _resyncInProgress = false;
@@ -1775,16 +1776,20 @@ async function quickAdd(meal, statusEl, btn){
 }
 
 // ---- Snel toevoegen: door de gebruiker zelf bewaarde opties ----
-// Persoonlijk per browser/apparaat via localStorage (geen gedeelde teamdata).
+// Persoonlijk per naam + browser/apparaat via localStorage (geen gedeelde teamdata).
+function quickAddsStorageKey(){
+  const owner = currentOwner() || 'onbekend';
+  return 'infood-custom-quickadds-' + owner;
+}
 async function loadCustomQuickAdds(){
   try{
-    const raw = localStorage.getItem('infood-custom-quickadds');
+    const raw = localStorage.getItem(quickAddsStorageKey());
     return raw ? JSON.parse(raw) : [];
   }catch(e){ return []; }
 }
 async function saveCustomQuickAdds(list){
   try{
-    localStorage.setItem('infood-custom-quickadds', JSON.stringify(list));
+    localStorage.setItem(quickAddsStorageKey(), JSON.stringify(list));
     return true;
   }catch(e){ console.error('Opslaan snel-toevoegen-lijst', e); return false; }
 }
@@ -1954,7 +1959,12 @@ photoInput.addEventListener('change', async (e)=>{
       })
     });
       if(!response.ok){
-        throw new Error('Server gaf status ' + response.status);
+        let serverMsg = '';
+        try{
+          const errBody = await response.json();
+          serverMsg = typeof errBody.error === 'string' ? errBody.error : JSON.stringify(errBody.error);
+        }catch(e){}
+        throw new Error(serverMsg || ('Server gaf status ' + response.status));
       }
       const data = await response.json();
       const parsed = extractJson(data.text || '');
@@ -1998,7 +2008,8 @@ photoInput.addEventListener('change', async (e)=>{
       }
     }catch(err){
       console.error(err);
-      statusEl.innerHTML = '<span class="status-msg status-err">Analyse mislukt. Vul de velden handmatig in.</span>';
+      const msg = (err && err.message) ? err.message : 'Analyse mislukt.';
+      statusEl.innerHTML = '<span class="status-msg status-err">' + escapeHtml(msg) + ' Vul de velden handmatig in.</span>';
     }
 });
 
