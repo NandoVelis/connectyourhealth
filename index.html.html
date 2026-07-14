@@ -1895,27 +1895,64 @@ const photoDrop = document.getElementById('photoDrop');
 const photoInput = document.getElementById('photoInput');
 photoDrop.addEventListener('click', ()=>photoInput.click());
 
+// Zet elke foto (ook HEIC van iPhone-camera's, en grote mobiele foto's) om
+// naar een gecomprimeerde JPEG via canvas, zodat de analyse-API altijd een
+// ondersteund en niet te groot formaat krijgt.
+function fileToJpegBase64(file, maxDim=1600, quality=0.85){
+  return new Promise((resolve, reject)=>{
+    const reader = new FileReader();
+    reader.onload = ()=>{
+      const img = new Image();
+      img.onload = ()=>{
+        let { width, height } = img;
+        if(width > maxDim || height > maxDim){
+          const scale = maxDim / Math.max(width, height);
+          width = Math.round(width*scale);
+          height = Math.round(height*scale);
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      };
+      img.onerror = ()=>reject(new Error('Kon de afbeelding niet laden (mogelijk een niet-ondersteund formaat zoals HEIC).'));
+      img.src = reader.result;
+    };
+    reader.onerror = ()=>reject(new Error('Kon het bestand niet lezen.'));
+    reader.readAsDataURL(file);
+  });
+}
+
 photoInput.addEventListener('change', async (e)=>{
   const file = e.target.files[0];
   if(!file) return;
   const preview = document.getElementById('photoPreview');
   const statusEl = document.getElementById('photoStatus');
-  const reader = new FileReader();
-  reader.onload = async ()=>{
-    const base64Full = reader.result;
-    const base64Data = base64Full.split(',')[1];
-    preview.src = base64Full;
-    preview.style.display = 'block';
-    statusEl.innerHTML = '<span class="status-msg">Foto wordt geanalyseerd...</span>';
-    try{
-      const response = await fetchWithTimeout("/api/analyze-photo", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          imageBase64: base64Data,
-          mediaType: file.type || "image/jpeg"
-        })
-      });
+
+  statusEl.innerHTML = '<span class="status-msg">Foto wordt voorbereid...</span>';
+  let base64Full;
+  try{
+    base64Full = await fileToJpegBase64(file);
+  }catch(err){
+    console.error(err);
+    statusEl.innerHTML = '<span class="status-msg status-err">Kon de foto niet verwerken (mogelijk een niet-ondersteund formaat). Probeer een andere foto.</span>';
+    return;
+  }
+  const base64Data = base64Full.split(',')[1];
+  preview.src = base64Full;
+  preview.style.display = 'block';
+  statusEl.innerHTML = '<span class="status-msg">Foto wordt geanalyseerd...</span>';
+  try{
+    const response = await fetchWithTimeout("/api/analyze-photo", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        imageBase64: base64Data,
+        mediaType: "image/jpeg"
+      })
+    });
       if(!response.ok){
         throw new Error('Server gaf status ' + response.status);
       }
@@ -1963,8 +2000,6 @@ photoInput.addEventListener('change', async (e)=>{
       console.error(err);
       statusEl.innerHTML = '<span class="status-msg status-err">Analyse mislukt. Vul de velden handmatig in.</span>';
     }
-  };
-  reader.readAsDataURL(file);
 });
 
 // ---- History ----
