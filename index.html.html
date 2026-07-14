@@ -279,6 +279,11 @@
       </div>
     </div>
 
+    <div class="card" style="margin-bottom:16px;">
+      <h3>Tip</h3>
+      <div id="nutritionTip" class="meal-meta" style="font-size:14px;color:var(--ink);"></div>
+    </div>
+
     <div class="grid">
       <div class="card">
         <h3>Maaltijden</h3>
@@ -775,6 +780,40 @@ function computeDagscore(consumedKcal, training, vitals){
   return {score: Math.round(total*10)/10, parts};
 }
 
+// Genereert een korte voedingstip op basis van resterende macro's, kcal-ruimte en herstel.
+function generateNutritionTip(totals, targets, burned, vitals, trainingHadActivity, recoveryConcern){
+  if(targets.protein==null){
+    return "Vul je gewicht in (via de Tredict-sync) zodat ik een tip op maat kan geven.";
+  }
+
+  const remainingKcal = burned!=null ? Math.round(burned - totals.kcal) : null;
+  const remainingProtein = targets.protein!=null ? Math.round(targets.protein - totals.protein) : null;
+  const remainingCarbs = targets.carbs!=null ? Math.round(targets.carbs - totals.carbs) : null;
+
+  const tips = [];
+
+  if(remainingProtein!=null && remainingProtein > 15){
+    tips.push(`nog ~${remainingProtein}g eiwit nodig \u2014 denk aan kwark, kipfilet, eieren of een eiwitshake`);
+  }
+  if(remainingCarbs!=null && remainingCarbs > 40 && trainingHadActivity){
+    tips.push(`na je training kun je nog ~${remainingCarbs}g koolhydraten gebruiken voor herstel \u2014 rijst, pasta, havermout of fruit`);
+  }
+  if(remainingKcal!=null && remainingKcal > 300 && tips.length===0){
+    tips.push(`je hebt nog ongeveer ${remainingKcal} kcal ruimte vandaag`);
+  }
+  if(remainingKcal!=null && remainingKcal < -200){
+    tips.push(`je zit al ${Math.abs(remainingKcal)} kcal boven je verbruik \u2014 hou de rest van de dag wat lichter`);
+  }
+  if(recoveryConcern){
+    tips.push(`je herstel (slaap/HRV/rust-HR) is wat lager dan je weekgemiddelde \u2014 extra hydratatie en op tijd naar bed kunnen helpen`);
+  }
+
+  if(tips.length===0){
+    return "Je zit mooi in balans voor vandaag \u2014 geen aanvullingen nodig.";
+  }
+  return tips.map((t,i)=> i===0 ? t.charAt(0).toUpperCase()+t.slice(1) : t).join('. ') + '.';
+}
+
 function macroKcal(meals){
   const totals = meals.reduce((acc,m)=>{
     acc.kcal += Number(m.kcal)||0;
@@ -910,6 +949,25 @@ async function renderDashboard(){
   const pctCarbsVal = pctOf(totals.carbs, targetCarbs);
   const pctFatVal = pctOf(totals.fat, targetFat);
   const pctLabel = (actual, target) => target ? ` <span style="color:var(--ink-soft);font-weight:400;">(${Math.round(actual/target*100)}%)</span>` : '';
+
+  // Herstel t.o.v. weekgemiddelde, voor de tip
+  let recoveryConcern = false;
+  if(vitals){
+    if(hrvWeekAvg!=null && vitals.hrv!=null && vitals.hrv < hrvWeekAvg*0.85) recoveryConcern = true;
+    if(hrRestWeekAvg!=null && vitals.hrRest!=null && vitals.hrRest > hrRestWeekAvg*1.1) recoveryConcern = true;
+    if(vitals.sleepMinutes && vitals.sleepMinutes < 360) recoveryConcern = true;
+  }
+  const trainingHadActivity = !!(training && training.activities && training.activities.some(a=>Number(a.kcal)>0));
+  const tipText = generateNutritionTip(
+    totals,
+    { protein: targetProtein, carbs: targetCarbs, fat: targetFat },
+    burned,
+    vitals,
+    trainingHadActivity,
+    recoveryConcern
+  );
+  const tipEl = document.getElementById('nutritionTip');
+  if(tipEl) tipEl.textContent = tipText;
 
   syncTeamEntry(dateStr, {
     dagscore: dagscoreVal,
@@ -1650,15 +1708,16 @@ async function quickAdd(meal, statusEl, btn){
 }
 
 // ---- Snel toevoegen: door de gebruiker zelf bewaarde opties ----
+// Persoonlijk per browser/apparaat via localStorage (geen gedeelde teamdata).
 async function loadCustomQuickAdds(){
   try{
-    const res = await storageGet('custom-quickadds');
-    return res ? JSON.parse(res.value) : [];
+    const raw = localStorage.getItem('infood-custom-quickadds');
+    return raw ? JSON.parse(raw) : [];
   }catch(e){ return []; }
 }
 async function saveCustomQuickAdds(list){
   try{
-    await storageSet('custom-quickadds', JSON.stringify(list));
+    localStorage.setItem('infood-custom-quickadds', JSON.stringify(list));
     return true;
   }catch(e){ console.error('Opslaan snel-toevoegen-lijst', e); return false; }
 }
@@ -1800,12 +1859,40 @@ photoInput.addEventListener('change', async (e)=>{
       const data = await response.json();
       const textBlocks = (data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('\n');
       const parsed = extractJson(textBlocks);
+
+      // Ook nog invullen in het formulier, zodat de waarden zichtbaar en corrigeerbaar zijn
       document.getElementById('fDesc').value = parsed.desc||'';
       document.getElementById('fKcal').value = parsed.kcal||'';
       document.getElementById('fProtein').value = parsed.protein||'';
       document.getElementById('fCarbs').value = parsed.carbs||'';
       document.getElementById('fFat').value = parsed.fat||'';
-      statusEl.innerHTML = '<span class="status-msg">Schatting ingevuld hieronder \u2014 check en pas aan waar nodig, klik dan op Opslaan.</span>';
+      document.getElementById('fTime').value = new Date().toLocaleTimeString('nl-NL', {
+        timeZone: 'Europe/Amsterdam', hour: '2-digit', minute: '2-digit'
+      });
+
+      // Direct opslaan als maaltijd, i.p.v. alleen het formulier vullen
+      const uploadTime = new Date().toLocaleTimeString('nl-NL', {
+        timeZone: 'Europe/Amsterdam', hour: '2-digit', minute: '2-digit'
+      });
+      const meal = {
+        desc: parsed.desc || 'Foto-analyse',
+        mealType: document.getElementById('fMeal').value,
+        kcal: Number(parsed.kcal)||0,
+        protein: Number(parsed.protein)||0,
+        carbs: Number(parsed.carbs)||0,
+        fat: Number(parsed.fat)||0,
+        time: uploadTime
+      };
+      const dateStr = fmtDate(state.currentDate);
+      const meals = await loadMeals(dateStr);
+      meals.push(meal);
+      const ok = await saveMeals(dateStr, meals);
+      if(ok){
+        statusEl.innerHTML = '<span class="status-msg">Toegevoegd bij ' + fmtDateLabel(state.currentDate) + ': ' + escapeHtml(meal.desc) + ' (' + meal.kcal + ' kcal). Klopt de schatting niet? Pas de velden hieronder aan en klik op Opslaan om te overschrijven, of verwijder de maaltijd bij Maaltijden op het Dashboard.</span>';
+        renderDashboard();
+      } else {
+        statusEl.innerHTML = '<span class="status-msg status-err">Schatting gelukt, maar opslaan is mislukt. Check de velden hieronder en klik zelf op Opslaan.</span>';
+      }
     }catch(err){
       console.error(err);
       statusEl.innerHTML = '<span class="status-msg status-err">Analyse mislukt. Vul de velden handmatig in.</span>';
