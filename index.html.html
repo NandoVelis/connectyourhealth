@@ -1841,24 +1841,19 @@ photoInput.addEventListener('change', async (e)=>{
     preview.style.display = 'block';
     statusEl.innerHTML = '<span class="status-msg">Foto wordt geanalyseerd...</span>';
     try{
-      const response = await fetchWithTimeout("https://api.anthropic.com/v1/messages", {
+      const response = await fetchWithTimeout("/api/analyze-photo", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          model: "claude-sonnet-4-6",
-          max_tokens: 500,
-          messages: [{
-            role: "user",
-            content: [
-              { type: "image", source: { type: "base64", media_type: file.type||"image/jpeg", data: base64Data } },
-              { type: "text", text: "Schat de voedingswaarden van deze maaltijd in. Antwoord ALLEEN met geldige JSON, geen markdown: {\"desc\": \"korte omschrijving in het Nederlands\", \"kcal\": <getal>, \"protein\": <gram>, \"carbs\": <gram>, \"fat\": <gram>}" }
-            ]
-          }]
+          imageBase64: base64Data,
+          mediaType: file.type || "image/jpeg"
         })
       });
+      if(!response.ok){
+        throw new Error('Server gaf status ' + response.status);
+      }
       const data = await response.json();
-      const textBlocks = (data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('\n');
-      const parsed = extractJson(textBlocks);
+      const parsed = extractJson(data.text || '');
 
       // Ook nog invullen in het formulier, zodat de waarden zichtbaar en corrigeerbaar zijn
       document.getElementById('fDesc').value = parsed.desc||'';
