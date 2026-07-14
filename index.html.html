@@ -608,13 +608,24 @@ function trainingKey(dateStr){ return 'training-'+dateStr; }
 
 function sleep(ms){ return new Promise(r=>setTimeout(r, ms)); }
 
+// Dezelfde naam die je bij Team instelt, dient nu ook als jouw identiteit
+// voor je hele persoonlijke dashboard (meals/training/vitals/weight).
+function currentOwner(){
+  try{
+    return localStorage.getItem('infood-team-name') || null;
+  }catch(e){ return null; }
+}
+
 function dayKey(dateStr){ return 'day-'+dateStr; }
 
 async function loadMeals(dateStr){
+const owner = currentOwner();
+if(!owner) return [];
 const { data, error } = await supabaseClient
 .from('meals')
 .select('*')
-.eq('meal_date', dateStr);
+.eq('meal_date', dateStr)
+.eq('owner', owner);
 console.log("MEALS", dateStr, data, error);
 if(error || !data){
 return [];
@@ -630,11 +641,14 @@ time: item.meal_time
 }));
 }
 async function saveMeals(dateStr, meals){
+  const owner = currentOwner();
+  if(!owner) return false;
   try{
-    const { error: delErr } = await supabaseClient.from('meals').delete().eq('meal_date', dateStr);
+    const { error: delErr } = await supabaseClient.from('meals').delete().eq('meal_date', dateStr).eq('owner', owner);
     if(delErr){ console.error('saveMeals delete error', delErr); return false; }
     if(meals.length === 0) return true;
     const rows = meals.map(m => ({
+      owner,
       meal_date: dateStr,
       meal_description: m.desc,
       meal_type: m.mealType,
@@ -651,10 +665,13 @@ async function saveMeals(dateStr, meals){
 }
 async function loadTraining(dateStr){
 console.log("LOAD TRAINING", dateStr);
+const owner = currentOwner();
+if(!owner) return null;
 const { data, error } = await supabaseClient
 .from('training')
 .select('*')
-.eq('training_date', dateStr);
+.eq('training_date', dateStr)
+.eq('owner', owner);
 console.log("TRAINING RESULT", data, error);
 if(error || !data || data.length === 0){
 return null;
@@ -671,14 +688,16 @@ totalKcal: data[0].total_kcal
 };
 }
 async function saveTraining(dateStr, data){
+  const owner = currentOwner();
+  if(!owner) return false;
   try{
-    const { error: delErr } = await supabaseClient.from('training').delete().eq('training_date', dateStr);
+    const { error: delErr } = await supabaseClient.from('training').delete().eq('training_date', dateStr).eq('owner', owner);
     if(delErr){ console.error('saveTraining delete error', delErr); return false; }
     const activities = (data && data.activities) || [];
     if(activities.length === 0){
       if(data && (data.restKcal || data.totalKcal)){
         const { error } = await supabaseClient.from('training').insert([{
-          training_date: dateStr, activity_name: null, kcal: null, km: null, activity_type: null,
+          owner, training_date: dateStr, activity_name: null, kcal: null, km: null, activity_type: null,
           rest_kcal: data.restKcal||0, total_kcal: data.totalKcal||0
         }]);
         if(error){ console.error('saveTraining insert error', error); return false; }
@@ -686,6 +705,7 @@ async function saveTraining(dateStr, data){
       return true;
     }
     const rows = activities.map(a => ({
+      owner,
       training_date: dateStr,
       activity_name: a.name,
       kcal: a.kcal,
@@ -701,10 +721,13 @@ async function saveTraining(dateStr, data){
 }
 function vitalsKey(dateStr){ return 'vitals-'+dateStr; }
 async function loadVitals(dateStr){
+const owner = currentOwner();
+if(!owner) return null;
 const { data, error } = await supabaseClient
 .from('vitals')
 .select('*')
 .eq('vital_date', dateStr)
+.eq('owner', owner)
 .maybeSingle();
   
 if(error || !data){
@@ -717,11 +740,13 @@ sleepMinutes: data.sleep_minutes
 };
 }
 async function saveVitals(dateStr, data){
+  const owner = currentOwner();
+  if(!owner) return false;
   try{
-    const { error: delErr } = await supabaseClient.from('vitals').delete().eq('vital_date', dateStr);
+    const { error: delErr } = await supabaseClient.from('vitals').delete().eq('vital_date', dateStr).eq('owner', owner);
     if(delErr){ console.error('saveVitals delete error', delErr); return false; }
     const { error: insErr } = await supabaseClient.from('vitals').insert([{
-      vital_date: dateStr, hr_rest: data.hrRest, hrv: data.hrv, sleep_minutes: data.sleepMinutes
+      owner, vital_date: dateStr, hr_rest: data.hrRest, hrv: data.hrv, sleep_minutes: data.sleepMinutes
     }]);
     if(insErr){ console.error('saveVitals insert error', insErr); return false; }
     return true;
@@ -834,6 +859,18 @@ async function renderDashboard(){
 
   const dateStr = fmtDate(state.currentDate);
   document.getElementById('dateLabel').textContent = fmtDateLabel(state.currentDate);
+
+  const owner = currentOwner();
+  if(!owner){
+    document.getElementById('trainingDetail').innerHTML = '<div class="empty">Vul eerst je naam in bij het tabblad Team om je persoonlijke dashboard te gebruiken.</div>';
+    document.getElementById('mealList').innerHTML = '<div class="empty">Vul eerst je naam in bij het tabblad Team.</div>';
+    document.getElementById('subtotalsList').innerHTML = '';
+    document.getElementById('macroBars').innerHTML = '';
+    document.getElementById('dagscoreBreakdown').innerHTML = '';
+    const tipElEarly = document.getElementById('nutritionTip');
+    if(tipElEarly) tipElEarly.textContent = 'Vul eerst je naam in bij het tabblad Team.';
+    return;
+  }
 
   const meals = await loadMeals(dateStr);
   const totals = macroKcal(meals);
@@ -1133,10 +1170,13 @@ function lastMonthDates(baseDate){
 }
 async function loadWeight(dateStr){
 console.log("LOAD WEIGHT", dateStr);
+const owner = currentOwner();
+if(!owner) return null;
 const { data, error } = await supabaseClient
 .from('weight')
 .select('*')
 .eq('weight_date', dateStr)
+.eq('owner', owner)
 .maybeSingle();
   
 console.log("WEIGHT RESULT", data, error);
@@ -1148,10 +1188,12 @@ kg: data.kg
 };
 }
 async function saveWeight(dateStr, kg){
+  const owner = currentOwner();
+  if(!owner) return false;
   try{
-    const { error: delErr } = await supabaseClient.from('weight').delete().eq('weight_date', dateStr);
+    const { error: delErr } = await supabaseClient.from('weight').delete().eq('weight_date', dateStr).eq('owner', owner);
     if(delErr){ console.error('saveWeight delete error', delErr); return false; }
-    const { error: insErr } = await supabaseClient.from('weight').insert([{ weight_date: dateStr, kg }]);
+    const { error: insErr } = await supabaseClient.from('weight').insert([{ owner, weight_date: dateStr, kg }]);
     if(insErr){ console.error('saveWeight insert error', insErr); return false; }
     return true;
   }catch(e){ console.error('saveWeight exception', e); return false; }
@@ -1916,11 +1958,16 @@ photoInput.addEventListener('change', async (e)=>{
 // ---- History ----
 async function renderHistory(){
   const body = document.getElementById('historyBody');
+  const owner = currentOwner();
+  if(!owner){
+    body.innerHTML = '<tr><td colspan="5" class="desc-cell">Vul eerst je naam in bij het tabblad Team.</td></tr>';
+    return;
+  }
   body.innerHTML = '<tr><td colspan="5">Laden...</td></tr>';
   try{
     const [mealsRes, trainingRes] = await Promise.all([
-      supabaseClient.from('meals').select('meal_date'),
-      supabaseClient.from('training').select('training_date')
+      supabaseClient.from('meals').select('meal_date').eq('owner', owner),
+      supabaseClient.from('training').select('training_date').eq('owner', owner)
     ]);
     const datesFromMeals = (mealsRes.data||[]).map(r=>r.meal_date);
     const datesFromTraining = (trainingRes.data||[]).map(r=>r.training_date);
@@ -1979,6 +2026,11 @@ renderDashboard();
   ?.addEventListener("click", async () => {
 
     const btn = document.getElementById("syncTredictBtn");
+    const owner = currentOwner();
+    if(!owner){
+      alert("Vul eerst je naam in bij het tabblad Team.");
+      return;
+    }
 
     btn.disabled = true;
     btn.innerText = "Synchroniseren...";
@@ -1986,7 +2038,7 @@ renderDashboard();
     try {
 
       await fetch(
-        "https://mhvduufxeqyxgkkvwimx.supabase.co/functions/v1/sync-tredict?full=1"
+        "https://mhvduufxeqyxgkkvwimx.supabase.co/functions/v1/sync-tredict?full=1&owner=" + encodeURIComponent(owner)
       );
 
       await renderDashboard();
@@ -2011,9 +2063,12 @@ renderDashboard();
 
   try {
 
-    await fetch(
-      "https://mhvduufxeqyxgkkvwimx.supabase.co/functions/v1/sync-tredict"
-    );
+    const owner = currentOwner();
+    if(owner){
+      await fetch(
+        "https://mhvduufxeqyxgkkvwimx.supabase.co/functions/v1/sync-tredict?owner=" + encodeURIComponent(owner)
+      );
+    }
 
   } catch (e) {
 
