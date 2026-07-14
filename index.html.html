@@ -476,9 +476,9 @@
       </div>
       <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--line);">
         <div class="meal-meta" style="margin-bottom:8px;">
-          Ontbreken er dagen op het teambord terwijl ze wel bij jou (Week/Geschiedenis) staan? Dat kan gebeuren als een import gedeeltelijk tegen een tijdelijke opslaglimiet aanliep. Zet dan alsnog al je lokaal opgeslagen dagen van deze maand door naar het teambord:
+          Ontbreken er dagen op het teambord terwijl ze wel bij jou (Week/Geschiedenis) staan? Zet dan alsnog al je lokaal opgeslagen dagen van vorige maand en deze maand door naar het teambord:
         </div>
-        <button class="btn-secondary" id="teamResyncBtn" type="button">Synchroniseer deze maand opnieuw naar teambord</button>
+        <button class="btn-secondary" id="teamResyncBtn" type="button">Synchroniseer vorige + huidige maand opnieuw naar teambord</button>
         <div class="status-msg" id="teamResyncStatus" style="margin-top:8px;"></div>
       </div>
     </div>
@@ -1466,7 +1466,7 @@ document.getElementById('teamResyncBtn').addEventListener('click', async ()=>{
   }
   _resyncInProgress = true;
   btn.disabled = true;
-  const days = monthDates(new Date()).filter(d=>d<=new Date());
+  const days = [...lastMonthDates(new Date()), ...monthDates(new Date())].filter(d=>d<=new Date());
   let synced = 0, skippedEmpty = 0, skippedRateLimit = 0;
   for(const d of days){
     const dateStr = fmtDate(d);
