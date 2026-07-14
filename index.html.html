@@ -1174,47 +1174,64 @@ function trainingDistanceByType(training){
 }
 
 // ---- Team (gedeeld scorebord) ----
-async function loadTeamName(){
+// Teamnaam is persoonlijk per browser/apparaat (localStorage), team-data zelf is gedeeld via Supabase.
+function loadTeamName(){
   try{
-    const res = await storageGet('profile-name', false);
-    return res ? JSON.parse(res.value).name : null;
+    return localStorage.getItem('infood-team-name') || null;
   }catch(e){ return null; }
 }
-async function saveTeamName(name){
+function saveTeamName(name){
   try{
-    await storageSet('profile-name', JSON.stringify({name}), false);
+    localStorage.setItem('infood-team-name', name);
   }catch(e){ console.error('Opslaan teamnaam', e); }
 }
 
 const _teamSyncCache = {};
 async function syncTeamEntry(dateStr, payload){
   try{
-    const name = await loadTeamName();
+    const name = loadTeamName();
     if(!name) return;
-    const key = 'team-'+name+'-'+dateStr;
-    const serialized = JSON.stringify({name, ...payload});
-    if(_teamSyncCache[key] === serialized) return;
-    await storageSet(key, serialized, true, 2);
-    _teamSyncCache[key] = serialized;
+    const cacheKey = name+'-'+dateStr;
+    const serialized = JSON.stringify(payload);
+    if(_teamSyncCache[cacheKey] === serialized) return; // ongewijzigd t.o.v. vorige sync
+
+    const { error } = await supabaseClient.from('team_entries').upsert({
+      name,
+      entry_date: dateStr,
+      dagscore: payload.dagscore,
+      km_hardlopen: payload.kmHardlopen || 0,
+      km_fietsen: payload.kmFietsen || 0,
+      km_zwemmen: payload.kmZwemmen || 0,
+      hrv: payload.hrv,
+      hr_rest: payload.hrRest,
+      sleep_minutes: payload.sleepMinutes,
+      updated_at: new Date().toISOString()
+    }, { onConflict: 'name,entry_date' });
+
+    if(error){
+      console.warn('Sync naar teambord mislukt, wordt bij volgende render opnieuw geprobeerd', error);
+      return;
+    }
+    _teamSyncCache[cacheKey] = serialized;
   }catch(e){
     console.warn('Sync naar teambord mislukt, wordt bij volgende render opnieuw geprobeerd', e);
   }
 }
 
 async function loadAllTeamEntries(){
-  const keysRes = await storageList('team-', true);
-  const keys = keysRes?.keys || [];
-  const entries = [];
-  for(const k of keys){
-    const res = await storageGet(k, true);
-    if(!res) continue;
-    try{
-      const entry = JSON.parse(res.value);
-      entry.date = k.slice(-10);
-      entries.push(entry);
-    }catch(e){ }
-  }
-  return entries;
+  const { data, error } = await supabaseClient.from('team_entries').select('*');
+  if(error || !data) return [];
+  return data.map(row => ({
+    name: row.name,
+    date: row.entry_date,
+    dagscore: row.dagscore,
+    kmHardlopen: row.km_hardlopen,
+    kmFietsen: row.km_fietsen,
+    kmZwemmen: row.km_zwemmen,
+    hrv: row.hrv,
+    hrRest: row.hr_rest,
+    sleepMinutes: row.sleep_minutes
+  }));
 }
 
 async function renderTeam(allEntries){
