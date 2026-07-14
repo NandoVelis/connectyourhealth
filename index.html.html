@@ -2065,18 +2065,22 @@ if(!currentOwner()){
 
     try {
 
-      await fetch(
+      const response = await fetch(
         "https://mhvduufxeqyxgkkvwimx.supabase.co/functions/v1/sync-tredict?full=1&owner=" + encodeURIComponent(owner)
       );
+      const data = await response.json();
 
-      await renderDashboard();
-
-      alert("Tredict synchronisatie voltooid");
+      if(!data.success){
+        alert(data.error || "Synchronisatie mislukt");
+      } else {
+        await renderDashboard();
+        alert("Tredict synchronisatie voltooid");
+      }
 
     } catch (err) {
 
       console.error(err);
-      alert("Synchronisatie mislukt");
+      alert("Synchronisatie mislukt (netwerkfout)");
 
     } finally {
 
