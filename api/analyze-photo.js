@@ -43,11 +43,12 @@ export default async function handler(req, res) {
     }
 
     // Gemini's gratis tier geeft af en toe een 503 ("model overloaded") terug
-    // bij drukte. Probeer het daarom een paar keer met oplopende pauze voordat
-    // we het opgeven, in plaats van meteen door te geven aan de gebruiker.
+    // bij drukte. Eén retry met een korte pauze, zodat de totale wachttijd
+    // (incl. eventuele trage requests op mobiel internet) ruim binnen de
+    // 90s-timeout aan de clientkant blijft.
     let response;
     let data;
-    const maxAttempts = 3;
+    const maxAttempts = 2;
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       response = await callGemini();
       data = await response.json();
@@ -55,7 +56,7 @@ export default async function handler(req, res) {
       if (response.ok) break;
       if (response.status !== 503 || attempt === maxAttempts) break;
 
-      await new Promise((r) => setTimeout(r, attempt * 1500)); // 1.5s, 3s
+      await new Promise((r) => setTimeout(r, 2000));
     }
 
     if (!response.ok) {
@@ -80,4 +81,5 @@ export const config = {
       sizeLimit: '10mb',
     },
   },
+  maxDuration: 60,
 };
