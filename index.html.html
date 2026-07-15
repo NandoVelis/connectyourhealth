@@ -388,7 +388,7 @@
   <section id="tab-invoer" style="display:none;">
     <div class="card form-card">
       <h3>Snel toevoegen</h3>
-      <div class="stat-row" style="border-bottom:1px solid var(--line);padding-top:0;">
+      <div class="stat-row" data-default-key="oats" style="border-bottom:1px solid var(--line);padding-top:0;">
         <div>
           <div class="meal-desc">Havermout + magere kwark</div>
           <div class="meal-meta">250ml magere kwark vast &middot; havermout aanpasbaar</div>
@@ -397,9 +397,10 @@
           <input type="number" id="oatsGrams" value="40" min="1" style="width:56px;padding:6px 8px;">
           <span style="font-size:11px;color:var(--ink-soft);">g</span>
           <button class="btn-secondary" id="quickAddOats">+ Toevoegen</button>
+          <button class="btn-secondary defaultQuickAddRemove" data-key="oats" title="Verwijderen uit Snel toevoegen" style="padding:6px 10px;">&times;</button>
         </div>
       </div>
-      <div class="stat-row" style="border-bottom:1px solid var(--line);">
+      <div class="stat-row" data-default-key="eggs" style="border-bottom:1px solid var(--line);">
         <div>
           <div class="meal-desc">Gekookte eieren</div>
           <div class="meal-meta">~78 kcal per ei</div>
@@ -408,9 +409,10 @@
           <input type="number" id="eggQty" value="2" min="1" style="width:56px;padding:6px 8px;">
           <span style="font-size:11px;color:var(--ink-soft);">stuks</span>
           <button class="btn-secondary" id="quickAddEggs">+ Toevoegen</button>
+          <button class="btn-secondary defaultQuickAddRemove" data-key="eggs" title="Verwijderen uit Snel toevoegen" style="padding:6px 10px;">&times;</button>
         </div>
       </div>
-      <div class="stat-row" style="border-bottom:1px solid var(--line);">
+      <div class="stat-row" data-default-key="lunch" style="border-bottom:1px solid var(--line);">
         <div>
           <div class="meal-desc">Broodje kipfilet</div>
           <div class="meal-meta">1 volkoren broodje + 1 plakje kipfilet &middot; ~140 kcal per stuk</div>
@@ -418,28 +420,38 @@
         <div style="display:flex;align-items:center;gap:8px;">
           <input type="number" id="lunchQty" value="4" min="1" style="width:56px;padding:6px 8px;">
           <button class="btn-secondary" id="quickAddLunch">+ Toevoegen</button>
+          <button class="btn-secondary defaultQuickAddRemove" data-key="lunch" title="Verwijderen uit Snel toevoegen" style="padding:6px 10px;">&times;</button>
         </div>
       </div>
-      <div class="stat-row" style="border-bottom:1px solid var(--line);">
+      <div class="stat-row" data-default-key="banana" style="border-bottom:1px solid var(--line);">
         <div>
           <div class="meal-desc">Banaan</div>
           <div class="meal-meta">1 middelgrote banaan &middot; ~105 kcal</div>
         </div>
-        <button class="btn-secondary" id="quickAddBanana">+ Toevoegen</button>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <button class="btn-secondary" id="quickAddBanana">+ Toevoegen</button>
+          <button class="btn-secondary defaultQuickAddRemove" data-key="banana" title="Verwijderen uit Snel toevoegen" style="padding:6px 10px;">&times;</button>
+        </div>
       </div>
-      <div class="stat-row" style="border-bottom:1px solid var(--line);">
+      <div class="stat-row" data-default-key="shake" style="border-bottom:1px solid var(--line);">
         <div>
           <div class="meal-desc">Eiwitshake</div>
           <div class="meal-meta">1 scoop whey (~30g) met water &middot; ~120 kcal</div>
         </div>
-        <button class="btn-secondary" id="quickAddShake">+ Toevoegen</button>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <button class="btn-secondary" id="quickAddShake">+ Toevoegen</button>
+          <button class="btn-secondary defaultQuickAddRemove" data-key="shake" title="Verwijderen uit Snel toevoegen" style="padding:6px 10px;">&times;</button>
+        </div>
       </div>
-      <div class="stat-row" style="border-bottom:1px solid var(--line);">
+      <div class="stat-row" data-default-key="leffe" style="border-bottom:1px solid var(--line);">
         <div>
           <div class="meal-desc">Leffe Blond 0.0</div>
           <div class="meal-meta">1 blikje (330ml), alcoholvrij &middot; ~86 kcal</div>
         </div>
-        <button class="btn-secondary" id="quickAddLeffe">+ Toevoegen</button>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <button class="btn-secondary" id="quickAddLeffe">+ Toevoegen</button>
+          <button class="btn-secondary defaultQuickAddRemove" data-key="leffe" title="Verwijderen uit Snel toevoegen" style="padding:6px 10px;">&times;</button>
+        </div>
       </div>
       <div id="customQuickAddList"></div>
       <div class="status-msg" id="quickAddStatus"></div>
@@ -1753,6 +1765,7 @@ document.getElementById('teamNameSaveBtn').addEventListener('click', async ()=>{
   statusEl.textContent = 'Opgeslagen. Je data wordt gesynchroniseerd.';
   statusEl.classList.remove('status-err');
   await maybeShowProfileOnboarding(name);
+  renderHiddenDefaults();
   renderDashboard();
   renderAllTeamViews();
   renderCustomQuickAdds();
@@ -2149,6 +2162,49 @@ async function renderCustomQuickAdds(){
   });
 }
 renderCustomQuickAdds();
+
+// ---- Snel toevoegen: standaardopties verbergen ----
+// De 6 vaste items (havermout, eieren, broodje, banaan, shake, Leffe) staan
+// hardcoded in de HTML, maar iemand kan ze per persoon verbergen als hij ze
+// niet gebruikt. Opgeslagen in Supabase (niet localStorage) zodat het ook
+// synct tussen apparaten, net als bij quick_adds.
+async function loadHiddenDefaults(){
+  const owner = currentOwner();
+  if(!owner) return [];
+  try{
+    const { data, error } = await supabaseClient
+      .from('hidden_defaults')
+      .select('item_key')
+      .eq('owner', owner);
+    if(error || !data) return [];
+    return data.map(row => row.item_key);
+  }catch(e){ console.error('Laden verborgen standaardopties', e); return []; }
+}
+async function hideDefaultQuickAdd(key){
+  const owner = currentOwner();
+  if(!owner) return;
+  try{
+    await supabaseClient.from('hidden_defaults').upsert(
+      { owner, item_key: key },
+      { onConflict: 'owner,item_key' }
+    );
+  }catch(e){ console.error('Verbergen standaardoptie', e); }
+}
+async function renderHiddenDefaults(){
+  const hidden = await loadHiddenDefaults();
+  document.querySelectorAll('[data-default-key]').forEach(row=>{
+    row.style.display = hidden.includes(row.dataset.defaultKey) ? 'none' : '';
+  });
+}
+renderHiddenDefaults();
+document.querySelectorAll('.defaultQuickAddRemove').forEach(btn=>{
+  btn.addEventListener('click', async (e)=>{
+    const key = e.target.dataset.key;
+    const row = document.querySelector(`[data-default-key="${key}"]`);
+    if(row) row.style.display = 'none'; // direct verbergen, niet wachten op de aanroep
+    await hideDefaultQuickAdd(key);
+  });
+});
 
 document.getElementById('quickAddOats').addEventListener('click', (e)=>{
   const grams = Math.max(1, Number(document.getElementById('oatsGrams').value)||40);
