@@ -1776,33 +1776,52 @@ async function quickAdd(meal, statusEl, btn){
 }
 
 // ---- Snel toevoegen: door de gebruiker zelf bewaarde opties ----
-// Persoonlijk per naam + browser/apparaat via localStorage (geen gedeelde teamdata).
-function quickAddsStorageKey(){
-  const owner = currentOwner() || 'onbekend';
-  return 'infood-custom-quickadds-' + owner;
-}
+// Persoonlijk per naam, opgeslagen in Supabase zodat het overal beschikbaar
+// is (niet gebonden aan één apparaat/browser zoals bij localStorage).
 async function loadCustomQuickAdds(){
+  const owner = currentOwner();
+  if(!owner) return [];
   try{
-    const raw = localStorage.getItem(quickAddsStorageKey());
-    return raw ? JSON.parse(raw) : [];
-  }catch(e){ return []; }
-}
-async function saveCustomQuickAdds(list){
-  try{
-    localStorage.setItem(quickAddsStorageKey(), JSON.stringify(list));
-    return true;
-  }catch(e){ console.error('Opslaan snel-toevoegen-lijst', e); return false; }
+    const { data, error } = await supabaseClient
+      .from('quick_adds')
+      .select('*')
+      .eq('owner', owner)
+      .order('id', { ascending: true });
+    if(error || !data) return [];
+    return data.map(item => ({
+      desc: item.description,
+      mealType: item.meal_type,
+      kcal: item.kcal,
+      protein: item.protein,
+      carbs: item.carbs,
+      fat: item.fat
+    }));
+  }catch(e){ console.error('Laden snel-toevoegen-lijst', e); return []; }
 }
 async function addCustomQuickAdd(meal){
-  const list = await loadCustomQuickAdds();
-  const filtered = list.filter(m=>m.desc.toLowerCase()!==meal.desc.toLowerCase());
-  filtered.push(meal);
-  await saveCustomQuickAdds(filtered);
+  const owner = currentOwner();
+  if(!owner) return;
+  try{
+    // Zelfde omschrijving? Dan de bestaande vervangen i.p.v. dupliceren.
+    await supabaseClient.from('quick_adds').delete().eq('owner', owner).ilike('description', meal.desc);
+    await supabaseClient.from('quick_adds').insert([{
+      owner,
+      description: meal.desc,
+      meal_type: meal.mealType,
+      kcal: meal.kcal,
+      protein: meal.protein,
+      carbs: meal.carbs,
+      fat: meal.fat
+    }]);
+  }catch(e){ console.error('Opslaan snel-toevoegen-item', e); }
   await renderCustomQuickAdds();
 }
 async function removeCustomQuickAdd(desc){
-  const list = await loadCustomQuickAdds();
-  await saveCustomQuickAdds(list.filter(m=>m.desc!==desc));
+  const owner = currentOwner();
+  if(!owner) return;
+  try{
+    await supabaseClient.from('quick_adds').delete().eq('owner', owner).eq('description', desc);
+  }catch(e){ console.error('Verwijderen snel-toevoegen-item', e); }
   await renderCustomQuickAdds();
 }
 async function renderCustomQuickAdds(){
@@ -1948,7 +1967,7 @@ photoInput.addEventListener('change', async (e)=>{
   const base64Data = base64Full.split(',')[1];
   preview.src = base64Full;
   preview.style.display = 'block';
-  statusEl.innerHTML = '<span class="status-msg">Foto wordt geanalyseerd...</span>';
+  statusEl.innerHTML = '<span class="status-msg">Foto wordt geanalyseerd... (kan bij drukte tot ~30 sec. duren)</span>';
   try{
     const response = await fetchWithTimeout("/api/analyze-photo", {
       method: "POST",
@@ -1957,7 +1976,7 @@ photoInput.addEventListener('change', async (e)=>{
         imageBase64: base64Data,
         mediaType: "image/jpeg"
       })
-    });
+    }, 90000);
       if(!response.ok){
         let serverMsg = '';
         try{
