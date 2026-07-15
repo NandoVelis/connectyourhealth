@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
 <title>InFood = Output Dashboard</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
@@ -282,6 +283,24 @@
     <div class="card" style="margin-bottom:16px;">
       <h3>Tip</h3>
       <div id="nutritionTip" class="meal-meta" style="font-size:14px;color:var(--ink);"></div>
+    </div>
+
+    <div class="card" style="margin-bottom:16px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
+        <h3 style="margin:0;">Trend (laatste 30 dagen)</h3>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <select id="trendMetricSelect" style="padding:6px 10px;border:1px solid var(--line);border-radius:8px;font-family:'Inter',sans-serif;font-size:13px;background:var(--card);color:var(--ink);">
+            <option value="weight">Gewicht</option>
+            <option value="dagscore">Dagscore</option>
+            <option value="balans">Balans</option>
+          </select>
+          <button class="refresh-btn" id="trendRefreshBtn" type="button" title="Trend verversen met de laatste data">&#8635;</button>
+        </div>
+      </div>
+      <div style="position:relative;height:220px;">
+        <canvas id="trendChart"></canvas>
+      </div>
+      <div id="trendEmpty" class="empty" style="display:none;">Nog niet genoeg data om een trend te tonen.</div>
     </div>
 
     <div class="grid">
@@ -837,6 +856,109 @@ function generateNutritionTip(totals, targets, burned, vitals, trainingHadActivi
     return "Je zit mooi in balans voor vandaag \u2014 geen aanvullingen nodig.";
   }
   return tips.map((t,i)=> i===0 ? t.charAt(0).toUpperCase()+t.slice(1) : t).join('. ') + '.';
+}
+
+function last30Days(){
+  const days = [];
+  const today = new Date();
+  for(let i=29;i>=0;i--){
+    const d = new Date(today);
+    d.setDate(d.getDate()-i);
+    days.push(d);
+  }
+  return days;
+}
+
+async function computeTrendData(days){
+  const points = { labels: [], weight: [], dagscore: [], balans: [] };
+  for(const d of days){
+    const dateStr = fmtDate(d);
+    const w = await loadWeight(dateStr);
+    const meals = await loadMeals(dateStr);
+    const macros = macroKcal(meals);
+    const training = await loadTraining(dateStr);
+    const vitals = await loadVitals(dateStr);
+    const burned = training ? (training.totalKcal||0) : null;
+    const balans = (burned!=null && macros.kcal>0) ? macros.kcal - burned : null;
+    const {score} = computeDagscore(macros.kcal, training, vitals);
+
+    points.labels.push(dateStr.slice(5)); // MM-DD, korter voor de as
+    points.weight.push(w && w.kg ? w.kg : null);
+    points.dagscore.push(score);
+    points.balans.push(balans);
+  }
+  return points;
+}
+
+let _trendChartInstance = null;
+let _trendDataCache = null;
+async function renderTrendChart(forceRefresh){
+  const owner = currentOwner();
+  const canvas = document.getElementById('trendChart');
+  const emptyEl = document.getElementById('trendEmpty');
+  if(!owner || !canvas) return;
+
+  if(forceRefresh || !_trendDataCache){
+    _trendDataCache = await computeTrendData(last30Days());
+  }
+
+  const selectEl = document.getElementById('trendMetricSelect');
+  const metric = selectEl ? selectEl.value : 'weight';
+  const dataset = _trendDataCache[metric];
+  const hasData = dataset.some(v => v!=null);
+
+  canvas.style.display = hasData ? 'block' : 'none';
+  if(emptyEl) emptyEl.style.display = hasData ? 'none' : 'block';
+  if(!hasData) return;
+
+  const meta = {
+    weight: { label: 'Gewicht (kg)', color: '#B8863B' },
+    dagscore: { label: 'Dagscore', color: '#3E6259' },
+    balans: { label: 'Balans (kcal)', color: '#A44A3F' }
+  }[metric];
+
+  const rootStyles = getComputedStyle(document.documentElement);
+  const inkSoftColor = rootStyles.getPropertyValue('--ink-soft').trim() || '#5B6660';
+  const lineColor = rootStyles.getPropertyValue('--line').trim() || '#DBD6C8';
+
+  if(_trendChartInstance){
+    _trendChartInstance.data.labels = _trendDataCache.labels;
+    _trendChartInstance.data.datasets[0].data = dataset;
+    _trendChartInstance.data.datasets[0].label = meta.label;
+    _trendChartInstance.data.datasets[0].borderColor = meta.color;
+    _trendChartInstance.data.datasets[0].backgroundColor = meta.color + '33';
+    _trendChartInstance.options.scales.x.ticks.color = inkSoftColor;
+    _trendChartInstance.options.scales.y.ticks.color = inkSoftColor;
+    _trendChartInstance.options.scales.y.grid.color = lineColor;
+    _trendChartInstance.update();
+    return;
+  }
+
+  _trendChartInstance = new Chart(canvas, {
+    type: 'line',
+    data: {
+      labels: _trendDataCache.labels,
+      datasets: [{
+        label: meta.label,
+        data: dataset,
+        borderColor: meta.color,
+        backgroundColor: meta.color + '33',
+        spanGaps: true,
+        tension: 0.3,
+        pointRadius: 2,
+        fill: true
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { maxTicksLimit: 8, color: inkSoftColor }, grid: { display: false } },
+        y: { ticks: { color: inkSoftColor }, grid: { color: lineColor } }
+      }
+    }
+  });
 }
 
 function macroKcal(meals){
@@ -1495,6 +1617,7 @@ document.getElementById('teamNameSaveBtn').addEventListener('click', async ()=>{
   renderDashboard();
   renderAllTeamViews();
   renderCustomQuickAdds();
+  renderTrendChart(true);
 });
 
 let _resyncInProgress = false;
@@ -2094,6 +2217,7 @@ document.getElementById('darkModeToggle').addEventListener('click', ()=>{
   const nowDark = !document.documentElement.classList.contains('dark');
   applyDarkMode(nowDark);
   saveDarkMode(nowDark);
+  if(_trendChartInstance) renderTrendChart();
 });
 applyDarkMode(loadDarkMode());
 
@@ -2113,7 +2237,10 @@ if(!currentOwner()){
   renderAllTeamViews();
 } else {
   renderDashboard();
+  renderTrendChart();
 }
+document.getElementById('trendMetricSelect').addEventListener('change', ()=>renderTrendChart());
+document.getElementById('trendRefreshBtn').addEventListener('click', ()=>renderTrendChart(true));
  document
   .getElementById("syncTredictBtn")
   ?.addEventListener("click", async () => {
