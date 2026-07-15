@@ -7,7 +7,7 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
 <title>InFood = Output Dashboard</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&family=Martian+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
   :root{
     --paper:#F4EEE1;
@@ -42,7 +42,7 @@
     margin:0;
     background:var(--paper);
     color:var(--ink);
-    font-family:'Inter',sans-serif;
+    font-family:'Archivo',sans-serif;
     -webkit-font-smoothing:antialiased;
   }
   .wrap{max-width:920px;margin:0 auto;padding:28px 20px 80px;}
@@ -60,7 +60,7 @@
     text-align:center;
   }
   .brand-title{
-    font-family:'Fraunces',serif;
+    font-family:'Archivo',sans-serif;
     font-size:26px;
     font-weight:700;
     color:#F5F1E8;
@@ -85,7 +85,7 @@
   }
   .petal-teal{
     top:0; right:0;
-    background:#1FA37E;
+    background:#00A878;
     border-radius:0 100% 0 100%;
   }
   .petal-magenta{
@@ -111,11 +111,11 @@
     margin-bottom:22px;flex-wrap:wrap;gap:12px;
   }
   .brand-eyebrow{
-    font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.14em;
+    font-family:'Martian Mono',monospace;font-size:11px;letter-spacing:.14em;
     text-transform:uppercase;color:var(--pine);margin:0 0 4px;
   }
   h1{
-    font-family:'Fraunces',serif;font-weight:600;font-size:32px;margin:0;
+    font-family:'Archivo',sans-serif;font-weight:600;font-size:32px;margin:0;
     letter-spacing:-0.01em;
   }
   .datenav{display:flex;align-items:center;gap:10px;}
@@ -125,13 +125,13 @@
   }
   .datenav button:hover{background:var(--amber-soft);}
   .dateLabel{
-    font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--ink-soft);
+    font-family:'Martian Mono',monospace;font-size:13px;color:var(--ink-soft);
     min-width:120px;text-align:center;
   }
   nav.tabs{display:flex;gap:6px;margin-bottom:22px;border-bottom:1px solid var(--line);}
   nav.tabs button{
     border:none;background:none;padding:10px 4px;margin-right:18px;
-    font-family:'Inter',sans-serif;font-weight:600;font-size:14px;color:var(--ink-soft);
+    font-family:'Archivo',sans-serif;font-weight:600;font-size:14px;color:var(--ink-soft);
     cursor:pointer;border-bottom:2px solid transparent;
   }
   nav.tabs button.active{color:var(--ink);border-bottom-color:var(--amber);}
@@ -144,11 +144,11 @@
     padding:20px;
   }
   .card h3{
-    margin:0 0 14px;font-family:'Inter',sans-serif;font-size:12px;font-weight:700;
+    margin:0 0 14px;font-family:'Archivo',sans-serif;font-size:12px;font-weight:700;
     text-transform:uppercase;letter-spacing:.08em;color:var(--ink-soft);
   }
   .balans-number{
-    font-family:'Fraunces',serif;font-size:58px;font-weight:600;line-height:1;
+    font-family:'Archivo',sans-serif;font-size:58px;font-weight:600;line-height:1;
     letter-spacing:-0.02em;
   }
   .balans-sub{font-size:13px;color:var(--ink-soft);margin-top:8px;}
@@ -158,14 +158,14 @@
   .stat-row{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--line);}
   .stat-row:last-child{border-bottom:none;}
   .stat-label{font-size:13px;color:var(--ink-soft);}
-  .stat-val{font-family:'JetBrains Mono',monospace;font-size:15px;font-weight:700;}
+  .stat-val{font-family:'Martian Mono',monospace;font-size:15px;font-weight:700;}
 
   .macro-bars{display:flex;flex-direction:column;gap:10px;}
   .macro-line{display:flex;align-items:center;gap:10px;}
   .macro-name{width:70px;font-size:12px;color:var(--ink-soft);}
   .macro-track{flex:1;height:8px;background:var(--line);border-radius:4px;overflow:hidden;}
   .macro-fill{height:100%;border-radius:4px;}
-  .macro-val{width:52px;text-align:right;font-family:'JetBrains Mono',monospace;font-size:12px;}
+  .macro-val{width:52px;text-align:right;font-family:'Martian Mono',monospace;font-size:12px;}
 
   .meal-item{
     display:flex;justify-content:space-between;align-items:center;
@@ -174,12 +174,12 @@
   .meal-item:last-child{border-bottom:none;}
   .meal-desc{font-size:14px;font-weight:500;}
   .meal-meta{font-size:12px;color:var(--ink-soft);margin-top:2px;}
-  .meal-kcal{font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:700;white-space:nowrap;margin-left:12px;}
+  .meal-kcal{font-family:'Martian Mono',monospace;font-size:14px;font-weight:700;white-space:nowrap;margin-left:12px;}
   .meal-del{background:none;border:none;color:var(--clay);cursor:pointer;font-size:12px;margin-left:10px;}
   .empty{color:var(--ink-soft);font-size:13px;font-style:italic;padding:8px 0;}
 
   .refresh-btn{
-    font-family:'JetBrains Mono',monospace;font-size:11px;border:1px solid var(--line);
+    font-family:'Martian Mono',monospace;font-size:11px;border:1px solid var(--line);
     background:var(--pine-soft);color:var(--pine);border-radius:7px;padding:5px 10px;cursor:pointer;
   }
   .refresh-btn:hover{filter:brightness(0.96);}
@@ -191,7 +191,7 @@
   label{display:block;font-size:12px;font-weight:600;color:var(--ink-soft);margin-bottom:6px;text-transform:uppercase;letter-spacing:.04em;}
   input[type=text],input[type=number],select,textarea{
     width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:8px;
-    font-family:'Inter',sans-serif;font-size:14px;background:var(--card);color:var(--ink);
+    font-family:'Archivo',sans-serif;font-size:14px;background:var(--card);color:var(--ink);
   }
   .form-grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
   .form-grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;}
@@ -203,13 +203,13 @@
   .photo-preview{max-width:100%;max-height:220px;border-radius:10px;margin-bottom:12px;display:none;}
   .btn-primary{
     background:var(--pine);color:#fff;border:none;border-radius:9px;padding:12px 20px;
-    font-family:'Inter',sans-serif;font-weight:600;font-size:14px;cursor:pointer;
+    font-family:'Archivo',sans-serif;font-weight:600;font-size:14px;cursor:pointer;
   }
   .btn-primary:hover{background:#0F1428;}
   .btn-primary:disabled{opacity:.5;cursor:default;}
   .btn-secondary{
     background:none;border:1px solid var(--line);border-radius:9px;padding:12px 20px;
-    font-family:'Inter',sans-serif;font-weight:600;font-size:14px;cursor:pointer;color:var(--ink);
+    font-family:'Archivo',sans-serif;font-weight:600;font-size:14px;cursor:pointer;color:var(--ink);
   }
   .status-msg{font-size:13px;color:var(--pine);margin-top:10px;}
   .status-err{color:var(--clay);}
@@ -220,11 +220,10 @@
     text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.06em;
     color:var(--ink-soft);padding:8px 10px;border-bottom:1px solid var(--line);
   }
-  td{padding:10px;font-size:13px;border-bottom:1px solid var(--line);font-family:'JetBrains Mono',monospace;}
-  td.desc-cell{font-family:'Inter',sans-serif;}
+  td{padding:10px;font-size:13px;border-bottom:1px solid var(--line);font-family:'Martian Mono',monospace;}
+  td.desc-cell{font-family:'Archivo',sans-serif;}
   tr:hover td{background:var(--amber-soft);}
 
-  .footer-note{font-size:11px;color:var(--ink-soft);text-align:center;margin-top:36px;}
 
   .table-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;}
   .table-scroll th, .table-scroll td{padding:7px 6px;font-size:11.5px;}
@@ -370,7 +369,7 @@
       <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
         <h3 style="margin:0;">Trend (laatste 30 dagen)</h3>
         <div style="display:flex;align-items:center;gap:8px;">
-          <select id="trendMetricSelect" style="padding:6px 10px;border:1px solid var(--line);border-radius:8px;font-family:'Inter',sans-serif;font-size:13px;background:var(--card);color:var(--ink);">
+          <select id="trendMetricSelect" style="padding:6px 10px;border:1px solid var(--line);border-radius:8px;font-family:'Archivo',sans-serif;font-size:13px;background:var(--card);color:var(--ink);">
             <option value="weight">Gewicht</option>
             <option value="dagscore">Dagscore</option>
             <option value="balans">Balans</option>
@@ -510,7 +509,7 @@
     <div class="card">
       <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:4px;">
         <h3 id="weekLabel" style="margin:0;">Deze week</h3>
-        <select id="weekSelect" style="padding:8px 10px;border:1px solid var(--line);border-radius:8px;font-family:'Inter',sans-serif;font-size:13px;"></select>
+        <select id="weekSelect" style="padding:8px 10px;border:1px solid var(--line);border-radius:8px;font-family:'Archivo',sans-serif;font-size:13px;"></select>
       </div>
       <div class="table-scroll">
       <table>
@@ -526,7 +525,7 @@
     <div class="card">
       <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:4px;">
         <h3 id="maandLabel" style="margin:0;">Deze maand</h3>
-        <select id="maandSelect" style="padding:8px 10px;border:1px solid var(--line);border-radius:8px;font-family:'Inter',sans-serif;font-size:13px;"></select>
+        <select id="maandSelect" style="padding:8px 10px;border:1px solid var(--line);border-radius:8px;font-family:'Archivo',sans-serif;font-size:13px;"></select>
       </div>
       <div class="table-scroll">
       <table>
@@ -647,7 +646,6 @@
   </section>
 
 
-  <p class="footer-note">Data blijft lokaal in je account opgeslagen &middot; foto-analyse en trainingsdata via Claude</p>
 </div>
 
 <script>
@@ -1217,7 +1215,7 @@ async function renderDashboard(){
         <div>
           <div class="meal-desc">${escapeHtml(m.desc)}</div>
           <div class="meal-meta">
-            <select class="mealTypeSelect" data-idx="${i}" style="font-size:12px;padding:3px 6px;border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--ink-soft);font-family:'Inter',sans-serif;">
+            <select class="mealTypeSelect" data-idx="${i}" style="font-size:12px;padding:3px 6px;border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--ink-soft);font-family:'Archivo',sans-serif;">
               ${['Ontbijt','Lunch','Diner','Snack','Sportvoeding'].map(opt=>`<option value="${opt}" ${m.mealType===opt?'selected':''}>${opt}</option>`).join('')}
             </select>
             ${m.time?(' &middot; '+escapeHtml(m.time)):''}
