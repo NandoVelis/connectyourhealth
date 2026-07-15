@@ -1270,21 +1270,31 @@ async function renderDashboard(){
   }
 
   const maxMacro = Math.max(totals.protein, totals.carbs, totals.fat, 1);
+  // Balkbreedte volgt het percentage van de streefwaarde (zelfde bron als het
+  // label ernaast), zodat balk en percentage altijd met elkaar overeenkomen.
+  // Zonder streefwaarde (nog geen gewicht ingevuld) valt terug op de oude
+  // relatieve schaal t.o.v. de hoogste macro van vandaag.
+  const barWidth = (actual, target) => {
+    if(target){
+      return Math.max(0, Math.min(100, actual/target*100));
+    }
+    return (actual/maxMacro*100);
+  };
   const macroEl = document.getElementById('macroBars');
   macroEl.innerHTML = `
     <div class="macro-line">
       <span class="macro-name">Eiwit</span>
-      <div class="macro-track"><div class="macro-fill" style="width:${(totals.protein/maxMacro*100)}%;background:var(--pine)"></div></div>
+      <div class="macro-track"><div class="macro-fill" style="width:${barWidth(totals.protein, targetProtein)}%;background:var(--pine)"></div></div>
       <span class="macro-val">${totals.protein}g${pctLabel(totals.protein, targetProtein)}</span>
     </div>
     <div class="macro-line">
       <span class="macro-name">Koolh.</span>
-      <div class="macro-track"><div class="macro-fill" style="width:${(totals.carbs/maxMacro*100)}%;background:var(--amber)"></div></div>
+      <div class="macro-track"><div class="macro-fill" style="width:${barWidth(totals.carbs, targetCarbs)}%;background:var(--amber)"></div></div>
       <span class="macro-val">${totals.carbs}g${pctLabel(totals.carbs, targetCarbs)}</span>
     </div>
     <div class="macro-line">
       <span class="macro-name">Vet</span>
-      <div class="macro-track"><div class="macro-fill" style="width:${(totals.fat/maxMacro*100)}%;background:var(--clay)"></div></div>
+      <div class="macro-track"><div class="macro-fill" style="width:${barWidth(totals.fat, targetFat)}%;background:var(--clay)"></div></div>
       <span class="macro-val">${totals.fat}g${pctLabel(totals.fat, targetFat)}</span>
     </div>
   `;
