@@ -46,8 +46,68 @@
     -webkit-font-smoothing:antialiased;
   }
   .wrap{max-width:920px;margin:0 auto;padding:28px 20px 80px;}
+  .brand-banner{
+    position:relative;
+    border-radius:16px;
+    padding:28px 32px;
+    margin:0 0 20px;
+    background:linear-gradient(115deg,#7A0A66 0%,#4B1F6B 30%,#1A1240 60%,#000725 100%);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:28px;
+    overflow:hidden;
+    text-align:center;
+  }
+  .brand-title{
+    font-family:'Fraunces',serif;
+    font-size:26px;
+    font-weight:700;
+    color:#F5F1E8;
+    line-height:1.2;
+  }
+  .brand-subtitle{
+    font-size:15px;
+    font-weight:500;
+    color:#C9C4F0;
+    margin-top:2px;
+  }
+  .brand-banner-mark{
+    position:relative;
+    width:72px;
+    height:72px;
+    flex-shrink:0;
+  }
+  .petal{
+    position:absolute;
+    width:36px;
+    height:36px;
+  }
+  .petal-teal{
+    top:0; right:0;
+    background:#1FA37E;
+    border-radius:0 100% 0 100%;
+  }
+  .petal-magenta{
+    bottom:0; left:0;
+    background:#96007A;
+    border-radius:0 100% 0 100%;
+  }
+  .petal-split{
+    position:absolute;
+    bottom:0; right:0;
+    width:36px; height:36px;
+    border-radius:100% 0 0 0;
+    overflow:hidden;
+  }
+  .tri{ position:absolute; width:100%; height:100%; }
+  .tri-light{ background:#8D85FF; clip-path:polygon(0 0,100% 0,0 100%); }
+  .tri-dark{ background:#6B63D6; clip-path:polygon(100% 0,100% 100%,0 100%); }
+  @media(max-width:480px){
+    .brand-banner{ flex-direction:column; padding:22px 20px; }
+  }
   header.top{
-    display:flex;justify-content:space-between;align-items:flex-end;
+    display:flex;justify-content:space-between;align-items:center;
     margin-bottom:22px;flex-wrap:wrap;gap:12px;
   }
   .brand-eyebrow{
@@ -192,19 +252,29 @@
 </head>
 <body>
 <div class="wrap">
-  <header class="top">
-   <div>
-  <p class="brand-eyebrow">ConnectYourHealth</p>
-  <h1>InFood = Output</h1>
+  <div class="brand-banner">
+    <div class="brand-banner-text">
+      <div class="brand-title">ConnectYourHealth</div>
+      <div class="brand-subtitle">InFood = Output</div>
+    </div>
+    <div class="brand-banner-mark" aria-hidden="true">
+      <span class="petal petal-teal"></span>
+      <span class="petal petal-magenta"></span>
+      <span class="petal-split">
+        <span class="tri tri-light"></span>
+        <span class="tri tri-dark"></span>
+      </span>
+    </div>
+  </div>
 
-  <button
-    id="syncTredictBtn"
-    class="btn-primary"
-    style="margin-top:12px;background:#8D85FF;color:#FFFFFF;"
-  >
-    🔄 Synchroniseer Tredict
-  </button>
-</div>
+  <header class="top">
+    <button
+      id="syncTredictBtn"
+      class="btn-primary"
+      style="background:#8D85FF;color:#FFFFFF;"
+    >
+      🔄 Synchroniseer Tredict
+    </button>
     <div class="datenav">
       <button id="darkModeToggle" title="Donkere modus aan/uit">&#9789;</button>
       <button id="prevDay">&larr;</button>
@@ -490,7 +560,7 @@
       </div>
       <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
         <input type="text" id="teamNameInput" placeholder="Jouw naam" style="max-width:220px;padding:10px 12px;border:1px solid var(--line);border-radius:8px;">
-        <button class="btn-primary" id="teamNameSaveBtn">Opslaan</button>
+        <button class="btn-primary" id="teamNameSaveBtn" style="background:#8D85FF;color:#FFFFFF;">Opslaan</button>
         <div class="status-msg" id="teamNameStatus"></div>
       </div>
       <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--line);">
