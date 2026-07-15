@@ -598,8 +598,7 @@
   <div class="status-msg" id="teamNameStatus"></div>
 
 </div>
-        <button class="btn-primary" id="teamNameSaveBtn" style="background:#8D85FF;color:#FFFFFF;">Opslaan</button>
-        <div class="status-msg" id="teamNameStatus"></div>
+      
       </div>
       <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--line);">
         <div class="meal-meta" style="margin-bottom:8px;">
@@ -1462,14 +1461,26 @@ function loadTeamName(){
   }catch(e){ return null; }
 }
 function saveTeamName(name){
-  async function saveProfile(
+  try{
+    localStorage.setItem(
+      'infood-team-name',
+      name
+    );
+  }catch(e){
+    console.error(
+      'Opslaan teamnaam',
+      e
+    );
+  }
+}
+
+async function saveProfile(
   owner,
   birthDate,
   heightCm,
   weightKg
 ){
-
-  return supabaseClient
+  return await supabaseClient
     .from("profiles")
     .upsert(
       {
@@ -1483,11 +1494,6 @@ function saveTeamName(name){
       }
     );
 }
-  try{
-    localStorage.setItem('infood-team-name', name);
-  }catch(e){ console.error('Opslaan teamnaam', e); }
-}
-
 const _teamSyncCache = {};
 async function syncTeamEntry(dateStr, payload){
   try{
