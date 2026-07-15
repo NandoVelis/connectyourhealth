@@ -1782,12 +1782,11 @@ document
         ).value
       );
 
-    if(
-      !name ||
-      !birthDate ||
-      !heightCm ||
-      !weightKg
-    ){
+    if(!name){
+  statusEl.innerHTML =
+    '<span class="status-err">Vul een naam in.</span>';
+  return;
+}{
       statusEl.innerHTML =
         '<span class="status-err">Vul alle gegevens in.</span>';
       return;
