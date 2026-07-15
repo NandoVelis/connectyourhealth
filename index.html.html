@@ -557,8 +557,47 @@
       <div class="meal-meta" style="margin-bottom:10px;">
         Deze naam wordt gebruikt op het gedeelde teambord hieronder. Je automatisch opgehaalde Tredict-data (afstand, dagscore, HRV, hartslag, slaap) wordt vanaf dat moment zichtbaar voor collega's die dit dashboard ook gebruiken &mdash; je maaltijden, kcal-inname en overige persoonlijke gegevens blijven priv&eacute;.
       </div>
-      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
-        <input type="text" id="teamNameInput" placeholder="Jouw naam" style="max-width:220px;padding:10px 12px;border:1px solid var(--line);border-radius:8px;">
+      <div style="display:flex;flex-direction:column;gap:12px;max-width:420px;">
+
+  <input
+    type="text"
+    id="teamNameInput"
+    placeholder="Jouw naam"
+    style="padding:10px 12px;border:1px solid var(--line);border-radius:8px;"
+  >
+
+  <input
+    type="date"
+    id="profileBirthDate"
+    style="padding:10px 12px;border:1px solid var(--line);border-radius:8px;"
+  >
+
+  <input
+    type="number"
+    id="profileHeight"
+    placeholder="Lengte (cm)"
+    style="padding:10px 12px;border:1px solid var(--line);border-radius:8px;"
+  >
+
+  <input
+    type="number"
+    id="profileWeight"
+    placeholder="Startgewicht (kg)"
+    step="0.1"
+    style="padding:10px 12px;border:1px solid var(--line);border-radius:8px;"
+  >
+
+  <button
+    class="btn-primary"
+    id="teamNameSaveBtn"
+    style="background:#8D85FF;color:#FFFFFF;"
+  >
+    Start dashboard
+  </button>
+
+  <div class="status-msg" id="teamNameStatus"></div>
+
+</div>
         <button class="btn-primary" id="teamNameSaveBtn" style="background:#8D85FF;color:#FFFFFF;">Opslaan</button>
         <div class="status-msg" id="teamNameStatus"></div>
       </div>
@@ -1423,6 +1462,27 @@ function loadTeamName(){
   }catch(e){ return null; }
 }
 function saveTeamName(name){
+  async function saveProfile(
+  owner,
+  birthDate,
+  heightCm,
+  weightKg
+){
+
+  return supabaseClient
+    .from("profiles")
+    .upsert(
+      {
+        owner,
+        birth_date: birthDate,
+        height_cm: heightCm,
+        starting_weight_kg: weightKg
+      },
+      {
+        onConflict: "owner"
+      }
+    );
+}
   try{
     localStorage.setItem('infood-team-name', name);
   }catch(e){ console.error('Opslaan teamnaam', e); }
@@ -1682,21 +1742,69 @@ async function renderAllTeamViews(){
   renderTeamPeriod(quarterDates(new Date()), 'teamQuarterBody', 'Nog geen teamdata dit kwartaal.', 'Teamkwartaaloverzicht kon niet geladen worden.', undefined, allEntries);
 }
 
-document.getElementById('teamNameSaveBtn').addEventListener('click', async ()=>{
-  const statusEl = document.getElementById('teamNameStatus');
-  const name = document.getElementById('teamNameInput').value.trim();
-  if(!name){
-    statusEl.innerHTML = '<span class="status-err">Vul een naam in.</span>';
-    return;
-  }
-  await saveTeamName(name);
-  statusEl.textContent = 'Opgeslagen. Je data wordt gesynchroniseerd.';
-  statusEl.classList.remove('status-err');
-  renderDashboard();
-  renderAllTeamViews();
-  renderCustomQuickAdds();
-  renderTrendChart(true);
-});
+document
+  .getElementById("teamNameSaveBtn")
+  .addEventListener("click", async () => {
+
+    const statusEl =
+      document.getElementById(
+        "teamNameStatus"
+      );
+
+    const name =
+      document
+        .getElementById("teamNameInput")
+        .value
+        .trim();
+
+    const birthDate =
+      document
+        .getElementById("profileBirthDate")
+        .value;
+
+    const heightCm =
+      Number(
+        document.getElementById(
+          "profileHeight"
+        ).value
+      );
+
+    const weightKg =
+      Number(
+        document.getElementById(
+          "profileWeight"
+        ).value
+      );
+
+    if(
+      !name ||
+      !birthDate ||
+      !heightCm ||
+      !weightKg
+    ){
+      statusEl.innerHTML =
+        '<span class="status-err">Vul alle gegevens in.</span>';
+      return;
+    }
+
+    await saveTeamName(name);
+
+    await saveProfile(
+      name,
+      birthDate,
+      heightCm,
+      weightKg
+    );
+
+    statusEl.textContent =
+      "Profiel opgeslagen.";
+
+    renderDashboard();
+    renderAllTeamViews();
+    renderCustomQuickAdds();
+    renderTrendChart(true);
+
+  });
 
 let _resyncInProgress = false;
 document.getElementById('teamResyncBtn').addEventListener('click', async ()=>{
