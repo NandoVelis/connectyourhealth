@@ -2336,7 +2336,7 @@ document.getElementById('trendRefreshBtn').addEventListener('click', ()=>renderT
     try {
 
       const response = await fetch(
-        "https://mhvduufxeqyxgkkvwimx.supabase.co/functions/v1/sync-tredict?full=1&owner=" + encodeURIComponent(owner),
+        "https://mhvduufxeqyxgkkvwimx.supabase.co/functions/v1/sync-tredict-weight?full=1&owner=" + encodeURIComponent(owner),
         {
           headers: {
             "apikey": SUPABASE_KEY,
@@ -2374,7 +2374,7 @@ document.getElementById('trendRefreshBtn').addEventListener('click', ()=>renderT
     const owner = currentOwner();
     if(owner){
       await fetch(
-        "https://mhvduufxeqyxgkkvwimx.supabase.co/functions/v1/sync-tredict?owner=" + encodeURIComponent(owner),
+        "https://mhvduufxeqyxgkkvwimx.supabase.co/functions/v1/sync-tredict-weight?full=1&owner=" + encodeURIComponent(owner),
         {
           headers: {
             "apikey": SUPABASE_KEY,
