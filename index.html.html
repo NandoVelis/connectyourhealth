@@ -595,6 +595,10 @@
         <button class="btn-secondary" id="profileSaveBtn" type="button">Profiel opslaan</button>
         <div class="status-msg" id="profileStatus" style="margin-top:8px;"></div>
       </div>
+      <div id="tredictStatusBanner" style="display:none;margin-top:14px;padding:14px 16px;border-radius:10px;background:var(--amber-soft);border:1px solid var(--amber);">
+        <div style="font-weight:600;margin-bottom:4px;color:var(--ink);">Tredict nog niet gekoppeld</div>
+        <div id="tredictStatusText" style="font-size:13px;color:var(--ink);white-space:pre-line;line-height:1.5;"></div>
+      </div>
       <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--line);">
         <div class="meal-meta" style="margin-bottom:8px;">
           Ontbreken er dagen op het teambord terwijl ze wel bij jou (Week/Geschiedenis) staan? Zet dan alsnog al je lokaal opgeslagen dagen van vorige maand en deze maand door naar het teambord:
@@ -1766,6 +1770,7 @@ document.getElementById('teamNameSaveBtn').addEventListener('click', async ()=>{
   statusEl.classList.remove('status-err');
   await maybeShowProfileOnboarding(name);
   renderHiddenDefaults();
+  checkTredictSyncStatus();
   renderDashboard();
   renderAllTeamViews();
   renderCustomQuickAdds();
@@ -2465,7 +2470,42 @@ if(!currentOwner()){
 }
 document.getElementById('trendMetricSelect').addEventListener('change', ()=>renderTrendChart());
 document.getElementById('trendRefreshBtn').addEventListener('click', ()=>renderTrendChart(true));
- document
+
+// ---- Tredict-koppelingsstatus tonen ----
+// De automatische sync bij het laden gebeurde tot nu toe volledig op de
+// achtergrond: bij een ontbrekend token faalde die stil (alleen zichtbaar in
+// de browserconsole), zonder dat de gebruiker zelf ergens in de app zag dat
+// er nog een stap (token naar de beheerder sturen) open stond.
+let _lastTredictSyncResult = null;
+function renderTredictStatusBanner(){
+  const banner = document.getElementById('tredictStatusBanner');
+  const textEl = document.getElementById('tredictStatusText');
+  if(!banner || !textEl) return;
+  const owner = currentOwner();
+  if(!owner || !_lastTredictSyncResult || _lastTredictSyncResult.success !== false){
+    banner.style.display = 'none';
+    return;
+  }
+  textEl.textContent = _lastTredictSyncResult.error || 'Tredict-synchronisatie is niet gelukt.';
+  banner.style.display = 'block';
+}
+async function checkTredictSyncStatus(){
+  const owner = currentOwner();
+  if(!owner){ _lastTredictSyncResult = null; renderTredictStatusBanner(); return; }
+  try {
+    const response = await fetch(
+      "https://mhvduufxeqyxgkkvwimx.supabase.co/functions/v1/sync-tredict?owner=" + encodeURIComponent(owner),
+      { headers: { "apikey": SUPABASE_KEY, "Authorization": "Bearer " + SUPABASE_KEY } }
+    );
+    _lastTredictSyncResult = await response.json();
+  } catch (e) {
+    console.log("Tredict sync mislukt", e);
+    _lastTredictSyncResult = { success: false, error: "Kon geen verbinding maken met de Tredict-synchronisatie (netwerkfout)." };
+  }
+  renderTredictStatusBanner();
+}
+
+document
   .getElementById("syncTredictBtn")
   ?.addEventListener("click", async () => {
 
@@ -2491,6 +2531,8 @@ document.getElementById('trendRefreshBtn').addEventListener('click', ()=>renderT
         }
       );
       const data = await response.json();
+      _lastTredictSyncResult = data;
+      renderTredictStatusBanner();
 
       if(!data.success){
         alert(data.error || "Synchronisatie mislukt");
@@ -2514,30 +2556,8 @@ document.getElementById('trendRefreshBtn').addEventListener('click', ()=>renderT
   });
 
 (async () => {
-
-  try {
-
-    const owner = currentOwner();
-    if(owner){
-      await fetch(
-        "https://mhvduufxeqyxgkkvwimx.supabase.co/functions/v1/sync-tredict?owner=" + encodeURIComponent(owner),
-        {
-          headers: {
-            "apikey": SUPABASE_KEY,
-            "Authorization": "Bearer " + SUPABASE_KEY
-          }
-        }
-      );
-    }
-
-  } catch (e) {
-
-    console.log("Tredict sync mislukt", e);
-
-  }
-
+  await checkTredictSyncStatus();
   await renderDashboard();
-
 })();
 </script>
 </body>
