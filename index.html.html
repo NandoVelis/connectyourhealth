@@ -755,6 +755,11 @@
       </div>
     </div>
 
+    <div class="card" style="margin-bottom:16px;">
+      <h3>🏅 Records &mdash; aller tijden</h3>
+      <div id="allTimeRecords"><div class="empty">Nog geen teamdata.</div></div>
+      <div class="meal-meta" style="margin-top:10px;">Hoogste dagscore ooit behaald per dag/week/maand/kwartaal, plus de grootste stijging t.o.v. de voorgaande periode &mdash; los van de lopende periode hieronder.</div>
+    </div>
 
     <div class="grid">
       <div class="card">
@@ -1778,33 +1783,30 @@ function topRanking(rows, field, direction){
     .sort((a,b) => direction==='asc' ? a[field]-b[field] : b[field]-a[field])
     .slice(0,3);
 }
-function renderAchievements(elId, rows, emptyLabel){
+function renderAchievements(elId, rows, emptyLabel, isAverage){
   const container = document.getElementById(elId);
   if(!container) return;
   if(!rows || rows.length===0){
     container.innerHTML = `<div class="empty">${emptyLabel}</div>`;
     return;
   }
+  const suffix = isAverage ? ' (gem.)' : '';
   const categories = [
-    { label: 'Hoogste dagscore', field: 'dagscore', dir: 'desc', fmt: v => v.toFixed(1) },
-    { label: 'Hoogste HRV', field: 'hrv', dir: 'desc', fmt: v => Math.round(v)+' ms' },
-    { label: 'Laagste rusthartslag', field: 'hrRest', dir: 'asc', fmt: v => Math.round(v)+' bpm' },
-    { label: 'Meeste slaap', field: 'sleepMinutes', dir: 'desc', fmt: v => Math.floor(v/60)+'u'+String(Math.round(v%60)).padStart(2,'0')+'m' },
+    { label: 'Hoogste dagscore'+suffix, field: 'dagscore', dir: 'desc', fmt: v => v.toFixed(1) },
+    { label: 'Hoogste HRV'+suffix, field: 'hrv', dir: 'desc', fmt: v => Math.round(v)+' ms' },
+    { label: 'Laagste rusthartslag'+suffix, field: 'hrRest', dir: 'asc', fmt: v => Math.round(v)+' bpm' },
+    { label: 'Meeste slaap'+suffix, field: 'sleepMinutes', dir: 'desc', fmt: v => Math.floor(v/60)+'u'+String(Math.round(v%60)).padStart(2,'0')+'m' },
   ];
-  let html = '';
-  for(const cat of categories){
-    const ranked = topRanking(rows, cat.field, cat.dir);
-    if(ranked.length===0) continue;
-    html += `<div style="margin-bottom:14px;">
-      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-soft);margin-bottom:6px;">${cat.label}</div>
-      ${ranked.map((r,i)=>`
-        <div class="stat-row" style="padding:5px 0;">
-          <span class="stat-label">${medalEmoji(i)} ${escapeHtml(r.name)}</span>
-          <span class="stat-val">${cat.fmt(r[cat.field])}</span>
-        </div>`).join('')}
+  const cells = categories.map(cat=>{
+    const winner = topRanking(rows, cat.field, cat.dir)[0];
+    if(!winner) return '';
+    return `<div class="stat-row" style="border-bottom:none;flex-direction:column;align-items:flex-start;">
+      <span class="stat-label">${cat.label}</span>
+      <span class="stat-val">${medalEmoji(0)} ${escapeHtml(winner.name)}</span>
+      <span class="meal-meta">${cat.fmt(winner[cat.field])}</span>
     </div>`;
-  }
-  container.innerHTML = html || `<div class="empty">${emptyLabel}</div>`;
+  }).filter(Boolean).join('');
+  container.innerHTML = cells ? `<div class="vitals-grid">${cells}</div>` : `<div class="empty">${emptyLabel}</div>`;
 }
 
 async function renderTeam(allEntries){
@@ -1948,7 +1950,7 @@ function renderTeamPeriod(days, bodyElId, emptyLabel, errorLabel, previousDays, 
       renderAchievements(achievementsElId, rows.map(r=>({
         name: r.name, dagscore: r.dagscoreAvg, hrv: r.hrvAvg, hrRest: r.hrRestAvg, sleepMinutes: r.sleepAvg,
         kmTotaal: (r.kmHardlopenTotal||0)+(r.kmFietsenTotal||0)+(r.kmZwemmenTotal||0)
-      })), emptyLabel);
+      })), emptyLabel, true);
     }
     if(rows.length===0){
       bodyEl.innerHTML = `<tr><td colspan="9" class="empty">${emptyLabel}</td></tr>`;
@@ -2013,6 +2015,120 @@ function renderTeamPeriod(days, bodyElId, emptyLabel, errorLabel, previousDays, 
     bodyEl.innerHTML = `<tr><td colspan="9" class="empty">${errorLabel}</td></tr>`;
   }
 }
+// ---- Records aller tijden ----
+// In tegenstelling tot de Prestaties-kaarten hierboven (die alleen de
+// lópende week/maand/kwartaal bekijken), kijkt dit over de VOLLEDIGE
+// geschiedenis: welke dag/week/maand/kwartaal had ooit de hoogste
+// (gemiddelde) dagscore, door wie, en wanneer.
+function getMondayOf(dateStr){
+  const d = new Date(dateStr+'T00:00:00');
+  const day = d.getDay();
+  d.setDate(d.getDate() + (day===0 ? -6 : 1-day));
+  return fmtDate(d);
+}
+function quarterKeyOf(dateStr){
+  const [y,m] = dateStr.split('-').map(Number);
+  return `${y}-Q${Math.floor((m-1)/3)+1}`;
+}
+function groupEntriesByPeriod(entries, keyFn, labelFn){
+  const groups = {};
+  for(const e of entries){
+    if(e.dagscore==null) continue;
+    const periodKey = keyFn(e.date);
+    const groupKey = e.name+'|'+periodKey;
+    if(!groups[groupKey]) groups[groupKey] = { name: e.name, periodKey, dagscores: [] };
+    groups[groupKey].dagscores.push(e.dagscore);
+  }
+  return Object.values(groups).map(g=>({
+    name: g.name,
+    periodKey: g.periodKey,
+    label: labelFn(g.periodKey),
+    dagscore: g.dagscores.reduce((a,b)=>a+b,0)/g.dagscores.length
+  }));
+}
+// Vindt, over alle personen en periodes, wie de grootste %-stijging had t.o.v.
+// hun eigen score in de exact voorafgaande periode (bijv. deze week vs de week
+// ervoor voor diezelfde persoon) — niet zomaar de vorige periode met data,
+// maar echt de kalender-aangrenzende periode.
+function computeBiggestImprovement(rows, prevKeyFn){
+  const byNameAndKey = {};
+  for(const r of rows) byNameAndKey[r.name+'|'+r.periodKey] = r;
+  let best = null;
+  for(const r of rows){
+    const prev = byNameAndKey[r.name+'|'+prevKeyFn(r.periodKey)];
+    if(!prev) continue;
+    const delta = pctDelta(r.dagscore, prev.dagscore);
+    if(delta==null || delta<=0) continue;
+    if(!best || delta>best.delta) best = { name:r.name, label:r.label, delta, dagscore:r.dagscore };
+  }
+  return best;
+}
+function prevMonthKeyOf(key){
+  const [y,m] = key.split('-').map(Number);
+  const d = new Date(y, m-2, 1);
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+}
+function prevQuarterKeyOf(key){
+  const [yStr, qStr] = key.split('-Q');
+  let y = Number(yStr), q = Number(qStr)-1;
+  if(q<1){ q=4; y-=1; }
+  return `${y}-Q${q}`;
+}
+function renderAllTimeRecords(allEntries){
+  const container = document.getElementById('allTimeRecords');
+  if(!container) return;
+  const withScore = allEntries.filter(e=>e.dagscore!=null);
+  if(withScore.length===0){
+    container.innerHTML = '<div class="empty">Nog geen teamdata.</div>';
+    return;
+  }
+  const monthLabel = key => { const [y,m] = key.split('-'); return new Date(Number(y),Number(m)-1,1).toLocaleDateString('nl-NL',{month:'long',year:'numeric'}); };
+  const weekRows = groupEntriesByPeriod(withScore, e=>getMondayOf(e), key=>'week van '+new Date(key+'T00:00:00').toLocaleDateString('nl-NL',{day:'numeric',month:'short'}));
+  const monthRows = groupEntriesByPeriod(withScore, e=>e.slice(0,7), monthLabel);
+  const quarterRows = groupEntriesByPeriod(withScore, e=>quarterKeyOf(e), key=>key);
+  const levels = [
+    { label: 'Beste dag', rows: withScore.map(e=>({name:e.name, label:new Date(e.date+'T00:00:00').toLocaleDateString('nl-NL',{day:'numeric',month:'short',year:'numeric'}), dagscore:e.dagscore})) },
+    { label: 'Beste week', rows: weekRows },
+    { label: 'Beste maand', rows: monthRows },
+    { label: 'Beste kwartaal', rows: quarterRows },
+  ];
+  const cells = levels.map(lvl=>{
+    const winner = topRanking(lvl.rows, 'dagscore', 'desc')[0];
+    if(!winner) return '';
+    return `<div class="stat-row" style="border-bottom:none;flex-direction:column;align-items:flex-start;">
+      <span class="stat-label">${lvl.label}</span>
+      <span class="stat-val">${medalEmoji(0)} ${escapeHtml(winner.name)} &mdash; ${winner.dagscore.toFixed(1)}</span>
+      <span class="meal-meta">${escapeHtml(winner.label)}</span>
+    </div>`;
+  }).filter(Boolean).join('');
+
+  const improvementLevels = [
+    { label: 'Grootste stijging (week)', rows: weekRows, prevKeyFn: key => addDaysToKey(key,-7) },
+    { label: 'Grootste stijging (maand)', rows: monthRows, prevKeyFn: prevMonthKeyOf },
+    { label: 'Grootste stijging (kwartaal)', rows: quarterRows, prevKeyFn: prevQuarterKeyOf },
+  ];
+  const improvementCells = improvementLevels.map(lvl=>{
+    const best = computeBiggestImprovement(lvl.rows, lvl.prevKeyFn);
+    if(!best) return '';
+    return `<div class="stat-row" style="border-bottom:none;flex-direction:column;align-items:flex-start;">
+      <span class="stat-label">${lvl.label}</span>
+      <span class="stat-val" style="color:var(--pine);">${medalEmoji(0)} ${escapeHtml(best.name)} &mdash; +${best.delta}%</span>
+      <span class="meal-meta">${escapeHtml(best.label)} (naar ${best.dagscore.toFixed(1)})</span>
+    </div>`;
+  }).filter(Boolean).join('');
+
+  let html = cells ? `<div class="vitals-grid">${cells}</div>` : '<div class="empty">Nog geen teamdata.</div>';
+  if(improvementCells){
+    html += `<div class="vitals-grid" style="margin-top:14px;padding-top:14px;border-top:1px solid var(--line);">${improvementCells}</div>`;
+  }
+  container.innerHTML = html;
+}
+function addDaysToKey(dateStr, days){
+  const d = new Date(dateStr+'T00:00:00');
+  d.setDate(d.getDate()+days);
+  return fmtDate(d);
+}
+
 async function renderAllTeamViews(){
   let allEntries = [];
   try{
@@ -2020,6 +2136,7 @@ async function renderAllTeamViews(){
   }catch(e){
     console.error('Ophalen teamdata', e);
   }
+  renderAllTimeRecords(allEntries);
   await renderTeam(allEntries);
   renderTeamPeriod(weekDates(new Date()), 'teamWeekBody', 'Nog geen teamdata deze week.', 'Teamweekoverzicht kon niet geladen worden.', lastWeekDates(new Date()), allEntries, 'achievementsWeek');
   renderTeamPeriod(lastWeekDates(new Date()), 'teamLastWeekBody', 'Nog geen teamdata voor vorige week.', 'Teamoverzicht vorige week kon niet geladen worden.', undefined, allEntries, 'achievementsLastWeek');
