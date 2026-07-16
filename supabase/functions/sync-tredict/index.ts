@@ -338,6 +338,12 @@ Deno.serve(async (req) => {
         km: detail.summary?.distance
           ? Math.round((detail.summary.distance / 1000) * 100) / 100
           : 0,
+        // Duur in minuten — Tredict houdt dit doorgaans nauwkeuriger bij dan
+        // afstand, met name bij zwemmen waar de GPS-afstand vaak onbetrouwbaar
+        // is. "duration" wordt door Tredict in seconden aangeleverd.
+        durationMinutes: detail.summary?.duration
+          ? Math.round((detail.summary.duration / 60) * 10) / 10
+          : 0,
         type: sportTypeMap[detail.sportType] || detail.sportType,
       });
     }
@@ -371,6 +377,7 @@ Deno.serve(async (req) => {
         activity_name: a.name,
         kcal: a.kcal,
         km: a.km,
+        duration_minutes: a.durationMinutes,
         activity_type: a.type,
         rest_kcal: restKcal,
         total_kcal: totalKcal,
@@ -430,10 +437,12 @@ Deno.serve(async (req) => {
     for (const dateStr of allSyncDates) {
       const activities = activitiesByDate[dateStr] || [];
       const kmByType = { hardlopen: 0, fietsen: 0, zwemmen: 0 } as Record<string, number>;
+      const minByType = { hardlopen: 0, zwemmen: 0 } as Record<string, number>;
       let activityKcalSum = 0;
       for (const a of activities as any[]) {
         activityKcalSum += a.kcal || 0;
         if (a.type in kmByType) kmByType[a.type] += Number(a.km) || 0;
+        if (a.type in minByType) minByType[a.type] += Number(a.durationMinutes) || 0;
       }
 
       const dayVitals = vitalsByDate.get(dateStr);
@@ -456,6 +465,8 @@ Deno.serve(async (req) => {
         km_hardlopen: kmByType.hardlopen,
         km_fietsen: kmByType.fietsen,
         km_zwemmen: kmByType.zwemmen,
+        min_hardlopen: minByType.hardlopen,
+        min_zwemmen: minByType.zwemmen,
         hrv: dayVitals?.hrv ?? null,
         hr_rest: dayVitals?.hr_rest ?? null,
         sleep_minutes: dayVitals?.sleep_minutes ?? null,
