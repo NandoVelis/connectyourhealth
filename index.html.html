@@ -316,22 +316,22 @@
       <h3>Herstel</h3>
       <div id="vitalsDetail" class="vitals-grid">
         <div class="stat-row" style="border-bottom:none;flex-direction:column;align-items:flex-start;">
-          <span class="stat-label">Rusthartslag</span>
+          <span class="stat-label">&#10084;&#65039; Rusthartslag</span>
           <span class="stat-val" id="vitalHrRest">&mdash;</span>
           <span class="meal-meta" id="vitalHrRestWeek">week gem. &mdash;</span>
         </div>
         <div class="stat-row" style="border-bottom:none;flex-direction:column;align-items:flex-start;">
-          <span class="stat-label">HRV</span>
+          <span class="stat-label">&#128147; HRV</span>
           <span class="stat-val" id="vitalHrv">&mdash;</span>
           <span class="meal-meta" id="vitalHrvWeek">week gem. &mdash;</span>
         </div>
         <div class="stat-row" style="border-bottom:none;flex-direction:column;align-items:flex-start;">
-          <span class="stat-label">Slaap</span>
+          <span class="stat-label">&#128564; Slaap</span>
           <span class="stat-val" id="vitalSleep">&mdash;</span>
           <span class="meal-meta" id="vitalSleepWeek">week gem. &mdash;</span>
         </div>
         <div class="stat-row" style="border-bottom:none;flex-direction:column;align-items:flex-start;">
-          <span class="stat-label">Gewicht</span>
+          <span class="stat-label">&#9878;&#65039; Gewicht</span>
           <span class="stat-val" id="vitalWeight">&mdash;</span>
           <span class="meal-meta" id="vitalWeightWeek">week gem. &mdash;</span>
         </div>
@@ -396,47 +396,9 @@
 
       <div id="qaGroup-Ontbijt">
         <h4 class="qa-group-heading">Ontbijt</h4>
-        <div class="stat-row" data-default-key="oats" style="border-bottom:1px solid var(--line);padding-top:0;">
+        <div class="stat-row" data-default-key="combo1" data-owner-only="Nando" style="border-bottom:1px solid var(--line);padding-top:0;">
           <div>
-            <div class="meal-desc">Havermout + magere kwark</div>
-            <div class="meal-meta">250ml magere kwark vast &middot; havermout aanpasbaar</div>
-          </div>
-          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-            <input type="number" id="oatsGrams" value="40" min="1" style="width:56px;padding:6px 8px;">
-            <span style="font-size:11px;color:var(--ink-soft);">g</span>
-            <select class="qaGroupSelect" data-key="oats" style="font-size:11px;padding:5px 6px;border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--ink-soft);">
-              <option value="Ontbijt" selected>Ontbijt</option>
-              <option value="Lunch">Lunch</option>
-              <option value="Snack">Snack</option>
-              <option value="Diner">Diner</option>
-              <option value="Drinken">Drinken</option>
-            </select>
-            <button class="btn-secondary" id="quickAddOats">+ Toevoegen</button>
-            <button class="btn-secondary defaultQuickAddRemove" data-key="oats" title="Verwijderen uit Snel toevoegen" style="padding:6px 10px;">&times;</button>
-          </div>
-        </div>
-        <div class="stat-row" data-default-key="eggs" style="border-bottom:1px solid var(--line);">
-          <div>
-            <div class="meal-desc">Gekookte eieren</div>
-            <div class="meal-meta">~78 kcal per ei</div>
-          </div>
-          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-            <input type="number" id="eggQty" value="2" min="1" style="width:56px;padding:6px 8px;">
-            <span style="font-size:11px;color:var(--ink-soft);">stuks</span>
-            <select class="qaGroupSelect" data-key="eggs" style="font-size:11px;padding:5px 6px;border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--ink-soft);">
-              <option value="Ontbijt" selected>Ontbijt</option>
-              <option value="Lunch">Lunch</option>
-              <option value="Snack">Snack</option>
-              <option value="Diner">Diner</option>
-              <option value="Drinken">Drinken</option>
-            </select>
-            <button class="btn-secondary" id="quickAddEggs">+ Toevoegen</button>
-            <button class="btn-secondary defaultQuickAddRemove" data-key="eggs" title="Verwijderen uit Snel toevoegen" style="padding:6px 10px;">&times;</button>
-          </div>
-        </div>
-        <div class="stat-row" data-default-key="combo1" data-owner-only="Nando" style="border-bottom:1px solid var(--line);">
-          <div>
-            <div class="meal-desc">Havermout/banaan/kwark shake</div>
+            <div class="meal-desc">🥣 Havermout+banaan+kwark shake</div>
             <div class="meal-meta">250ml magere kwark vast &middot; havermout en aantal bananen aanpasbaar</div>
           </div>
           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
@@ -457,7 +419,7 @@
         </div>
         <div class="stat-row" data-default-key="combo2" data-owner-only="Nando" style="border-bottom:1px solid var(--line);">
           <div>
-            <div class="meal-desc">Havermout banaan shake</div>
+            <div class="meal-desc">🥣 Havermout banaan shake</div>
             <div class="meal-meta">zonder kwark &middot; havermout en aantal bananen aanpasbaar</div>
           </div>
           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
@@ -476,13 +438,51 @@
             <button class="btn-secondary defaultQuickAddRemove" data-key="combo2" title="Verwijderen uit Snel toevoegen" style="padding:6px 10px;">&times;</button>
           </div>
         </div>
+        <div class="stat-row" data-default-key="oats" style="border-bottom:1px solid var(--line);">
+          <div>
+            <div class="meal-desc">🥣 Havermout + magere kwark</div>
+            <div class="meal-meta">250ml magere kwark vast &middot; havermout aanpasbaar</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            <input type="number" id="oatsGrams" value="40" min="1" style="width:56px;padding:6px 8px;">
+            <span style="font-size:11px;color:var(--ink-soft);">g</span>
+            <select class="qaGroupSelect" data-key="oats" style="font-size:11px;padding:5px 6px;border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--ink-soft);">
+              <option value="Ontbijt" selected>Ontbijt</option>
+              <option value="Lunch">Lunch</option>
+              <option value="Snack">Snack</option>
+              <option value="Diner">Diner</option>
+              <option value="Drinken">Drinken</option>
+            </select>
+            <button class="btn-secondary" id="quickAddOats">+ Toevoegen</button>
+            <button class="btn-secondary defaultQuickAddRemove" data-key="oats" title="Verwijderen uit Snel toevoegen" style="padding:6px 10px;">&times;</button>
+          </div>
+        </div>
+        <div class="stat-row" data-default-key="eggs" style="border-bottom:1px solid var(--line);">
+          <div>
+            <div class="meal-desc">🥚 Gekookte eieren</div>
+            <div class="meal-meta">~78 kcal per ei</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            <input type="number" id="eggQty" value="2" min="1" style="width:56px;padding:6px 8px;">
+            <span style="font-size:11px;color:var(--ink-soft);">stuks</span>
+            <select class="qaGroupSelect" data-key="eggs" style="font-size:11px;padding:5px 6px;border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--ink-soft);">
+              <option value="Ontbijt" selected>Ontbijt</option>
+              <option value="Lunch">Lunch</option>
+              <option value="Snack">Snack</option>
+              <option value="Diner">Diner</option>
+              <option value="Drinken">Drinken</option>
+            </select>
+            <button class="btn-secondary" id="quickAddEggs">+ Toevoegen</button>
+            <button class="btn-secondary defaultQuickAddRemove" data-key="eggs" title="Verwijderen uit Snel toevoegen" style="padding:6px 10px;">&times;</button>
+          </div>
+        </div>
       </div>
 
       <div id="qaGroup-Lunch">
         <h4 class="qa-group-heading">Lunch</h4>
         <div class="stat-row" data-default-key="lunch" style="border-bottom:1px solid var(--line);">
           <div>
-            <div class="meal-desc">Broodje kipfilet</div>
+            <div class="meal-desc">🥪 Broodje kipfilet</div>
             <div class="meal-meta">1 volkoren broodje + 1 plakje kipfilet &middot; ~140 kcal per stuk</div>
           </div>
           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
@@ -498,13 +498,32 @@
             <button class="btn-secondary defaultQuickAddRemove" data-key="lunch" title="Verwijderen uit Snel toevoegen" style="padding:6px 10px;">&times;</button>
           </div>
         </div>
+        <div class="stat-row" data-default-key="eggs-lunch" style="border-bottom:1px solid var(--line);">
+          <div>
+            <div class="meal-desc">🥚 Gekookte eieren</div>
+            <div class="meal-meta">~78 kcal per ei</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            <input type="number" id="eggQtyLunch" value="2" min="1" style="width:56px;padding:6px 8px;">
+            <span style="font-size:11px;color:var(--ink-soft);">stuks</span>
+            <select class="qaGroupSelect" data-key="eggs-lunch" style="font-size:11px;padding:5px 6px;border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--ink-soft);">
+              <option value="Ontbijt">Ontbijt</option>
+              <option value="Lunch" selected>Lunch</option>
+              <option value="Snack">Snack</option>
+              <option value="Diner">Diner</option>
+              <option value="Drinken">Drinken</option>
+            </select>
+            <button class="btn-secondary" id="quickAddEggsLunch">+ Toevoegen</button>
+            <button class="btn-secondary defaultQuickAddRemove" data-key="eggs-lunch" title="Verwijderen uit Snel toevoegen" style="padding:6px 10px;">&times;</button>
+          </div>
+        </div>
       </div>
 
       <div id="qaGroup-Snack">
         <h4 class="qa-group-heading">Snack</h4>
         <div class="stat-row" data-default-key="banana" style="border-bottom:1px solid var(--line);">
           <div>
-            <div class="meal-desc">Banaan</div>
+            <div class="meal-desc">🍌 Banaan</div>
             <div class="meal-meta">1 middelgrote banaan &middot; ~105 kcal</div>
           </div>
           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
@@ -519,17 +538,35 @@
             <button class="btn-secondary defaultQuickAddRemove" data-key="banana" title="Verwijderen uit Snel toevoegen" style="padding:6px 10px;">&times;</button>
           </div>
         </div>
+        <div class="stat-row" data-default-key="apple" style="border-bottom:1px solid var(--line);">
+          <div>
+            <div class="meal-desc">🍎 Appel</div>
+            <div class="meal-meta">1 middelgrote appel &middot; ~95 kcal</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            <select class="qaGroupSelect" data-key="apple" style="font-size:11px;padding:5px 6px;border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--ink-soft);">
+              <option value="Ontbijt">Ontbijt</option>
+              <option value="Lunch">Lunch</option>
+              <option value="Snack" selected>Snack</option>
+              <option value="Diner">Diner</option>
+              <option value="Drinken">Drinken</option>
+            </select>
+            <button class="btn-secondary" id="quickAddApple">+ Toevoegen</button>
+            <button class="btn-secondary defaultQuickAddRemove" data-key="apple" title="Verwijderen uit Snel toevoegen" style="padding:6px 10px;">&times;</button>
+          </div>
+        </div>
       </div>
 
       <div id="qaGroup-Diner">
         <h4 class="qa-group-heading">Diner</h4>
+        <div id="customQuickAddList"></div>
       </div>
 
       <div id="qaGroup-Drinken">
         <h4 class="qa-group-heading">Drinken</h4>
         <div class="stat-row" data-default-key="shake" style="border-bottom:1px solid var(--line);">
           <div>
-            <div class="meal-desc">Eiwitshake</div>
+            <div class="meal-desc">🥤 Eiwitshake</div>
             <div class="meal-meta">1 scoop whey (~30g) met water &middot; ~120 kcal</div>
           </div>
           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
@@ -546,7 +583,7 @@
         </div>
         <div class="stat-row" data-default-key="leffe" style="border-bottom:1px solid var(--line);">
           <div>
-            <div class="meal-desc">Leffe Blond 0.0</div>
+            <div class="meal-desc">🍺 Leffe Blond 0.0</div>
             <div class="meal-meta">1 blikje (330ml), alcoholvrij &middot; ~86 kcal</div>
           </div>
           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
@@ -563,7 +600,6 @@
         </div>
       </div>
 
-      <div id="customQuickAddList"></div>
       <div class="status-msg" id="quickAddStatus"></div>
     </div>
 
@@ -591,6 +627,7 @@
             <option>Lunch</option>
             <option>Diner</option>
             <option>Snack</option>
+            <option>Drinken</option>
             <option>Sportvoeding</option>
           </select>
         </div>
@@ -635,7 +672,7 @@
       </div>
       <div class="table-scroll">
       <table>
-        <thead><tr><th>Dag</th><th>Gewicht</th><th>Rusthartslag</th><th>HRV</th><th>Slaap</th><th>Kcal in</th><th>Eiwit</th><th>Vet</th><th>Verbrand</th><th>Balans</th><th>Score</th></tr></thead>
+        <thead><tr><th>Dag</th><th>⚖️ Gewicht</th><th>❤️ Rusthartslag</th><th>💓 HRV</th><th>😴 Slaap</th><th>Kcal in</th><th>Eiwit</th><th>Vet</th><th>Verbrand</th><th>Balans</th><th>Score</th></tr></thead>
         <tbody id="weekBody"></tbody>
       </table>
       </div>
@@ -651,7 +688,7 @@
       </div>
       <div class="table-scroll">
       <table>
-        <thead><tr><th>Dag</th><th>Gewicht</th><th>Rusthartslag</th><th>HRV</th><th>Slaap</th><th>Kcal in</th><th>Eiwit</th><th>Vet</th><th>Verbrand</th><th>Balans</th><th>Score</th></tr></thead>
+        <thead><tr><th>Dag</th><th>⚖️ Gewicht</th><th>❤️ Rusthartslag</th><th>💓 HRV</th><th>😴 Slaap</th><th>Kcal in</th><th>Eiwit</th><th>Vet</th><th>Verbrand</th><th>Balans</th><th>Score</th></tr></thead>
         <tbody id="maandBody"></tbody>
       </table>
       </div>
@@ -724,7 +761,7 @@
       <div class="table-scroll">
       <table>
         <thead><tr>
-          <th>Naam</th><th>Dagscore</th><th>🏃 km</th><th>🚴 km</th><th>🏊 km</th><th>HRV</th><th>Rust-HR</th><th>Slaap</th>
+          <th>Naam</th><th>Dagscore</th><th>🏃 km</th><th>🚴 km</th><th>🏊 km</th><th>💓 HRV</th><th>❤️ Rust-HR</th><th>😴 Slaap</th>
         </tr></thead>
         <tbody id="teamBoardBody"><tr><td colspan="8" class="empty">Nog geen teamdata voor vandaag.</td></tr></tbody>
       </table>
@@ -737,7 +774,7 @@
       <div class="table-scroll">
       <table>
         <thead><tr>
-          <th>Naam</th><th>Dagen</th><th>Dagscore</th><th>🏃 km</th><th>🚴 km</th><th>🏊 km</th><th>HRV</th><th>Rust-HR</th><th>Slaap</th>
+          <th>Naam</th><th>Dagen</th><th>Dagscore</th><th>🏃 km</th><th>🚴 km</th><th>🏊 km</th><th>💓 HRV</th><th>❤️ Rust-HR</th><th>😴 Slaap</th>
         </tr></thead>
         <tbody id="teamWeekBody"><tr><td colspan="9" class="empty">Nog geen teamdata deze week.</td></tr></tbody>
       </table>
@@ -749,7 +786,7 @@
       <div class="table-scroll">
       <table>
         <thead><tr>
-          <th>Naam</th><th>Dagen</th><th>Dagscore</th><th>🏃 km</th><th>🚴 km</th><th>🏊 km</th><th>HRV</th><th>Rust-HR</th><th>Slaap</th>
+          <th>Naam</th><th>Dagen</th><th>Dagscore</th><th>🏃 km</th><th>🚴 km</th><th>🏊 km</th><th>💓 HRV</th><th>❤️ Rust-HR</th><th>😴 Slaap</th>
         </tr></thead>
         <tbody id="teamLastWeekBody"><tr><td colspan="9" class="empty">Nog geen teamdata voor vorige week.</td></tr></tbody>
       </table>
@@ -761,7 +798,7 @@
       <div class="table-scroll">
       <table>
         <thead><tr>
-          <th>Naam</th><th>Dagen</th><th>Dagscore</th><th>🏃 km</th><th>🚴 km</th><th>🏊 km</th><th>HRV</th><th>Rust-HR</th><th>Slaap</th>
+          <th>Naam</th><th>Dagen</th><th>Dagscore</th><th>🏃 km</th><th>🚴 km</th><th>🏊 km</th><th>💓 HRV</th><th>❤️ Rust-HR</th><th>😴 Slaap</th>
         </tr></thead>
         <tbody id="teamMonthBody"><tr><td colspan="9" class="empty">Nog geen teamdata deze maand.</td></tr></tbody>
       </table>
@@ -773,7 +810,7 @@
       <div class="table-scroll">
       <table>
         <thead><tr>
-          <th>Naam</th><th>Dagen</th><th>Dagscore</th><th>🏃 km</th><th>🚴 km</th><th>🏊 km</th><th>HRV</th><th>Rust-HR</th><th>Slaap</th>
+          <th>Naam</th><th>Dagen</th><th>Dagscore</th><th>🏃 km</th><th>🚴 km</th><th>🏊 km</th><th>💓 HRV</th><th>❤️ Rust-HR</th><th>😴 Slaap</th>
         </tr></thead>
         <tbody id="teamLastMonthBody"><tr><td colspan="9" class="empty">Nog geen teamdata voor vorige maand.</td></tr></tbody>
       </table>
@@ -785,7 +822,7 @@
       <div class="table-scroll">
       <table>
         <thead><tr>
-          <th>Naam</th><th>Dagen</th><th>Dagscore</th><th>🏃 km</th><th>🚴 km</th><th>🏊 km</th><th>HRV</th><th>Rust-HR</th><th>Slaap</th>
+          <th>Naam</th><th>Dagen</th><th>Dagscore</th><th>🏃 km</th><th>🚴 km</th><th>🏊 km</th><th>💓 HRV</th><th>❤️ Rust-HR</th><th>😴 Slaap</th>
         </tr></thead>
         <tbody id="teamQuarterBody"><tr><td colspan="9" class="empty">Nog geen teamdata dit kwartaal.</td></tr></tbody>
       </table>
@@ -1041,6 +1078,30 @@ function computeDagscore(consumedKcal, training, vitals){
 }
 
 // Genereert een korte voedingstip op basis van resterende macro's, kcal-ruimte en herstel.
+// Zelfde items en macro's als bij "Snel toevoegen" (InFood-tab), zodat de
+// tip op het Persoonlijk Dashboard concrete, aanklikbare suggesties kan
+// noemen in plaats van alleen generieke productcategorieën.
+const QUICK_ADD_REFERENCE = [
+  { name: 'Havermout + kwark', kcal: 263, protein: 30, carbs: 34, fat: 4 },
+  { name: 'Gekookt ei', kcal: 78, protein: 6, carbs: 1, fat: 5 },
+  { name: 'Broodje kipfilet', kcal: 140, protein: 8, carbs: 24, fat: 2 },
+  { name: 'Banaan', kcal: 105, protein: 1, carbs: 27, fat: 0 },
+  { name: 'Appel', kcal: 95, protein: 0, carbs: 25, fat: 0 },
+  { name: 'Eiwitshake', kcal: 120, protein: 24, carbs: 3, fat: 1.5 },
+  { name: 'Havermout+banaan+kwark shake', kcal: 368, protein: 31, carbs: 61, fat: 4, ownerOnly: 'Nando' },
+  { name: 'Havermout banaan shake', kcal: 255, protein: 6, carbs: 51, fat: 3, ownerOnly: 'Nando' },
+];
+function suggestQuickAddItems(byField, count){
+  const owner = currentOwner();
+  const available = QUICK_ADD_REFERENCE.filter(item => !item.ownerOnly || item.ownerOnly === owner);
+  const top = available
+    .filter(item => item[byField] > 0)
+    .sort((a,b) => b[byField]-a[byField])
+    .slice(0, count);
+  const unit = byField==='protein' ? 'g eiwit' : 'g koolh.';
+  return top.map(item => `${item.name} (${item[byField]}${unit})`).join(' of ');
+}
+
 function generateNutritionTip(totals, targets, burned, vitals, trainingHadActivity, recoveryConcern){
   if(targets.protein==null){
     return "Vul je gewicht in (via de Tredict-sync) zodat ik een tip op maat kan geven.";
@@ -1053,10 +1114,12 @@ function generateNutritionTip(totals, targets, burned, vitals, trainingHadActivi
   const tips = [];
 
   if(remainingProtein!=null && remainingProtein > 15){
-    tips.push(`nog ~${remainingProtein}g eiwit nodig \u2014 denk aan kwark, kipfilet, eieren of een eiwitshake`);
+    const suggestion = suggestQuickAddItems('protein', 2);
+    tips.push(`nog ~${remainingProtein}g eiwit nodig \u2014 bijvoorbeeld ${suggestion} uit je snel-toevoegen-lijst`);
   }
   if(remainingCarbs!=null && remainingCarbs > 40 && trainingHadActivity){
-    tips.push(`na je training kun je nog ~${remainingCarbs}g koolhydraten gebruiken voor herstel \u2014 rijst, pasta, havermout of fruit`);
+    const suggestion = suggestQuickAddItems('carbs', 2);
+    tips.push(`na je training kun je nog ~${remainingCarbs}g koolhydraten gebruiken voor herstel \u2014 bijvoorbeeld ${suggestion}`);
   }
   if(remainingKcal!=null && remainingKcal > 300 && tips.length===0){
     tips.push(`je hebt nog ongeveer ${remainingKcal} kcal ruimte vandaag`);
@@ -1364,7 +1427,7 @@ async function renderDashboard(){
           <div class="meal-desc">${escapeHtml(m.desc)}</div>
           <div class="meal-meta">
             <select class="mealTypeSelect" data-idx="${i}" style="font-size:12px;padding:3px 6px;border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--ink-soft);font-family:'Archivo',sans-serif;">
-              ${['Ontbijt','Lunch','Diner','Snack','Sportvoeding'].map(opt=>`<option value="${opt}" ${m.mealType===opt?'selected':''}>${opt}</option>`).join('')}
+              ${['Ontbijt','Lunch','Diner','Snack','Drinken','Sportvoeding'].map(opt=>`<option value="${opt}" ${m.mealType===opt?'selected':''}>${opt}</option>`).join('')}
             </select>
             ${m.time?(' &middot; '+escapeHtml(m.time)):''}
           </div>
@@ -1395,7 +1458,7 @@ async function renderDashboard(){
   }
 
   const subtotalEl = document.getElementById('subtotalsList');
-  const order = ['Ontbijt','Lunch','Diner','Snack','Sportvoeding'];
+  const order = ['Ontbijt','Lunch','Diner','Snack','Drinken','Sportvoeding'];
   const byType = {};
   order.forEach(t=>byType[t]={kcal:0,count:0});
   meals.forEach(m=>{
@@ -2242,6 +2305,48 @@ async function removeCustomQuickAdd(desc){
   }catch(e){ console.error('Verwijderen snel-toevoegen-item', e); }
   await renderCustomQuickAdds();
 }
+// Kiest automatisch een passend icoontje bij een voedingsmiddel op basis van
+// trefwoorden in de naam — zodat ook zelf-opgeslagen items (en toekomstige
+// nieuwe vaste opties) meteen een logisch icoontje krijgen, zonder dat dat
+// telkens handmatig hoeft te worden ingesteld. Specifiekere trefwoorden staan
+// vooraan zodat bijv. "kipfilet" niet per ongeluk op een generieke term matcht.
+const FOOD_EMOJI_KEYWORDS = [
+  ['zalm', '\u{1F41F}'], ['tonijn', '\u{1F41F}'], ['makreel', '\u{1F41F}'], ['vis', '\u{1F41F}'],
+  ['kip', '\u{1F357}'], ['kalkoen', '\u{1F357}'],
+  ['shake', '\u{1F964}'], ['smoothie', '\u{1F964}'],
+  ['aardbei', '\u{1F353}'],
+  ['ei', '\u{1F95A}'],
+  ['banaan', '\u{1F34C}'],
+  ['aardappel', '\u{1F954}'], ['sinaasappel', '\u{1F34A}'], ['mandarijn', '\u{1F34A}'],
+  ['appel', '\u{1F34E}'],
+  ['druif', '\u{1F347}'],
+  ['broodje', '\u{1F96A}'], ['sandwich', '\u{1F96A}'], ['brood', '\u{1F35E}'],
+  ['havermout', '\u{1F963}'], ['muesli', '\u{1F963}'], ['oats', '\u{1F963}'],
+  ['kwark', '\u{1F963}'], ['yoghurt', '\u{1F963}'],
+  ['macaroni', '\u{1F35D}'], ['pasta', '\u{1F35D}'], ['spaghetti', '\u{1F35D}'],
+  ['rijst', '\u{1F35A}'],
+  ['patat', '\u{1F35F}'],
+  ['salade', '\u{1F957}'], ['sla', '\u{1F957}'], ['groente', '\u{1F957}'],
+  ['kaas', '\u{1F9C0}'],
+  ['noot', '\u{1F95C}'], ['noten', '\u{1F95C}'], ['pinda', '\u{1F95C}'], ['amandel', '\u{1F95C}'],
+  ['gehakt', '\u{1F969}'], ['biefstuk', '\u{1F969}'], ['vlees', '\u{1F969}'],
+  ['bier', '\u{1F37A}'], ['leffe', '\u{1F37A}'], ['wijn', '\u{1F377}'],
+  ['koffie', '\u2615'],
+  ['thee', '\u{1F375}'],
+  ['melk', '\u{1F95B}'],
+  ['water', '\u{1F4A7}'],
+  ['soep', '\u{1F372}'],
+  ['taart', '\u{1F370}'], ['cake', '\u{1F370}'], ['gebak', '\u{1F370}'],
+  ['chocolade', '\u{1F36B}'],
+];
+function getFoodEmoji(name){
+  const lower = (name||'').toLowerCase();
+  for(const [keyword, emoji] of FOOD_EMOJI_KEYWORDS){
+    if(lower.includes(keyword)) return emoji;
+  }
+  return '\u{1F37D}\uFE0F'; // neutraal bord-icoontje als fallback
+}
+
 async function renderCustomQuickAdds(){
   const list = await loadCustomQuickAdds();
   const containerEl = document.getElementById('customQuickAddList');
@@ -2255,7 +2360,7 @@ async function renderCustomQuickAdds(){
     return `
       <div class="stat-row" style="border-bottom:${isLast?'none':'1px solid var(--line)'};">
         <div>
-          <div class="meal-desc">${escapeHtml(m.desc)}</div>
+          <div class="meal-desc">${getFoodEmoji(m.desc)} ${escapeHtml(m.desc)}</div>
           <div class="meal-meta">${escapeHtml(metaParts.join(' &middot; '))} &middot; ${escapeHtml(m.mealType)}</div>
         </div>
         <div style="display:flex;align-items:center;gap:8px;">
@@ -2361,6 +2466,14 @@ document.getElementById('quickAddEggs').addEventListener('click', (e)=>{
   }, document.getElementById('quickAddStatus'), e.target);
 });
 
+document.getElementById('quickAddEggsLunch').addEventListener('click', (e)=>{
+  const qty = Math.max(1, Number(document.getElementById('eggQtyLunch').value)||2);
+  quickAdd({
+    desc: qty + 'x gekookt ei',
+    mealType: 'Lunch', kcal: 78*qty, protein: 6*qty, carbs: 1*qty, fat: 5*qty, time: ''
+  }, document.getElementById('quickAddStatus'), e.target);
+});
+
 document.getElementById('quickAddLunch').addEventListener('click', (e)=>{
   const qty = Math.max(1, Number(document.getElementById('lunchQty').value)||1);
   quickAdd({
@@ -2373,6 +2486,13 @@ document.getElementById('quickAddBanana').addEventListener('click', (e)=>{
   quickAdd({
     desc: 'Banaan',
     mealType: 'Snack', kcal: 105, protein: 1, carbs: 27, fat: 0, time: ''
+  }, document.getElementById('quickAddStatus'), e.target);
+});
+
+document.getElementById('quickAddApple').addEventListener('click', (e)=>{
+  quickAdd({
+    desc: 'Appel',
+    mealType: 'Snack', kcal: 95, protein: 0, carbs: 25, fat: 0, time: ''
   }, document.getElementById('quickAddStatus'), e.target);
 });
 
