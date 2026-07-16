@@ -386,6 +386,11 @@ Deno.serve(async (req) => {
     // wat aanvoelde als "het werkt niet". Nu berekent de sync zelf voor élke
     // dag in de synchronisatieperiode (dus ook rustdagen zonder training)
     // direct het teambord-record, met dezelfde dagscore-formule als de app.
+    //
+    // Alle brondata (vitals/maaltijden/gewicht) wordt in bulk voor de héle
+    // periode in één keer opgehaald i.p.v. per dag apart — bij een volledige
+    // 60-dagen-sync scheelt dat honderden sequentiële database-aanroepen en
+    // dus veel wachttijd.
     const allSyncDates: string[] = [];
     for (
       let dt = new Date(cutoffDate);
@@ -395,7 +400,33 @@ Deno.serve(async (req) => {
       allSyncDates.push(toAmsterdamDateStr(dt.toISOString()));
     }
 
-    let teamEntriesUpdated = 0;
+    const [{ data: allVitals }, { data: allMeals }, { data: allWeights }] = await Promise.all([
+      supabase.from("vitals").select("vital_date, hr_rest, hrv, sleep_minutes").eq("owner", owner).gte("vital_date", cutoffDateStr),
+      supabase.from("meals").select("meal_date, kcal").eq("owner", owner).gte("meal_date", cutoffDateStr),
+      supabase.from("weight").select("weight_date, kg").eq("owner", owner).order("weight_date", { ascending: true }),
+    ]);
+
+    const vitalsByDate = new Map<string, { hr_rest: number | null; hrv: number | null; sleep_minutes: number | null }>();
+    for (const v of allVitals || []) vitalsByDate.set(v.vital_date, v);
+
+    const mealsKcalByDate = new Map<string, number>();
+    for (const m of allMeals || []) {
+      mealsKcalByDate.set(m.meal_date, (mealsKcalByDate.get(m.meal_date) || 0) + (Number(m.kcal) || 0));
+    }
+
+    // Gesorteerde gewichtshistorie, zodat we per dag snel "laatst bekende
+    // gewicht op of vóór die datum" kunnen opzoeken zonder een query per dag.
+    const weightHistory = (allWeights || []) as { weight_date: string; kg: number }[];
+    function weightOnOrBefore(dateStr: string): number {
+      let result = 63;
+      for (const w of weightHistory) {
+        if (w.weight_date <= dateStr) result = w.kg;
+        else break;
+      }
+      return result;
+    }
+
+    const teamEntryRows: any[] = [];
     for (const dateStr of allSyncDates) {
       const activities = activitiesByDate[dateStr] || [];
       const kmByType = { hardlopen: 0, fietsen: 0, zwemmen: 0 } as Record<string, number>;
@@ -405,21 +436,10 @@ Deno.serve(async (req) => {
         if (a.type in kmByType) kmByType[a.type] += Number(a.km) || 0;
       }
 
-      const [{ data: dayVitals }, { data: dayMeals }] = await Promise.all([
-        supabase.from("vitals").select("hr_rest, hrv, sleep_minutes").eq("owner", owner).eq("vital_date", dateStr).maybeSingle(),
-        supabase.from("meals").select("kcal").eq("owner", owner).eq("meal_date", dateStr),
-      ]);
-      const consumedKcal = (dayMeals || []).reduce((s: number, m: any) => s + (Number(m.kcal) || 0), 0);
+      const dayVitals = vitalsByDate.get(dateStr);
+      const consumedKcal = mealsKcalByDate.get(dateStr) || 0;
 
-      const { data: weightRow } = await supabase
-        .from("weight")
-        .select("kg")
-        .eq("owner", owner)
-        .lte("weight_date", dateStr)
-        .order("weight_date", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      const weightKg = weightRow?.kg || 63;
+      const weightKg = weightOnOrBefore(dateStr);
       const restKcal = Math.round(calculateBMR(weightKg, new Date(dateStr)) * 1.31);
       const totalKcal = restKcal + activityKcalSum;
 
@@ -429,22 +449,26 @@ Deno.serve(async (req) => {
         { hrRest: dayVitals?.hr_rest, hrv: dayVitals?.hrv, sleepMinutes: dayVitals?.sleep_minutes }
       );
 
-      const { error: teamErr } = await supabase.from("team_entries").upsert(
-        {
-          name: owner,
-          entry_date: dateStr,
-          dagscore,
-          km_hardlopen: kmByType.hardlopen,
-          km_fietsen: kmByType.fietsen,
-          km_zwemmen: kmByType.zwemmen,
-          hrv: dayVitals?.hrv ?? null,
-          hr_rest: dayVitals?.hr_rest ?? null,
-          sleep_minutes: dayVitals?.sleep_minutes ?? null,
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: "name,entry_date" }
-      );
-      if (!teamErr) teamEntriesUpdated++;
+      teamEntryRows.push({
+        name: owner,
+        entry_date: dateStr,
+        dagscore,
+        km_hardlopen: kmByType.hardlopen,
+        km_fietsen: kmByType.fietsen,
+        km_zwemmen: kmByType.zwemmen,
+        hrv: dayVitals?.hrv ?? null,
+        hr_rest: dayVitals?.hr_rest ?? null,
+        sleep_minutes: dayVitals?.sleep_minutes ?? null,
+        updated_at: new Date().toISOString(),
+      });
+    }
+
+    let teamEntriesUpdated = 0;
+    if (teamEntryRows.length) {
+      const { error: teamErr } = await supabase
+        .from("team_entries")
+        .upsert(teamEntryRows, { onConflict: "name,entry_date" });
+      if (!teamErr) teamEntriesUpdated = teamEntryRows.length;
     }
 
     return new Response(
