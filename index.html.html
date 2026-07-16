@@ -147,6 +147,11 @@
     margin:0 0 14px;font-family:'Archivo',sans-serif;font-size:12px;font-weight:700;
     text-transform:uppercase;letter-spacing:.08em;color:var(--ink-soft);
   }
+  .qa-group-heading{
+    margin:16px 0 2px;font-size:11px;font-weight:700;text-transform:uppercase;
+    letter-spacing:.06em;color:var(--amber);
+  }
+  #qaGroup-Ontbijt .qa-group-heading{margin-top:0;}
   .balans-number{
     font-family:'Archivo',sans-serif;font-size:58px;font-weight:600;line-height:1;
     letter-spacing:-0.02em;
@@ -388,71 +393,176 @@
   <section id="tab-invoer" style="display:none;">
     <div class="card form-card">
       <h3>Snel toevoegen</h3>
-      <div class="stat-row" data-default-key="oats" style="border-bottom:1px solid var(--line);padding-top:0;">
-        <div>
-          <div class="meal-desc">Havermout + magere kwark</div>
-          <div class="meal-meta">250ml magere kwark vast &middot; havermout aanpasbaar</div>
+
+      <div id="qaGroup-Ontbijt">
+        <h4 class="qa-group-heading">Ontbijt</h4>
+        <div class="stat-row" data-default-key="oats" style="border-bottom:1px solid var(--line);padding-top:0;">
+          <div>
+            <div class="meal-desc">Havermout + magere kwark</div>
+            <div class="meal-meta">250ml magere kwark vast &middot; havermout aanpasbaar</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            <input type="number" id="oatsGrams" value="40" min="1" style="width:56px;padding:6px 8px;">
+            <span style="font-size:11px;color:var(--ink-soft);">g</span>
+            <select class="qaGroupSelect" data-key="oats" style="font-size:11px;padding:5px 6px;border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--ink-soft);">
+              <option value="Ontbijt" selected>Ontbijt</option>
+              <option value="Lunch">Lunch</option>
+              <option value="Snack">Snack</option>
+              <option value="Diner">Diner</option>
+              <option value="Drinken">Drinken</option>
+            </select>
+            <button class="btn-secondary" id="quickAddOats">+ Toevoegen</button>
+            <button class="btn-secondary defaultQuickAddRemove" data-key="oats" title="Verwijderen uit Snel toevoegen" style="padding:6px 10px;">&times;</button>
+          </div>
         </div>
-        <div style="display:flex;align-items:center;gap:8px;">
-          <input type="number" id="oatsGrams" value="40" min="1" style="width:56px;padding:6px 8px;">
-          <span style="font-size:11px;color:var(--ink-soft);">g</span>
-          <button class="btn-secondary" id="quickAddOats">+ Toevoegen</button>
-          <button class="btn-secondary defaultQuickAddRemove" data-key="oats" title="Verwijderen uit Snel toevoegen" style="padding:6px 10px;">&times;</button>
+        <div class="stat-row" data-default-key="eggs" style="border-bottom:1px solid var(--line);">
+          <div>
+            <div class="meal-desc">Gekookte eieren</div>
+            <div class="meal-meta">~78 kcal per ei</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            <input type="number" id="eggQty" value="2" min="1" style="width:56px;padding:6px 8px;">
+            <span style="font-size:11px;color:var(--ink-soft);">stuks</span>
+            <select class="qaGroupSelect" data-key="eggs" style="font-size:11px;padding:5px 6px;border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--ink-soft);">
+              <option value="Ontbijt" selected>Ontbijt</option>
+              <option value="Lunch">Lunch</option>
+              <option value="Snack">Snack</option>
+              <option value="Diner">Diner</option>
+              <option value="Drinken">Drinken</option>
+            </select>
+            <button class="btn-secondary" id="quickAddEggs">+ Toevoegen</button>
+            <button class="btn-secondary defaultQuickAddRemove" data-key="eggs" title="Verwijderen uit Snel toevoegen" style="padding:6px 10px;">&times;</button>
+          </div>
+        </div>
+        <div class="stat-row" data-default-key="combo1" data-owner-only="Nando" style="border-bottom:1px solid var(--line);">
+          <div>
+            <div class="meal-desc">Havermout/banaan/kwark shake</div>
+            <div class="meal-meta">250ml magere kwark vast &middot; havermout en aantal bananen aanpasbaar</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            <input type="number" id="combo1OatsGrams" value="40" min="1" style="width:56px;padding:6px 8px;">
+            <span style="font-size:11px;color:var(--ink-soft);">g havermout</span>
+            <input type="number" id="combo1BananaQty" value="1" min="0" style="width:44px;padding:6px 8px;">
+            <span style="font-size:11px;color:var(--ink-soft);">banaan</span>
+            <select class="qaGroupSelect" data-key="combo1" style="font-size:11px;padding:5px 6px;border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--ink-soft);">
+              <option value="Ontbijt" selected>Ontbijt</option>
+              <option value="Lunch">Lunch</option>
+              <option value="Snack">Snack</option>
+              <option value="Diner">Diner</option>
+              <option value="Drinken">Drinken</option>
+            </select>
+            <button class="btn-secondary" id="quickAddCombo1">+ Toevoegen</button>
+            <button class="btn-secondary defaultQuickAddRemove" data-key="combo1" title="Verwijderen uit Snel toevoegen" style="padding:6px 10px;">&times;</button>
+          </div>
+        </div>
+        <div class="stat-row" data-default-key="combo2" data-owner-only="Nando" style="border-bottom:1px solid var(--line);">
+          <div>
+            <div class="meal-desc">Havermout banaan shake</div>
+            <div class="meal-meta">zonder kwark &middot; havermout en aantal bananen aanpasbaar</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            <input type="number" id="combo2OatsGrams" value="40" min="1" style="width:56px;padding:6px 8px;">
+            <span style="font-size:11px;color:var(--ink-soft);">g havermout</span>
+            <input type="number" id="combo2BananaQty" value="1" min="0" style="width:44px;padding:6px 8px;">
+            <span style="font-size:11px;color:var(--ink-soft);">banaan</span>
+            <select class="qaGroupSelect" data-key="combo2" style="font-size:11px;padding:5px 6px;border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--ink-soft);">
+              <option value="Ontbijt" selected>Ontbijt</option>
+              <option value="Lunch">Lunch</option>
+              <option value="Snack">Snack</option>
+              <option value="Diner">Diner</option>
+              <option value="Drinken">Drinken</option>
+            </select>
+            <button class="btn-secondary" id="quickAddCombo2">+ Toevoegen</button>
+            <button class="btn-secondary defaultQuickAddRemove" data-key="combo2" title="Verwijderen uit Snel toevoegen" style="padding:6px 10px;">&times;</button>
+          </div>
         </div>
       </div>
-      <div class="stat-row" data-default-key="eggs" style="border-bottom:1px solid var(--line);">
-        <div>
-          <div class="meal-desc">Gekookte eieren</div>
-          <div class="meal-meta">~78 kcal per ei</div>
-        </div>
-        <div style="display:flex;align-items:center;gap:8px;">
-          <input type="number" id="eggQty" value="2" min="1" style="width:56px;padding:6px 8px;">
-          <span style="font-size:11px;color:var(--ink-soft);">stuks</span>
-          <button class="btn-secondary" id="quickAddEggs">+ Toevoegen</button>
-          <button class="btn-secondary defaultQuickAddRemove" data-key="eggs" title="Verwijderen uit Snel toevoegen" style="padding:6px 10px;">&times;</button>
-        </div>
-      </div>
-      <div class="stat-row" data-default-key="lunch" style="border-bottom:1px solid var(--line);">
-        <div>
-          <div class="meal-desc">Broodje kipfilet</div>
-          <div class="meal-meta">1 volkoren broodje + 1 plakje kipfilet &middot; ~140 kcal per stuk</div>
-        </div>
-        <div style="display:flex;align-items:center;gap:8px;">
-          <input type="number" id="lunchQty" value="4" min="1" style="width:56px;padding:6px 8px;">
-          <button class="btn-secondary" id="quickAddLunch">+ Toevoegen</button>
-          <button class="btn-secondary defaultQuickAddRemove" data-key="lunch" title="Verwijderen uit Snel toevoegen" style="padding:6px 10px;">&times;</button>
-        </div>
-      </div>
-      <div class="stat-row" data-default-key="banana" style="border-bottom:1px solid var(--line);">
-        <div>
-          <div class="meal-desc">Banaan</div>
-          <div class="meal-meta">1 middelgrote banaan &middot; ~105 kcal</div>
-        </div>
-        <div style="display:flex;align-items:center;gap:8px;">
-          <button class="btn-secondary" id="quickAddBanana">+ Toevoegen</button>
-          <button class="btn-secondary defaultQuickAddRemove" data-key="banana" title="Verwijderen uit Snel toevoegen" style="padding:6px 10px;">&times;</button>
+
+      <div id="qaGroup-Lunch">
+        <h4 class="qa-group-heading">Lunch</h4>
+        <div class="stat-row" data-default-key="lunch" style="border-bottom:1px solid var(--line);">
+          <div>
+            <div class="meal-desc">Broodje kipfilet</div>
+            <div class="meal-meta">1 volkoren broodje + 1 plakje kipfilet &middot; ~140 kcal per stuk</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            <input type="number" id="lunchQty" value="4" min="1" style="width:56px;padding:6px 8px;">
+            <select class="qaGroupSelect" data-key="lunch" style="font-size:11px;padding:5px 6px;border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--ink-soft);">
+              <option value="Ontbijt">Ontbijt</option>
+              <option value="Lunch" selected>Lunch</option>
+              <option value="Snack">Snack</option>
+              <option value="Diner">Diner</option>
+              <option value="Drinken">Drinken</option>
+            </select>
+            <button class="btn-secondary" id="quickAddLunch">+ Toevoegen</button>
+            <button class="btn-secondary defaultQuickAddRemove" data-key="lunch" title="Verwijderen uit Snel toevoegen" style="padding:6px 10px;">&times;</button>
+          </div>
         </div>
       </div>
-      <div class="stat-row" data-default-key="shake" style="border-bottom:1px solid var(--line);">
-        <div>
-          <div class="meal-desc">Eiwitshake</div>
-          <div class="meal-meta">1 scoop whey (~30g) met water &middot; ~120 kcal</div>
-        </div>
-        <div style="display:flex;align-items:center;gap:8px;">
-          <button class="btn-secondary" id="quickAddShake">+ Toevoegen</button>
-          <button class="btn-secondary defaultQuickAddRemove" data-key="shake" title="Verwijderen uit Snel toevoegen" style="padding:6px 10px;">&times;</button>
+
+      <div id="qaGroup-Snack">
+        <h4 class="qa-group-heading">Snack</h4>
+        <div class="stat-row" data-default-key="banana" style="border-bottom:1px solid var(--line);">
+          <div>
+            <div class="meal-desc">Banaan</div>
+            <div class="meal-meta">1 middelgrote banaan &middot; ~105 kcal</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            <select class="qaGroupSelect" data-key="banana" style="font-size:11px;padding:5px 6px;border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--ink-soft);">
+              <option value="Ontbijt">Ontbijt</option>
+              <option value="Lunch">Lunch</option>
+              <option value="Snack" selected>Snack</option>
+              <option value="Diner">Diner</option>
+              <option value="Drinken">Drinken</option>
+            </select>
+            <button class="btn-secondary" id="quickAddBanana">+ Toevoegen</button>
+            <button class="btn-secondary defaultQuickAddRemove" data-key="banana" title="Verwijderen uit Snel toevoegen" style="padding:6px 10px;">&times;</button>
+          </div>
         </div>
       </div>
-      <div class="stat-row" data-default-key="leffe" style="border-bottom:1px solid var(--line);">
-        <div>
-          <div class="meal-desc">Leffe Blond 0.0</div>
-          <div class="meal-meta">1 blikje (330ml), alcoholvrij &middot; ~86 kcal</div>
+
+      <div id="qaGroup-Diner">
+        <h4 class="qa-group-heading">Diner</h4>
+      </div>
+
+      <div id="qaGroup-Drinken">
+        <h4 class="qa-group-heading">Drinken</h4>
+        <div class="stat-row" data-default-key="shake" style="border-bottom:1px solid var(--line);">
+          <div>
+            <div class="meal-desc">Eiwitshake</div>
+            <div class="meal-meta">1 scoop whey (~30g) met water &middot; ~120 kcal</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            <select class="qaGroupSelect" data-key="shake" style="font-size:11px;padding:5px 6px;border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--ink-soft);">
+              <option value="Ontbijt">Ontbijt</option>
+              <option value="Lunch">Lunch</option>
+              <option value="Snack">Snack</option>
+              <option value="Diner">Diner</option>
+              <option value="Drinken" selected>Drinken</option>
+            </select>
+            <button class="btn-secondary" id="quickAddShake">+ Toevoegen</button>
+            <button class="btn-secondary defaultQuickAddRemove" data-key="shake" title="Verwijderen uit Snel toevoegen" style="padding:6px 10px;">&times;</button>
+          </div>
         </div>
-        <div style="display:flex;align-items:center;gap:8px;">
-          <button class="btn-secondary" id="quickAddLeffe">+ Toevoegen</button>
-          <button class="btn-secondary defaultQuickAddRemove" data-key="leffe" title="Verwijderen uit Snel toevoegen" style="padding:6px 10px;">&times;</button>
+        <div class="stat-row" data-default-key="leffe" style="border-bottom:1px solid var(--line);">
+          <div>
+            <div class="meal-desc">Leffe Blond 0.0</div>
+            <div class="meal-meta">1 blikje (330ml), alcoholvrij &middot; ~86 kcal</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            <select class="qaGroupSelect" data-key="leffe" style="font-size:11px;padding:5px 6px;border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--ink-soft);">
+              <option value="Ontbijt">Ontbijt</option>
+              <option value="Lunch">Lunch</option>
+              <option value="Snack">Snack</option>
+              <option value="Diner">Diner</option>
+              <option value="Drinken" selected>Drinken</option>
+            </select>
+            <button class="btn-secondary" id="quickAddLeffe">+ Toevoegen</button>
+            <button class="btn-secondary defaultQuickAddRemove" data-key="leffe" title="Verwijderen uit Snel toevoegen" style="padding:6px 10px;">&times;</button>
+          </div>
         </div>
       </div>
+
       <div id="customQuickAddList"></div>
       <div class="status-msg" id="quickAddStatus"></div>
     </div>
@@ -511,7 +621,7 @@
         <input type="checkbox" id="fSaveAsQuickAdd" style="width:auto;">
         <label for="fSaveAsQuickAdd" style="margin:0;text-transform:none;letter-spacing:normal;font-weight:400;color:var(--ink);">Ook bewaren bij "Snel toevoegen" voor volgende keer</label>
       </div>
-      <button class="btn-primary" id="saveMeal">Opslaan</button>
+      <button class="btn-primary" id="saveMeal" style="background:#8D85FF;color:#FFFFFF;">Opslaan</button>
       <div class="status-msg" id="saveStatus"></div>
     </div>
   </section>
@@ -2197,8 +2307,11 @@ async function hideDefaultQuickAdd(key){
 }
 async function renderHiddenDefaults(){
   const hidden = await loadHiddenDefaults();
+  const owner = currentOwner();
   document.querySelectorAll('[data-default-key]').forEach(row=>{
-    row.style.display = hidden.includes(row.dataset.defaultKey) ? 'none' : '';
+    const ownerOnly = row.dataset.ownerOnly;
+    const restrictedForThisOwner = ownerOnly && ownerOnly !== owner;
+    row.style.display = (hidden.includes(row.dataset.defaultKey) || restrictedForThisOwner) ? 'none' : '';
   });
 }
 renderHiddenDefaults();
@@ -2210,6 +2323,18 @@ document.querySelectorAll('.defaultQuickAddRemove').forEach(btn=>{
     await hideDefaultQuickAdd(key);
   });
 });
+
+// Verplaatst een standaard-item naar een andere kop binnen Snel toevoegen
+// (Ontbijt/Lunch/Snack/Diner/Drinken) — puur visuele indeling, verandert
+// niets aan het moment (mealType) dat wordt opgeslagen bij het toevoegen.
+document.querySelectorAll('.qaGroupSelect').forEach(sel=>{
+  sel.addEventListener('change', (e)=>{
+    const row = e.target.closest('.stat-row');
+    const target = document.getElementById('qaGroup-' + e.target.value);
+    if(row && target) target.appendChild(row);
+  });
+});
+
 
 document.getElementById('quickAddOats').addEventListener('click', (e)=>{
   const grams = Math.max(1, Number(document.getElementById('oatsGrams').value)||40);
@@ -2262,6 +2387,42 @@ document.getElementById('quickAddLeffe').addEventListener('click', (e)=>{
   quickAdd({
     desc: 'Leffe Blond 0.0 (blikje, 330ml)',
     mealType: 'Snack', kcal: 86, protein: 0.7, carbs: 17, fat: 0, time: ''
+  }, document.getElementById('quickAddStatus'), e.target);
+});
+
+document.getElementById('quickAddCombo1').addEventListener('click', (e)=>{
+  const grams = Math.max(1, Number(document.getElementById('combo1OatsGrams').value)||40);
+  const bananas = Math.max(0, Number(document.getElementById('combo1BananaQty').value)||0);
+  const oatKcal = Math.round(grams/100*375);
+  const oatProtein = Math.round(grams/100*13);
+  const oatCarbs = Math.round(grams/100*61);
+  const oatFat = Math.round(grams/100*7);
+  quickAdd({
+    desc: grams + 'g havermout + 250ml magere kwark + ' + bananas + 'x banaan',
+    mealType: 'Ontbijt',
+    kcal: oatKcal + 113 + bananas*105,
+    protein: oatProtein + 25 + bananas*1,
+    carbs: oatCarbs + 10 + bananas*27,
+    fat: oatFat + 1,
+    time: ''
+  }, document.getElementById('quickAddStatus'), e.target);
+});
+
+document.getElementById('quickAddCombo2').addEventListener('click', (e)=>{
+  const grams = Math.max(1, Number(document.getElementById('combo2OatsGrams').value)||40);
+  const bananas = Math.max(0, Number(document.getElementById('combo2BananaQty').value)||0);
+  const oatKcal = Math.round(grams/100*375);
+  const oatProtein = Math.round(grams/100*13);
+  const oatCarbs = Math.round(grams/100*61);
+  const oatFat = Math.round(grams/100*7);
+  quickAdd({
+    desc: grams + 'g havermout + ' + bananas + 'x banaan (zonder kwark)',
+    mealType: 'Ontbijt',
+    kcal: oatKcal + bananas*105,
+    protein: oatProtein + bananas*1,
+    carbs: oatCarbs + bananas*27,
+    fat: oatFat,
+    time: ''
   }, document.getElementById('quickAddStatus'), e.target);
 });
 
