@@ -138,6 +138,8 @@
 
   .grid{display:grid;grid-template-columns:1.3fr 1fr;gap:16px;margin-bottom:16px;}
   @media(max-width:680px){.grid{grid-template-columns:1fr;}}
+  .grid-3{display:grid;grid-template-columns:1.1fr 0.9fr 0.9fr;gap:16px;margin-bottom:16px;}
+  @media(max-width:900px){.grid-3{grid-template-columns:1fr;}}
 
   .card{
     background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
@@ -294,6 +296,7 @@
     <button data-tab="maand">Maand</button>
     <button data-tab="geschiedenis">Geschiedenis</button>
     <button data-tab="team">Team</button>
+    <button data-tab="prestaties">Prestaties</button>
   </nav>
 
   <!-- DASHBOARD -->
@@ -755,118 +758,133 @@
       </div>
     </div>
 
-    <div class="card" style="margin-bottom:16px;">
-      <h3>🏅 Records &mdash; aller tijden</h3>
-      <div id="allTimeRecords"><div class="empty">Nog geen teamdata.</div></div>
-      <div class="meal-meta" style="margin-top:10px;">Hoogste dagscore ooit behaald per dag/week/maand/kwartaal, plus de grootste stijging t.o.v. de voorgaande periode &mdash; los van de lopende periode hieronder.</div>
+    <div class="card">
+      <h3>Teambord &mdash; vandaag</h3>
+      <div class="table-scroll">
+      <table>
+        <thead><tr>
+          <th>Naam</th><th>Dagscore</th><th>🏃 km</th><th>🚴 km</th><th>🏊 km</th><th>💓 HRV</th><th>❤️ Rust-HR</th><th>😴 Slaap</th>
+        </tr></thead>
+        <tbody id="teamBoardBody"><tr><td colspan="8" class="empty">Nog geen teamdata voor vandaag.</td></tr></tbody>
+      </table>
+      </div>
+      <div class="meal-meta" style="margin-top:10px;">Bijgewerkt zodra iemand het dashboard opent met een ingevulde teamnaam.</div>
     </div>
 
-    <div class="grid">
-      <div class="card">
-        <h3>Teambord &mdash; vandaag</h3>
-        <div class="table-scroll">
-        <table>
-          <thead><tr>
-            <th>Naam</th><th>Dagscore</th><th>🏃 km</th><th>🚴 km</th><th>🏊 km</th><th>💓 HRV</th><th>❤️ Rust-HR</th><th>😴 Slaap</th>
-          </tr></thead>
-          <tbody id="teamBoardBody"><tr><td colspan="8" class="empty">Nog geen teamdata voor vandaag.</td></tr></tbody>
-        </table>
-        </div>
-        <div class="meal-meta" style="margin-top:10px;">Bijgewerkt zodra iemand het dashboard opent met een ingevulde teamnaam.</div>
+    <div class="card" style="margin-top:16px;">
+      <h3>Teambord &mdash; deze week</h3>
+      <div class="table-scroll">
+      <table>
+        <thead><tr>
+          <th>Naam</th><th>Dagen</th><th>Dagscore</th><th>🏃 km</th><th>🚴 km</th><th>🏊 km</th><th>💓 HRV</th><th>❤️ Rust-HR</th><th>😴 Slaap</th>
+        </tr></thead>
+        <tbody id="teamWeekBody"><tr><td colspan="9" class="empty">Nog geen teamdata deze week.</td></tr></tbody>
+      </table>
       </div>
+    </div>
+
+    <div class="card" style="margin-top:16px;">
+      <h3>Teambord &mdash; vorige week</h3>
+      <div class="table-scroll">
+      <table>
+        <thead><tr>
+          <th>Naam</th><th>Dagen</th><th>Dagscore</th><th>🏃 km</th><th>🚴 km</th><th>🏊 km</th><th>💓 HRV</th><th>❤️ Rust-HR</th><th>😴 Slaap</th>
+        </tr></thead>
+        <tbody id="teamLastWeekBody"><tr><td colspan="9" class="empty">Nog geen teamdata voor vorige week.</td></tr></tbody>
+      </table>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:16px;">
+      <h3>Teambord &mdash; deze maand</h3>
+      <div class="table-scroll">
+      <table>
+        <thead><tr>
+          <th>Naam</th><th>Dagen</th><th>Dagscore</th><th>🏃 km</th><th>🚴 km</th><th>🏊 km</th><th>💓 HRV</th><th>❤️ Rust-HR</th><th>😴 Slaap</th>
+        </tr></thead>
+        <tbody id="teamMonthBody"><tr><td colspan="9" class="empty">Nog geen teamdata deze maand.</td></tr></tbody>
+      </table>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:16px;">
+      <h3>Teambord &mdash; vorige maand</h3>
+      <div class="table-scroll">
+      <table>
+        <thead><tr>
+          <th>Naam</th><th>Dagen</th><th>Dagscore</th><th>🏃 km</th><th>🚴 km</th><th>🏊 km</th><th>💓 HRV</th><th>❤️ Rust-HR</th><th>😴 Slaap</th>
+        </tr></thead>
+        <tbody id="teamLastMonthBody"><tr><td colspan="9" class="empty">Nog geen teamdata voor vorige maand.</td></tr></tbody>
+      </table>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:16px;">
+      <h3>Teambord &mdash; dit kwartaal</h3>
+      <div class="table-scroll">
+      <table>
+        <thead><tr>
+          <th>Naam</th><th>Dagen</th><th>Dagscore</th><th>🏃 km</th><th>🚴 km</th><th>🏊 km</th><th>💓 HRV</th><th>❤️ Rust-HR</th><th>😴 Slaap</th>
+        </tr></thead>
+        <tbody id="teamQuarterBody"><tr><td colspan="9" class="empty">Nog geen teamdata dit kwartaal.</td></tr></tbody>
+      </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- PRESTATIES -->
+  <section id="tab-prestaties" style="display:none;">
+    <div class="grid">
       <div class="card">
         <h3>🏆 Prestaties &mdash; vandaag</h3>
         <div id="achievementsToday"><div class="empty">Nog geen teamdata voor vandaag.</div></div>
       </div>
+      <div class="card">
+        <h3>🏅 Records &mdash; beste dag ooit</h3>
+        <div id="recordsDay"><div class="empty">Nog geen teamdata.</div></div>
+      </div>
     </div>
 
     <div class="grid" style="margin-top:16px;">
-      <div class="card">
-        <h3>Teambord &mdash; deze week</h3>
-        <div class="table-scroll">
-        <table>
-          <thead><tr>
-            <th>Naam</th><th>Dagen</th><th>Dagscore</th><th>🏃 km</th><th>🚴 km</th><th>🏊 km</th><th>💓 HRV</th><th>❤️ Rust-HR</th><th>😴 Slaap</th>
-          </tr></thead>
-          <tbody id="teamWeekBody"><tr><td colspan="9" class="empty">Nog geen teamdata deze week.</td></tr></tbody>
-        </table>
-        </div>
-      </div>
       <div class="card">
         <h3>🏆 Prestaties &mdash; deze week</h3>
         <div id="achievementsWeek"><div class="empty">Nog geen teamdata deze week.</div></div>
       </div>
-    </div>
-
-    <div class="grid" style="margin-top:16px;">
       <div class="card">
-        <h3>Teambord &mdash; vorige week</h3>
-        <div class="table-scroll">
-        <table>
-          <thead><tr>
-            <th>Naam</th><th>Dagen</th><th>Dagscore</th><th>🏃 km</th><th>🚴 km</th><th>🏊 km</th><th>💓 HRV</th><th>❤️ Rust-HR</th><th>😴 Slaap</th>
-          </tr></thead>
-          <tbody id="teamLastWeekBody"><tr><td colspan="9" class="empty">Nog geen teamdata voor vorige week.</td></tr></tbody>
-        </table>
-        </div>
-      </div>
-      <div class="card">
-        <h3>🏆 Prestaties &mdash; vorige week</h3>
-        <div id="achievementsLastWeek"><div class="empty">Nog geen teamdata voor vorige week.</div></div>
+        <h3>🏅 Records &mdash; beste week ooit</h3>
+        <div id="recordsWeek"><div class="empty">Nog geen teamdata.</div></div>
       </div>
     </div>
 
+    <div class="card" style="margin-top:16px;">
+      <h3>🏆 Prestaties &mdash; vorige week</h3>
+      <div id="achievementsLastWeek"><div class="empty">Nog geen teamdata voor vorige week.</div></div>
+    </div>
+
     <div class="grid" style="margin-top:16px;">
-      <div class="card">
-        <h3>Teambord &mdash; deze maand</h3>
-        <div class="table-scroll">
-        <table>
-          <thead><tr>
-            <th>Naam</th><th>Dagen</th><th>Dagscore</th><th>🏃 km</th><th>🚴 km</th><th>🏊 km</th><th>💓 HRV</th><th>❤️ Rust-HR</th><th>😴 Slaap</th>
-          </tr></thead>
-          <tbody id="teamMonthBody"><tr><td colspan="9" class="empty">Nog geen teamdata deze maand.</td></tr></tbody>
-        </table>
-        </div>
-      </div>
       <div class="card">
         <h3>🏆 Prestaties &mdash; deze maand</h3>
         <div id="achievementsMonth"><div class="empty">Nog geen teamdata deze maand.</div></div>
       </div>
-    </div>
-
-    <div class="grid" style="margin-top:16px;">
       <div class="card">
-        <h3>Teambord &mdash; vorige maand</h3>
-        <div class="table-scroll">
-        <table>
-          <thead><tr>
-            <th>Naam</th><th>Dagen</th><th>Dagscore</th><th>🏃 km</th><th>🚴 km</th><th>🏊 km</th><th>💓 HRV</th><th>❤️ Rust-HR</th><th>😴 Slaap</th>
-          </tr></thead>
-          <tbody id="teamLastMonthBody"><tr><td colspan="9" class="empty">Nog geen teamdata voor vorige maand.</td></tr></tbody>
-        </table>
-        </div>
-      </div>
-      <div class="card">
-        <h3>🏆 Prestaties &mdash; vorige maand</h3>
-        <div id="achievementsLastMonth"><div class="empty">Nog geen teamdata voor vorige maand.</div></div>
+        <h3>🏅 Records &mdash; beste maand ooit</h3>
+        <div id="recordsMonth"><div class="empty">Nog geen teamdata.</div></div>
       </div>
     </div>
 
+    <div class="card" style="margin-top:16px;">
+      <h3>🏆 Prestaties &mdash; vorige maand</h3>
+      <div id="achievementsLastMonth"><div class="empty">Nog geen teamdata voor vorige maand.</div></div>
+    </div>
+
     <div class="grid" style="margin-top:16px;">
-      <div class="card">
-        <h3>Teambord &mdash; dit kwartaal</h3>
-        <div class="table-scroll">
-        <table>
-          <thead><tr>
-            <th>Naam</th><th>Dagen</th><th>Dagscore</th><th>🏃 km</th><th>🚴 km</th><th>🏊 km</th><th>💓 HRV</th><th>❤️ Rust-HR</th><th>😴 Slaap</th>
-          </tr></thead>
-          <tbody id="teamQuarterBody"><tr><td colspan="9" class="empty">Nog geen teamdata dit kwartaal.</td></tr></tbody>
-        </table>
-        </div>
-      </div>
       <div class="card">
         <h3>🏆 Prestaties &mdash; dit kwartaal</h3>
         <div id="achievementsQuarter"><div class="empty">Nog geen teamdata dit kwartaal.</div></div>
+      </div>
+      <div class="card">
+        <h3>🏅 Records &mdash; beste kwartaal ooit</h3>
+        <div id="recordsQuarter"><div class="empty">Nog geen teamdata.</div></div>
       </div>
     </div>
   </section>
@@ -2018,8 +2036,8 @@ function renderTeamPeriod(days, bodyElId, emptyLabel, errorLabel, previousDays, 
 // ---- Records aller tijden ----
 // In tegenstelling tot de Prestaties-kaarten hierboven (die alleen de
 // lópende week/maand/kwartaal bekijken), kijkt dit over de VOLLEDIGE
-// geschiedenis: welke dag/week/maand/kwartaal had ooit de hoogste
-// (gemiddelde) dagscore, door wie, en wanneer.
+// geschiedenis: wie had ooit, op dag/week/maand/kwartaal-niveau, de beste
+// waarde per onderdeel (dagscore/hardlopen/zwemmen/hrv/rusthartslag/slaap).
 function getMondayOf(dateStr){
   const d = new Date(dateStr+'T00:00:00');
   const day = d.getDay();
@@ -2030,38 +2048,10 @@ function quarterKeyOf(dateStr){
   const [y,m] = dateStr.split('-').map(Number);
   return `${y}-Q${Math.floor((m-1)/3)+1}`;
 }
-function groupEntriesByPeriod(entries, keyFn, labelFn){
-  const groups = {};
-  for(const e of entries){
-    if(e.dagscore==null) continue;
-    const periodKey = keyFn(e.date);
-    const groupKey = e.name+'|'+periodKey;
-    if(!groups[groupKey]) groups[groupKey] = { name: e.name, periodKey, dagscores: [] };
-    groups[groupKey].dagscores.push(e.dagscore);
-  }
-  return Object.values(groups).map(g=>({
-    name: g.name,
-    periodKey: g.periodKey,
-    label: labelFn(g.periodKey),
-    dagscore: g.dagscores.reduce((a,b)=>a+b,0)/g.dagscores.length
-  }));
-}
-// Vindt, over alle personen en periodes, wie de grootste %-stijging had t.o.v.
-// hun eigen score in de exact voorafgaande periode (bijv. deze week vs de week
-// ervoor voor diezelfde persoon) — niet zomaar de vorige periode met data,
-// maar echt de kalender-aangrenzende periode.
-function computeBiggestImprovement(rows, prevKeyFn){
-  const byNameAndKey = {};
-  for(const r of rows) byNameAndKey[r.name+'|'+r.periodKey] = r;
-  let best = null;
-  for(const r of rows){
-    const prev = byNameAndKey[r.name+'|'+prevKeyFn(r.periodKey)];
-    if(!prev) continue;
-    const delta = pctDelta(r.dagscore, prev.dagscore);
-    if(delta==null || delta<=0) continue;
-    if(!best || delta>best.delta) best = { name:r.name, label:r.label, delta, dagscore:r.dagscore };
-  }
-  return best;
+function addDaysToKey(dateStr, days){
+  const d = new Date(dateStr+'T00:00:00');
+  d.setDate(d.getDate()+days);
+  return fmtDate(d);
 }
 function prevMonthKeyOf(key){
   const [y,m] = key.split('-').map(Number);
@@ -2074,59 +2064,115 @@ function prevQuarterKeyOf(key){
   if(q<1){ q=4; y-=1; }
   return `${y}-Q${q}`;
 }
-function renderAllTimeRecords(allEntries){
-  const container = document.getElementById('allTimeRecords');
+// Groepeert team_entries-records per persoon+periode en telt/middelt alle
+// onderdelen op — niet alleen dagscore, ook km hardlopen en tijd zwemmen
+// (zwemafstand is vaak onbetrouwbaar, duur juist niet).
+function groupEntriesByPeriod(entries, keyFn, labelFn){
+  const groups = {};
+  for(const e of entries){
+    const periodKey = keyFn(e.date);
+    const groupKey = e.name+'|'+periodKey;
+    if(!groups[groupKey]) groups[groupKey] = { name: e.name, periodKey, dagscores:[], kmHardlopen:0, minZwemmen:0, hrvs:[], hrRests:[], sleeps:[] };
+    const g = groups[groupKey];
+    if(e.dagscore!=null) g.dagscores.push(e.dagscore);
+    g.kmHardlopen += e.kmHardlopen||0;
+    g.minZwemmen += e.minZwemmen||0;
+    if(e.hrv!=null) g.hrvs.push(e.hrv);
+    if(e.hrRest!=null) g.hrRests.push(e.hrRest);
+    if(e.sleepMinutes) g.sleeps.push(e.sleepMinutes);
+  }
+  const avg = arr => arr.length ? arr.reduce((a,b)=>a+b,0)/arr.length : null;
+  return Object.values(groups).map(g=>({
+    name: g.name,
+    periodKey: g.periodKey,
+    label: labelFn(g.periodKey),
+    dagscore: avg(g.dagscores),
+    kmHardlopen: g.kmHardlopen,
+    minZwemmen: g.minZwemmen,
+    hrv: avg(g.hrvs),
+    hrRest: avg(g.hrRests),
+    sleepMinutes: avg(g.sleeps)
+  }));
+}
+// Vindt, over alle personen en periodes van dit niveau, wie de grootste
+// %-stijging in dagscore had t.o.v. hun eigen score in de exact
+// voorafgaande periode (bijv. deze week vs de week ervoor voor diezelfde
+// persoon) — niet zomaar de vorige periode met data, maar echt de
+// kalender-aangrenzende periode.
+function computeBiggestImprovement(rows, prevKeyFn){
+  const byNameAndKey = {};
+  for(const r of rows) byNameAndKey[r.name+'|'+r.periodKey] = r;
+  let best = null;
+  for(const r of rows){
+    if(r.dagscore==null) continue;
+    const prev = byNameAndKey[r.name+'|'+prevKeyFn(r.periodKey)];
+    if(!prev || prev.dagscore==null) continue;
+    const delta = pctDelta(r.dagscore, prev.dagscore);
+    if(delta==null || delta<=0) continue;
+    if(!best || delta>best.delta) best = { name:r.name, label:r.label, delta, dagscore:r.dagscore };
+  }
+  return best;
+}
+const RECORD_METRICS = [
+  { key:'dagscore', label:'Dagscore', dir:'desc', fmt:v=>v.toFixed(1) },
+  { key:'kmHardlopen', label:'Meeste km hardlopen', dir:'desc', fmt:v=>v.toFixed(1)+' km' },
+  { key:'minZwemmen', label:'Meeste tijd zwemmen', dir:'desc', fmt:v=>formatMinutes(v) },
+  { key:'hrv', label:'Hoogste HRV', dir:'desc', fmt:v=>Math.round(v)+' ms' },
+  { key:'hrRest', label:'Laagste rusthartslag', dir:'asc', fmt:v=>Math.round(v)+' bpm' },
+  { key:'sleepMinutes', label:'Meeste slaap', dir:'desc', fmt:v=>formatMinutes(v) },
+];
+// Rendert één records-blokje (dag/week/maand/kwartaal) met alle 6 onderdelen
+// naast elkaar, plus (optioneel) de grootste stijging t.o.v. de vorige
+// periode als extra tegel in dezelfde rij.
+function renderRecordsBlock(elId, rows, improvementPrevKeyFn){
+  const container = document.getElementById(elId);
   if(!container) return;
-  const withScore = allEntries.filter(e=>e.dagscore!=null);
-  if(withScore.length===0){
+  if(!rows || rows.length===0){
     container.innerHTML = '<div class="empty">Nog geen teamdata.</div>';
     return;
   }
-  const monthLabel = key => { const [y,m] = key.split('-'); return new Date(Number(y),Number(m)-1,1).toLocaleDateString('nl-NL',{month:'long',year:'numeric'}); };
-  const weekRows = groupEntriesByPeriod(withScore, e=>getMondayOf(e), key=>'week van '+new Date(key+'T00:00:00').toLocaleDateString('nl-NL',{day:'numeric',month:'short'}));
-  const monthRows = groupEntriesByPeriod(withScore, e=>e.slice(0,7), monthLabel);
-  const quarterRows = groupEntriesByPeriod(withScore, e=>quarterKeyOf(e), key=>key);
-  const levels = [
-    { label: 'Beste dag', rows: withScore.map(e=>({name:e.name, label:new Date(e.date+'T00:00:00').toLocaleDateString('nl-NL',{day:'numeric',month:'short',year:'numeric'}), dagscore:e.dagscore})) },
-    { label: 'Beste week', rows: weekRows },
-    { label: 'Beste maand', rows: monthRows },
-    { label: 'Beste kwartaal', rows: quarterRows },
-  ];
-  const cells = levels.map(lvl=>{
-    const winner = topRanking(lvl.rows, 'dagscore', 'desc')[0];
-    if(!winner) return '';
+  let cells = RECORD_METRICS.map(m=>{
+    const winner = topRanking(rows, m.key, m.dir)[0];
+    if(!winner || !winner[m.key]) return '';
     return `<div class="stat-row" style="border-bottom:none;flex-direction:column;align-items:flex-start;">
-      <span class="stat-label">${lvl.label}</span>
-      <span class="stat-val">${medalEmoji(0)} ${escapeHtml(winner.name)} &mdash; ${winner.dagscore.toFixed(1)}</span>
-      <span class="meal-meta">${escapeHtml(winner.label)}</span>
+      <span class="stat-label" style="font-size:10px;">${m.label}</span>
+      <span class="stat-val" style="font-size:13px;">${medalEmoji(0)} ${escapeHtml(winner.name)}</span>
+      <span class="meal-meta">${m.fmt(winner[m.key])} &middot; ${escapeHtml(winner.label)}</span>
     </div>`;
-  }).filter(Boolean).join('');
-
-  const improvementLevels = [
-    { label: 'Grootste stijging (week)', rows: weekRows, prevKeyFn: key => addDaysToKey(key,-7) },
-    { label: 'Grootste stijging (maand)', rows: monthRows, prevKeyFn: prevMonthKeyOf },
-    { label: 'Grootste stijging (kwartaal)', rows: quarterRows, prevKeyFn: prevQuarterKeyOf },
-  ];
-  const improvementCells = improvementLevels.map(lvl=>{
-    const best = computeBiggestImprovement(lvl.rows, lvl.prevKeyFn);
-    if(!best) return '';
-    return `<div class="stat-row" style="border-bottom:none;flex-direction:column;align-items:flex-start;">
-      <span class="stat-label">${lvl.label}</span>
-      <span class="stat-val" style="color:var(--pine);">${medalEmoji(0)} ${escapeHtml(best.name)} &mdash; +${best.delta}%</span>
-      <span class="meal-meta">${escapeHtml(best.label)} (naar ${best.dagscore.toFixed(1)})</span>
-    </div>`;
-  }).filter(Boolean).join('');
-
-  let html = cells ? `<div class="vitals-grid">${cells}</div>` : '<div class="empty">Nog geen teamdata.</div>';
-  if(improvementCells){
-    html += `<div class="vitals-grid" style="margin-top:14px;padding-top:14px;border-top:1px solid var(--line);">${improvementCells}</div>`;
+  }).join('');
+  if(improvementPrevKeyFn){
+    const best = computeBiggestImprovement(rows, improvementPrevKeyFn);
+    if(best){
+      cells += `<div class="stat-row" style="border-bottom:none;flex-direction:column;align-items:flex-start;">
+        <span class="stat-label" style="font-size:10px;">Grootste stijging</span>
+        <span class="stat-val" style="font-size:13px;color:var(--pine);">${medalEmoji(0)} ${escapeHtml(best.name)} +${best.delta}%</span>
+        <span class="meal-meta">${escapeHtml(best.label)}</span>
+      </div>`;
+    }
   }
-  container.innerHTML = html;
+  container.innerHTML = cells ? `<div class="vitals-grid" style="grid-template-columns:1fr 1fr;">${cells}</div>` : '<div class="empty">Nog geen teamdata.</div>';
 }
-function addDaysToKey(dateStr, days){
-  const d = new Date(dateStr+'T00:00:00');
-  d.setDate(d.getDate()+days);
-  return fmtDate(d);
+function renderAllTimeRecords(allEntries){
+  if(!allEntries || allEntries.length===0){
+    renderRecordsBlock('recordsDay', []);
+    renderRecordsBlock('recordsWeek', []);
+    renderRecordsBlock('recordsMonth', []);
+    renderRecordsBlock('recordsQuarter', []);
+    return;
+  }
+  const monthLabel = key => { const [y,m] = key.split('-'); return new Date(Number(y),Number(m)-1,1).toLocaleDateString('nl-NL',{month:'long',year:'numeric'}); };
+  const dayRows = allEntries.map(e=>({
+    name: e.name, periodKey: e.date, label: new Date(e.date+'T00:00:00').toLocaleDateString('nl-NL',{day:'numeric',month:'short',year:'numeric'}),
+    dagscore: e.dagscore, kmHardlopen: e.kmHardlopen, minZwemmen: e.minZwemmen, hrv: e.hrv, hrRest: e.hrRest, sleepMinutes: e.sleepMinutes
+  }));
+  const weekRows = groupEntriesByPeriod(allEntries, e=>getMondayOf(e), key=>'week van '+new Date(key+'T00:00:00').toLocaleDateString('nl-NL',{day:'numeric',month:'short'}));
+  const monthRows = groupEntriesByPeriod(allEntries, e=>e.slice(0,7), monthLabel);
+  const quarterRows = groupEntriesByPeriod(allEntries, e=>quarterKeyOf(e), key=>key);
+
+  renderRecordsBlock('recordsDay', dayRows);
+  renderRecordsBlock('recordsWeek', weekRows, key => addDaysToKey(key,-7));
+  renderRecordsBlock('recordsMonth', monthRows, prevMonthKeyOf);
+  renderRecordsBlock('recordsQuarter', quarterRows, prevQuarterKeyOf);
 }
 
 async function renderAllTeamViews(){
@@ -2427,13 +2473,13 @@ document.querySelectorAll('nav.tabs button').forEach(btn=>{
   btn.addEventListener('click', ()=>{
     document.querySelectorAll('nav.tabs button').forEach(b=>b.classList.remove('active'));
     btn.classList.add('active');
-    ['dashboard','invoer','week','maand','geschiedenis','team'].forEach(t=>{
+    ['dashboard','invoer','week','maand','geschiedenis','team','prestaties'].forEach(t=>{
       document.getElementById('tab-'+t).style.display = (t===btn.dataset.tab)?'block':'none';
     });
     if(btn.dataset.tab==='geschiedenis') renderHistory();
     if(btn.dataset.tab==='week') renderWeek();
     if(btn.dataset.tab==='maand') renderMaand();
-    if(btn.dataset.tab==='team'){ renderAllTeamViews(); }
+    if(btn.dataset.tab==='team' || btn.dataset.tab==='prestaties'){ renderAllTeamViews(); }
   });
 });
 
@@ -2988,7 +3034,7 @@ if(!currentOwner()){
   document.querySelectorAll('nav.tabs button').forEach(b=>b.classList.remove('active'));
   const teamTabBtn = document.querySelector('nav.tabs button[data-tab="team"]');
   if(teamTabBtn) teamTabBtn.classList.add('active');
-  ['dashboard','invoer','week','maand','geschiedenis','team'].forEach(t=>{
+  ['dashboard','invoer','week','maand','geschiedenis','team','prestaties'].forEach(t=>{
     document.getElementById('tab-'+t).style.display = (t==='team')?'block':'none';
   });
   const teamNameStatusEl = document.getElementById('teamNameStatus');
