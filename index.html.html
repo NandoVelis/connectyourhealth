@@ -2088,10 +2088,10 @@ function renderTeamPeriod(days, bodyElId, emptyLabel, errorLabel, previousDays, 
       <tr style="font-weight:700;border-top:2px solid var(--line);">
         <td>Totaal (${n})</td>
         <td>\u2014</td>
-        <td>${(()=>{const v=avgOf(r=>r.dagscoreAvg); return v!=null?v.toFixed(1)+' gem.':'\u2014';})()}${deltaBadge(totalDDagscore)}</td>
-        <td>${sum(r=>r.kmHardlopenTotal).toFixed(1)}${(()=>{const p=formatPace(sum(r=>r.kmHardlopenTotal),sum(r=>r.minHardlopenTotal)); return p?' <span style="color:var(--ink-soft);font-size:11px;">('+p+')</span>':'';})()}${deltaBadge(totalDHardlopen)}</td>
-        <td>${sum(r=>r.kmFietsenTotal).toFixed(1)}${deltaBadge(totalDFietsen)}</td>
-        <td>${sum(r=>r.kmZwemmenTotal).toFixed(1)}${(()=>{const d=formatMinutes(sum(r=>r.minZwemmenTotal)); return d?' <span style="color:var(--ink-soft);font-size:11px;">('+d+')</span>':'';})()}${deltaBadge(totalDZwemmen)}</td>
+        <td>${(()=>{const v=avgOf(r=>r.dagscoreAvg); return v!=null?v.toFixed(1)+' gem.':'\u2014';})()}</td>
+        <td>${sum(r=>r.kmHardlopenTotal).toFixed(1)}${(()=>{const p=formatPace(sum(r=>r.kmHardlopenTotal),sum(r=>r.minHardlopenTotal)); return p?' <span style="color:var(--ink-soft);font-size:11px;">('+p+')</span>':'';})()}</td>
+        <td>${sum(r=>r.kmFietsenTotal).toFixed(1)}</td>
+        <td>${sum(r=>r.kmZwemmenTotal).toFixed(1)}${(()=>{const d=formatMinutes(sum(r=>r.minZwemmenTotal)); return d?' <span style="color:var(--ink-soft);font-size:11px;">('+d+')</span>':'';})()}</td>
         <td>${(()=>{const v=avgOf(r=>r.hrvAvg); return v!=null?Math.round(v)+' ms gem.':'\u2014';})()}</td>
         <td>${(()=>{const v=avgOf(r=>r.hrRestAvg); return v!=null?Math.round(v)+' bpm gem.':'\u2014';})()}</td>
         <td>${(()=>{const v=avgOf(r=>r.sleepAvg); return v!=null?(Math.floor(v/60)+'u'+String(Math.round(v)%60).padStart(2,'0')+'m gem.'):'\u2014';})()}</td>
@@ -2100,10 +2100,10 @@ function renderTeamPeriod(days, bodyElId, emptyLabel, errorLabel, previousDays, 
       <tr>
         <td>${escapeHtml(r.name)}</td>
         <td>${r.days}</td>
-        <td>${r.dagscoreAvg!=null ? r.dagscoreAvg.toFixed(1) : '\u2014'}${deltaBadge(r.dDagscore)}</td>
-        <td>${r.kmHardlopenTotal ? r.kmHardlopenTotal.toFixed(1)+(formatPace(r.kmHardlopenTotal,r.minHardlopenTotal)?' <span style="color:var(--ink-soft);font-size:11px;">('+formatPace(r.kmHardlopenTotal,r.minHardlopenTotal)+')</span>':'') : '\u2014'}${deltaBadge(r.dHardlopen)}</td>
-        <td>${r.kmFietsenTotal ? r.kmFietsenTotal.toFixed(1) : '\u2014'}${deltaBadge(r.dFietsen)}</td>
-        <td>${r.kmZwemmenTotal ? r.kmZwemmenTotal.toFixed(1)+(formatMinutes(r.minZwemmenTotal)?' <span style="color:var(--ink-soft);font-size:11px;">('+formatMinutes(r.minZwemmenTotal)+')</span>':'') : '\u2014'}${deltaBadge(r.dZwemmen)}</td>
+        <td>${r.dagscoreAvg!=null ? r.dagscoreAvg.toFixed(1) : '\u2014'}</td>
+        <td>${r.kmHardlopenTotal ? r.kmHardlopenTotal.toFixed(1)+(formatPace(r.kmHardlopenTotal,r.minHardlopenTotal)?' <span style="color:var(--ink-soft);font-size:11px;">('+formatPace(r.kmHardlopenTotal,r.minHardlopenTotal)+')</span>':'') : '\u2014'}</td>
+        <td>${r.kmFietsenTotal ? r.kmFietsenTotal.toFixed(1) : '\u2014'}</td>
+        <td>${r.kmZwemmenTotal ? r.kmZwemmenTotal.toFixed(1)+(formatMinutes(r.minZwemmenTotal)?' <span style="color:var(--ink-soft);font-size:11px;">('+formatMinutes(r.minZwemmenTotal)+')</span>':'') : '\u2014'}</td>
         <td>${r.hrvAvg!=null ? r.hrvAvg+' ms' : '\u2014'}</td>
         <td>${r.hrRestAvg!=null ? r.hrRestAvg+' bpm' : '\u2014'}</td>
         <td>${r.sleepAvg ? (Math.floor(r.sleepAvg/60)+'u'+String(r.sleepAvg%60).padStart(2,'0')+'m') : '\u2014'}</td>
@@ -2204,7 +2204,7 @@ const RECORD_METRICS = [
 // Rendert één records-blokje (dag/week/maand/kwartaal) met alle 6 onderdelen
 // naast elkaar, plus (optioneel) de grootste stijging t.o.v. de vorige
 // periode als extra tegel in dezelfde rij.
-function renderRecordsBlock(elId, rows, improvementPrevKeyFn){
+function renderRecordsBlock(elId, rows){
   const container = document.getElementById(elId);
   if(!container) return;
   if(!rows || rows.length===0){
@@ -2220,16 +2220,6 @@ function renderRecordsBlock(elId, rows, improvementPrevKeyFn){
       <span class="meal-meta">${m.fmt(winner[m.key])} &middot; ${escapeHtml(winner.label)}</span>
     </div>`;
   }).join('');
-  if(improvementPrevKeyFn){
-    const best = computeBiggestImprovement(rows, improvementPrevKeyFn);
-    if(best){
-      cells += `<div class="stat-row" style="border-bottom:none;flex-direction:column;align-items:flex-start;">
-        <span class="stat-label" style="font-size:10px;">Grootste stijging</span>
-        <span class="stat-val" style="font-size:13px;color:var(--pine);">${medalEmoji(0)} ${escapeHtml(best.name)} +${best.delta}%</span>
-        <span class="meal-meta">${escapeHtml(best.label)}</span>
-      </div>`;
-    }
-  }
   container.innerHTML = cells ? `<div class="vitals-grid" style="grid-template-columns:1fr 1fr;">${cells}</div>` : '<div class="empty">Nog geen teamdata.</div>';
 }
 function renderAllTimeRecords(allEntries){
@@ -2250,9 +2240,9 @@ function renderAllTimeRecords(allEntries){
   const quarterRows = groupEntriesByPeriod(allEntries, e=>quarterKeyOf(e), key=>key);
 
   renderRecordsBlock('recordsDay', dayRows);
-  renderRecordsBlock('recordsWeek', weekRows, key => addDaysToKey(key,-7));
-  renderRecordsBlock('recordsMonth', monthRows, prevMonthKeyOf);
-  renderRecordsBlock('recordsQuarter', quarterRows, prevQuarterKeyOf);
+  renderRecordsBlock('recordsWeek', weekRows);
+  renderRecordsBlock('recordsMonth', monthRows);
+  renderRecordsBlock('recordsQuarter', quarterRows);
 }
 
 async function renderAllTeamViews(){
