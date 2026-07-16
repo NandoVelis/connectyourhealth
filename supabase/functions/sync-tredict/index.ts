@@ -47,6 +47,43 @@ async function mapWithConcurrency<T, R>(
   return results;
 }
 
+// Zelfde dagscore-formule als in dashboard.html (computeDagscore), zodat het
+// teambord en het persoonlijke dashboard nooit uit de pas lopen.
+function computeDagscoreServer(
+  consumedKcal: number,
+  training: { totalKcal?: number; activities: { kcal: number }[] } | null,
+  vitals: { hrRest?: number | null; hrv?: number | null; sleepMinutes?: number | null } | null
+): number | null {
+  if (!consumedKcal || consumedKcal === 0) {
+    const hadActivity = !!training?.activities?.some((a) => Number(a.kcal) > 0);
+    return hadActivity ? 8 : 6;
+  }
+
+  const parts: number[] = [];
+
+  if (training?.totalKcal) {
+    const balans = consumedKcal - training.totalKcal;
+    const absB = Math.abs(balans);
+    parts.push(absB <= 200 ? 10 : Math.max(0, 10 - (absB - 200) / 144.4));
+  }
+
+  const herstelScores: number[] = [];
+  if (vitals?.sleepMinutes) herstelScores.push(Math.max(0, 10 - Math.abs(vitals.sleepMinutes - 480) / 30));
+  if (vitals?.hrRest != null) herstelScores.push(Math.max(0, Math.min(10, 10 - (vitals.hrRest - 35) / 2)));
+  if (vitals?.hrv != null) herstelScores.push(Math.max(0, Math.min(10, vitals.hrv / 10)));
+  if (herstelScores.length) {
+    parts.push(herstelScores.reduce((a, b) => a + b, 0) / herstelScores.length);
+  }
+
+  if (training) {
+    const actKcal = training.activities.reduce((sum, a) => sum + (Number(a.kcal) || 0), 0);
+    parts.push(actKcal === 0 ? 5 : Math.min(10, actKcal / 60));
+  }
+
+  if (parts.length === 0) return null;
+  return Math.round((parts.reduce((a, b) => a + b, 0) / parts.length) * 10) / 10;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -342,6 +379,64 @@ Deno.serve(async (req) => {
       trainingDaysWritten++;
     }
 
+    // ---- TEAMBORD (real-time) ----
+    // Voorheen werd het gedeelde teambord alleen bijgewerkt als iemand zelf
+    // het dashboard opende (client-side push) — dus nieuwe Tredict-data
+    // (bijv. een zwemactiviteit) verscheen daar pas ná een volgend bezoek,
+    // wat aanvoelde als "het werkt niet". Nu berekent de sync zelf voor elke
+    // dag die training bevat direct het teambord-record, met dezelfde
+    // dagscore-formule als de app.
+    let teamEntriesUpdated = 0;
+    for (const [dateStr, activities] of Object.entries(activitiesByDate)) {
+      const kmByType = { hardlopen: 0, fietsen: 0, zwemmen: 0 } as Record<string, number>;
+      let activityKcalSum = 0;
+      for (const a of activities as any[]) {
+        activityKcalSum += a.kcal || 0;
+        if (a.type in kmByType) kmByType[a.type] += Number(a.km) || 0;
+      }
+
+      const [{ data: dayVitals }, { data: dayMeals }] = await Promise.all([
+        supabase.from("vitals").select("hr_rest, hrv, sleep_minutes").eq("owner", owner).eq("vital_date", dateStr).maybeSingle(),
+        supabase.from("meals").select("kcal").eq("owner", owner).eq("meal_date", dateStr),
+      ]);
+      const consumedKcal = (dayMeals || []).reduce((s: number, m: any) => s + (Number(m.kcal) || 0), 0);
+
+      const { data: weightRow } = await supabase
+        .from("weight")
+        .select("kg")
+        .eq("owner", owner)
+        .lte("weight_date", dateStr)
+        .order("weight_date", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      const weightKg = weightRow?.kg || 63;
+      const restKcal = Math.round(calculateBMR(weightKg, new Date(dateStr)) * 1.31);
+      const totalKcal = restKcal + activityKcalSum;
+
+      const dagscore = computeDagscoreServer(
+        consumedKcal,
+        { totalKcal, activities },
+        { hrRest: dayVitals?.hr_rest, hrv: dayVitals?.hrv, sleepMinutes: dayVitals?.sleep_minutes }
+      );
+
+      const { error: teamErr } = await supabase.from("team_entries").upsert(
+        {
+          name: owner,
+          entry_date: dateStr,
+          dagscore,
+          km_hardlopen: kmByType.hardlopen,
+          km_fietsen: kmByType.fietsen,
+          km_zwemmen: kmByType.zwemmen,
+          hrv: dayVitals?.hrv ?? null,
+          hr_rest: dayVitals?.hr_rest ?? null,
+          sleep_minutes: dayVitals?.sleep_minutes ?? null,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "name,entry_date" }
+      );
+      if (!teamErr) teamEntriesUpdated++;
+    }
+
     return new Response(
       JSON.stringify(
         {
@@ -350,6 +445,7 @@ Deno.serve(async (req) => {
           weightsInserted,
           vitalsUpdated,
           trainingDaysWritten,
+          teamEntriesUpdated,
           daysBack: DAYS_BACK,
           message: "Sync completed",
         },
