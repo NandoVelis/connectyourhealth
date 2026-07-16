@@ -1535,9 +1535,9 @@ async function renderTeam(allEntries){
         <td>${sum(r=>r.kmHardlopen).toFixed(1)}</td>
         <td>${sum(r=>r.kmFietsen).toFixed(1)}</td>
         <td>${sum(r=>r.kmZwemmen).toFixed(1)}</td>
-        <td>\u2014</td>
-        <td>\u2014</td>
-        <td>\u2014</td>
+        <td>${(()=>{const v=avgOf(r=>r.hrv); return v!=null?Math.round(v)+' ms gem.':'\u2014';})()}</td>
+        <td>${(()=>{const v=avgOf(r=>r.hrRest); return v!=null?Math.round(v)+' bpm gem.':'\u2014';})()}</td>
+        <td>${(()=>{const v=avgOf(r=>r.sleepMinutes); return v!=null?(Math.floor(v/60)+'u'+String(Math.round(v)%60).padStart(2,'0')+'m gem.'):'\u2014';})()}</td>
       </tr>` : '';
     bodyEl.innerHTML = rows.map(r=>`
       <tr>
@@ -1680,9 +1680,9 @@ function renderTeamPeriod(days, bodyElId, emptyLabel, errorLabel, previousDays, 
         <td>${sum(r=>r.kmHardlopenTotal).toFixed(1)}${deltaBadge(totalDHardlopen)}</td>
         <td>${sum(r=>r.kmFietsenTotal).toFixed(1)}${deltaBadge(totalDFietsen)}</td>
         <td>${sum(r=>r.kmZwemmenTotal).toFixed(1)}${deltaBadge(totalDZwemmen)}</td>
-        <td>\u2014</td>
-        <td>\u2014</td>
-        <td>\u2014</td>
+        <td>${(()=>{const v=avgOf(r=>r.hrvAvg); return v!=null?Math.round(v)+' ms gem.':'\u2014';})()}</td>
+        <td>${(()=>{const v=avgOf(r=>r.hrRestAvg); return v!=null?Math.round(v)+' bpm gem.':'\u2014';})()}</td>
+        <td>${(()=>{const v=avgOf(r=>r.sleepAvg); return v!=null?(Math.floor(v/60)+'u'+String(Math.round(v)%60).padStart(2,'0')+'m gem.'):'\u2014';})()}</td>
       </tr>` : '';
     bodyEl.innerHTML = rows.map(r=>`
       <tr>
