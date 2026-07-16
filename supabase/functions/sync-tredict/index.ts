@@ -115,20 +115,27 @@ Deno.serve(async (req) => {
     }
     const bodyData = await bodyResponse.json();
 
-    const weightRows: { owner: string; weight_date: string; kg: number }[] = [];
-    const hrRestRows: { owner: string; vital_date: string; hr_rest: number }[] = [];
+    // Deno.Map i.p.v. array: als Tredict meerdere metingen op dezelfde dag
+    // teruggeeft, mag een batch-upsert nooit twee rijen met dezelfde sleutel
+    // (owner+datum) bevatten — Postgres staat dat niet toe binnen één
+    // aanroep ("ON CONFLICT DO UPDATE command cannot affect row a second
+    // time"). Per datum houden we gewoon de laatst geziene meting aan.
+    const weightByDate = new Map<string, { owner: string; weight_date: string; kg: number }>();
+    const hrRestByDate = new Map<string, { owner: string; vital_date: string; hr_rest: number }>();
 
     for (const item of bodyData.bodyvalues || []) {
       const date = item.timestamp.substring(0, 10);
       if (date < cutoffDateStr) continue; // buiten de gekozen periode, overslaan
 
       if (item.weightInKilograms) {
-        weightRows.push({ owner, weight_date: date, kg: item.weightInKilograms });
+        weightByDate.set(date, { owner, weight_date: date, kg: item.weightInKilograms });
       }
       if (item.hrRestDynamic) {
-        hrRestRows.push({ owner, vital_date: date, hr_rest: item.hrRestDynamic });
+        hrRestByDate.set(date, { owner, vital_date: date, hr_rest: item.hrRestDynamic });
       }
     }
+    const weightRows = Array.from(weightByDate.values());
+    const hrRestRows = Array.from(hrRestByDate.values());
 
     // In één keer wegschrijven per tabel i.p.v. per rij een aparte aanroep —
     // dat scheelt bij een volledige (60-dagen) sync tientallen tot honderden
