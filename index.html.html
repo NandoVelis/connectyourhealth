@@ -236,6 +236,7 @@
   .table-scroll th, .table-scroll td{padding:7px 6px;font-size:11.5px;}
 
   .vitals-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;}
+  .vitals-grid .stat-row{min-height:66px;justify-content:flex-start;}
 
   @media(max-width:600px){
     .wrap{padding:18px 14px 60px;}
@@ -362,6 +363,10 @@
       <div id="nutritionTip" class="meal-meta" style="font-size:14px;color:var(--ink);"></div>
     </div>
 
+    <div class="card" style="margin-bottom:16px;background:linear-gradient(115deg,#7A0A66 0%,#4B1F6B 40%,#1A1240 100%);border:none;">
+      <div id="motivationQuote" style="font-family:'Archivo',sans-serif;font-size:16px;font-weight:600;color:#F5F1E8;text-align:center;line-height:1.5;"></div>
+    </div>
+
     <div class="grid">
       <div class="card">
         <h3>Maaltijden</h3>
@@ -375,12 +380,18 @@
 
     <div class="card" style="margin-bottom:16px;">
       <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
-        <h3 style="margin:0;">Trend (laatste 30 dagen)</h3>
-        <div style="display:flex;align-items:center;gap:8px;">
+        <h3 style="margin:0;" id="trendTitle">Trend</h3>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
           <select id="trendMetricSelect" style="padding:6px 10px;border:1px solid var(--line);border-radius:8px;font-family:'Archivo',sans-serif;font-size:13px;background:var(--card);color:var(--ink);">
             <option value="weight">Gewicht</option>
             <option value="dagscore">Dagscore</option>
             <option value="balans">Balans</option>
+          </select>
+          <select id="trendPeriodSelect" style="padding:6px 10px;border:1px solid var(--line);border-radius:8px;font-family:'Archivo',sans-serif;font-size:13px;background:var(--card);color:var(--ink);">
+            <option value="7">Laatste 7 dagen</option>
+            <option value="30" selected>Laatste 30 dagen</option>
+            <option value="week">Per week (laatste 12)</option>
+            <option value="month">Per maand (laatste 12)</option>
           </select>
           <button class="refresh-btn" id="trendRefreshBtn" type="button" title="Trend verversen met de laatste data">&#8635;</button>
         </div>
@@ -763,7 +774,7 @@
       <div class="table-scroll">
       <table>
         <thead><tr>
-          <th>Naam</th><th>Dagscore</th><th>🏃 km</th><th>🚴 km</th><th>🏊 km</th><th>💓 HRV</th><th>❤️ Rust-HR</th><th>😴 Slaap</th>
+          <th>Naam</th><th>Dagscore</th><th>🏃 km</th><th>🚴 km</th><th>🏊 km</th><th>🏋️ tijd</th><th>💓 HRV</th><th>❤️ Rust-HR</th>
         </tr></thead>
         <tbody id="teamBoardBody"><tr><td colspan="8" class="empty">Nog geen teamdata voor vandaag.</td></tr></tbody>
       </table>
@@ -776,7 +787,7 @@
       <div class="table-scroll">
       <table>
         <thead><tr>
-          <th>Naam</th><th>Dagen</th><th>Dagscore</th><th>🏃 km</th><th>🚴 km</th><th>🏊 km</th><th>💓 HRV</th><th>❤️ Rust-HR</th><th>😴 Slaap</th>
+          <th>Naam</th><th>Dagen</th><th>Dagscore</th><th>🏃 km</th><th>🚴 km</th><th>🏊 km</th><th>🏋️ tijd</th><th>💓 HRV</th><th>❤️ Rust-HR</th>
         </tr></thead>
         <tbody id="teamWeekBody"><tr><td colspan="9" class="empty">Nog geen teamdata deze week.</td></tr></tbody>
       </table>
@@ -788,7 +799,7 @@
       <div class="table-scroll">
       <table>
         <thead><tr>
-          <th>Naam</th><th>Dagen</th><th>Dagscore</th><th>🏃 km</th><th>🚴 km</th><th>🏊 km</th><th>💓 HRV</th><th>❤️ Rust-HR</th><th>😴 Slaap</th>
+          <th>Naam</th><th>Dagen</th><th>Dagscore</th><th>🏃 km</th><th>🚴 km</th><th>🏊 km</th><th>🏋️ tijd</th><th>💓 HRV</th><th>❤️ Rust-HR</th>
         </tr></thead>
         <tbody id="teamLastWeekBody"><tr><td colspan="9" class="empty">Nog geen teamdata voor vorige week.</td></tr></tbody>
       </table>
@@ -800,7 +811,7 @@
       <div class="table-scroll">
       <table>
         <thead><tr>
-          <th>Naam</th><th>Dagen</th><th>Dagscore</th><th>🏃 km</th><th>🚴 km</th><th>🏊 km</th><th>💓 HRV</th><th>❤️ Rust-HR</th><th>😴 Slaap</th>
+          <th>Naam</th><th>Dagen</th><th>Dagscore</th><th>🏃 km</th><th>🚴 km</th><th>🏊 km</th><th>🏋️ tijd</th><th>💓 HRV</th><th>❤️ Rust-HR</th>
         </tr></thead>
         <tbody id="teamMonthBody"><tr><td colspan="9" class="empty">Nog geen teamdata deze maand.</td></tr></tbody>
       </table>
@@ -812,7 +823,7 @@
       <div class="table-scroll">
       <table>
         <thead><tr>
-          <th>Naam</th><th>Dagen</th><th>Dagscore</th><th>🏃 km</th><th>🚴 km</th><th>🏊 km</th><th>💓 HRV</th><th>❤️ Rust-HR</th><th>😴 Slaap</th>
+          <th>Naam</th><th>Dagen</th><th>Dagscore</th><th>🏃 km</th><th>🚴 km</th><th>🏊 km</th><th>🏋️ tijd</th><th>💓 HRV</th><th>❤️ Rust-HR</th>
         </tr></thead>
         <tbody id="teamLastMonthBody"><tr><td colspan="9" class="empty">Nog geen teamdata voor vorige maand.</td></tr></tbody>
       </table>
@@ -824,7 +835,7 @@
       <div class="table-scroll">
       <table>
         <thead><tr>
-          <th>Naam</th><th>Dagen</th><th>Dagscore</th><th>🏃 km</th><th>🚴 km</th><th>🏊 km</th><th>💓 HRV</th><th>❤️ Rust-HR</th><th>😴 Slaap</th>
+          <th>Naam</th><th>Dagen</th><th>Dagscore</th><th>🏃 km</th><th>🚴 km</th><th>🏊 km</th><th>🏋️ tijd</th><th>💓 HRV</th><th>❤️ Rust-HR</th>
         </tr></thead>
         <tbody id="teamQuarterBody"><tr><td colspan="9" class="empty">Nog geen teamdata dit kwartaal.</td></tr></tbody>
       </table>
@@ -1190,6 +1201,94 @@ function suggestQuickAddItems(byField, count){
   return top.map(item => `${item.name} (${item[byField]}${unit})`).join(' of ');
 }
 
+// Losstaand van de voedingstip: puur een positieve boost, geen advies of
+// cijfer nodig. Kiest elke keer dat het dashboard laadt willekeurig één uit.
+const MOTIVATION_QUOTES = [
+  // Echte, geverifieerde uitspraken van bekende sporters
+  { text: "I hated every minute of training, but I said, don't quit. Suffer now and live the rest of your life as a champion.", author: "Muhammad Ali" },
+  { text: "Don't count the days, make the days count.", author: "Muhammad Ali" },
+  { text: "It's the repetition of affirmations that leads to belief. Once that belief becomes conviction, things begin to happen.", author: "Muhammad Ali" },
+  { text: "I've failed over and over and over again in my life. And that is why I succeed.", author: "Michael Jordan" },
+  { text: "Limits, like fears, are often just an illusion.", author: "Michael Jordan" },
+  { text: "Rest at the end, not in the middle.", author: "Kobe Bryant" },
+  { text: "The most important thing is to try and inspire people so that they can be great in whatever they want to do.", author: "Kobe Bryant" },
+  { text: "I really think a champion is defined not by their wins but by how they can recover when they fall.", author: "Serena Williams" },
+  { text: "I don't like to lose at anything, yet I've grown most not from victories, but setbacks.", author: "Serena Williams" },
+  { text: "Fear is not an option.", author: "Usain Bolt" },
+  { text: "No human is limited.", author: "Eliud Kipchoge" },
+  { text: "Strength does not come from winning. Your struggles develop your strengths.", author: "Arnold Schwarzenegger" },
+  { text: "Pain is temporary. Quitting lasts forever.", author: "Lance Armstrong" },
+  { text: "It's not whether you get knocked down, it's whether you get up.", author: "Vince Lombardi" },
+  { text: "You miss 100% of the shots you don't take.", author: "Wayne Gretzky" },
+  { text: "Somewhere behind the athlete you've become is a little kid who fell in love with the game \u2014 play for them.", author: "Mia Hamm" },
+  { text: "Never let the fear of striking out keep you from playing the game.", author: "Babe Ruth" },
+  // Met een knipoog
+  { text: "Baseball is 90% mental, the other half is physical.", author: "Yogi Berra" },
+  { text: "It ain't over till it's over.", author: "Yogi Berra" },
+  { text: "You can observe a lot by watching.", author: "Yogi Berra" },
+  { text: "When you come to a fork in the road, take it.", author: "Yogi Berra" },
+  { text: "I'm not a role model. Just because I dunk a basketball doesn't mean I should raise your kids.", author: "Charles Barkley" },
+  { text: "I'm so fast that last night I turned off the light switch and was in bed before the room was dark.", author: "Muhammad Ali" },
+  // Eigen gezegdes (geen bron)
+  { text: "Elke dag dat je iets doet, telt \u2014 ook de kleine dagen." },
+  { text: "Consistentie wint van perfectie." },
+  { text: "Je bent al verder dan de versie van jezelf die nooit begon." },
+  { text: "Rust is ook training. Herstel is geen stilstand." },
+  { text: "Vooruitgang is zelden een rechte lijn \u2014 blijf gewoon bewegen." },
+  { text: "Je hoeft niet gemotiveerd te zijn, je hoeft alleen te beginnen." },
+  { text: "Een goede dag begint met een klein besluit." },
+  { text: "Discipline is jezelf herinneren wat je écht wilt." },
+  { text: "Elke stap, elke hap, elke nacht slaap telt mee." },
+  { text: "Je bouwt niet aan één dag \u2014 je bouwt aan een patroon." },
+  { text: "Sterk worden gebeurt niet in de spiegel, maar in de herhaling." },
+  { text: "Kleine winst vandaag is grote vooruitgang over een jaar." },
+  { text: "Je hoeft niet perfect te eten om goed bezig te zijn." },
+  { text: "Beweging is een cadeau aan je toekomstige zelf." },
+  { text: "Niemand ziet de dagen dat je toch ging \u2014 maar je lichaam onthoudt ze allemaal." },
+  { text: "Vergelijk jezelf met gisteren, niet met een ander." },
+  { text: "Een rustdag is geen verloren dag." },
+  { text: "Motivatie brengt je op gang, gewoonte houdt je gaande." },
+  { text: "Elke maaltijd is een nieuwe kans, geen eindoordeel." },
+  { text: "Je beste tijd is niet gisteren, en ook niet morgen \u2014 het is nu." },
+  { text: "Een goede nachtrust is net zo veel winst als een goede training." },
+  { text: "Onderweg zijn is al de helft van aankomen." },
+  { text: "Je wordt niet sterker op je beste dag, maar op je moeilijkste." },
+  { text: "Trots zijn op jezelf hoeft niet te wachten tot het einddoel." },
+  { text: "Herstel is waar de vooruitgang eigenlijk gebeurt." },
+  { text: "Je grootste concurrent is de versie van jezelf van gisteren." },
+  { text: "Wat vandaag zwaar voelt, wordt morgen je nieuwe normaal." },
+  { text: "Elke goede gewoonte begint met één herhaling." },
+  { text: "Een dag overslaan is geen mislukking, het is een pauze." },
+  { text: "Kracht bouw je niet in een dag, maar wel elke dag een beetje." },
+  { text: "Rustdagen maken harde dagen mogelijk." },
+  { text: "Je vooruitgang is van jou \u2014 vergelijk 'm met niemand anders." },
+  { text: "Doorzetten voelt saai, maar werkt wel." },
+  { text: "Wees net zo aardig voor jezelf als voor een teamgenoot." },
+  { text: "Vooruitgang meet je in weken, niet in uren." },
+  { text: "Het gaat niet om perfecte dagen, maar om weinig gemiste dagen." },
+];
+// Kiest een gezegde op basis van wie er is ingelogd + de datum van vandaag,
+// zodat het (a) elke dag verandert voor dezelfde persoon en (b) twee
+// personen op dezelfde dag normaliter een ander gezegde te zien krijgen \u2014
+// zonder dat daar iets voor opgeslagen hoeft te worden.
+function hashString(str){
+  let hash = 0;
+  for(let i=0;i<str.length;i++){
+    hash = ((hash<<5)-hash)+str.charCodeAt(i);
+    hash |= 0;
+  }
+  return Math.abs(hash);
+}
+function showMotivationQuote(){
+  const el = document.getElementById('motivationQuote');
+  if(!el) return;
+  const owner = currentOwner() || 'anoniem';
+  const seed = owner + '-' + fmtDate(new Date());
+  const idx = hashString(seed) % MOTIVATION_QUOTES.length;
+  const q = MOTIVATION_QUOTES[idx];
+  el.innerHTML = escapeHtml(q.text) + (q.author ? `<div style="margin-top:8px;font-size:12px;font-weight:400;opacity:.75;">\u2014 ${escapeHtml(q.author)}</div>` : '');
+}
+
 function generateNutritionTip(totals, targets, burned, vitals, trainingHadActivity, recoveryConcern){
   if(targets.protein==null){
     return "Vul je gewicht in (via de Tredict-sync) zodat ik een tip op maat kan geven.";
@@ -1235,38 +1334,97 @@ function last30Days(){
   }
   return days;
 }
-
-async function computeTrendData(days){
-  const points = { labels: [], weight: [], dagscore: [], balans: [] };
-  for(const d of days){
-    const dateStr = fmtDate(d);
-    const w = await loadWeight(dateStr);
-    const meals = await loadMeals(dateStr);
-    const macros = macroKcal(meals);
-    const training = await loadTraining(dateStr);
-    const vitals = await loadVitals(dateStr);
-    const burned = training ? (training.totalKcal||0) : null;
-    const balans = (burned!=null && macros.kcal>0) ? macros.kcal - burned : null;
-    const {score} = computeDagscore(macros.kcal, training, vitals);
-
-    points.labels.push(dateStr.slice(5)); // MM-DD, korter voor de as
-    points.weight.push(w && w.kg ? w.kg : null);
-    points.dagscore.push(score);
-    points.balans.push(balans);
+function lastNDays(n){
+  const days = [];
+  const today = new Date();
+  for(let i=n-1;i>=0;i--){
+    const d = new Date(today);
+    d.setDate(d.getDate()-i);
+    days.push(d);
   }
-  return points;
+  return days;
+}
+
+// Eén dag inladen — alle 4 velden tegelijk i.p.v. na elkaar, en alle dagen
+// van de gekozen periode ook parallel i.p.v. één voor één. Dat scheelde
+// voorheen tot wel 120 sequentiële databasevragen bij 30 dagen.
+async function loadTrendDay(d){
+  const dateStr = fmtDate(d);
+  const [w, meals, training, vitals] = await Promise.all([
+    loadWeight(dateStr), loadMeals(dateStr), loadTraining(dateStr), loadVitals(dateStr)
+  ]);
+  const macros = macroKcal(meals);
+  const burned = training ? (training.totalKcal||0) : null;
+  const balans = (burned!=null && macros.kcal>0) ? macros.kcal - burned : null;
+  const {score} = computeDagscore(macros.kcal, training, vitals);
+  return { dateStr, weight: (w && w.kg) ? w.kg : null, dagscore: score, balans };
+}
+
+async function computeTrendDataDaily(days){
+  const results = await Promise.all(days.map(loadTrendDay));
+  return {
+    labels: results.map(r=>r.dateStr.slice(5)),
+    weight: results.map(r=>r.weight),
+    dagscore: results.map(r=>r.dagscore),
+    balans: results.map(r=>r.balans)
+  };
+}
+// Per week/maand: elke dag in dat blok inladen (parallel), daarna middelen
+// per blok tot één punt in de grafiek.
+async function computeTrendDataAggregated(mode){
+  const blocks = [];
+  if(mode==='week'){
+    const thisMonday = getMonday(new Date());
+    for(let i=11;i>=0;i--){
+      const monday = new Date(thisMonday);
+      monday.setDate(monday.getDate()-7*i);
+      blocks.push({ label: monday.toLocaleDateString('nl-NL',{day:'numeric',month:'short'}), days: weekDates(monday) });
+    }
+  } else {
+    const now = new Date();
+    for(let i=11;i>=0;i--){
+      const d = new Date(now.getFullYear(), now.getMonth()-i, 1);
+      blocks.push({ label: d.toLocaleDateString('nl-NL',{month:'short',year:'2-digit'}), days: monthDates(d).filter(x=>x<=now) });
+    }
+  }
+  const avg = arr => { const v = arr.filter(x=>x!=null); return v.length ? v.reduce((a,b)=>a+b,0)/v.length : null; };
+  const blockResults = await Promise.all(blocks.map(async b=>{
+    const dayResults = await Promise.all(b.days.map(loadTrendDay));
+    return {
+      label: b.label,
+      weight: avg(dayResults.map(r=>r.weight)),
+      dagscore: avg(dayResults.map(r=>r.dagscore)),
+      balans: avg(dayResults.map(r=>r.balans))
+    };
+  }));
+  return {
+    labels: blockResults.map(r=>r.label),
+    weight: blockResults.map(r=>r.weight),
+    dagscore: blockResults.map(r=>r.dagscore),
+    balans: blockResults.map(r=>r.balans)
+  };
 }
 
 let _trendChartInstance = null;
 let _trendDataCache = null;
+let _trendCacheKey = null;
 async function renderTrendChart(forceRefresh){
   const owner = currentOwner();
   const canvas = document.getElementById('trendChart');
   const emptyEl = document.getElementById('trendEmpty');
+  const titleEl = document.getElementById('trendTitle');
   if(!owner || !canvas) return;
 
-  if(forceRefresh || !_trendDataCache){
-    _trendDataCache = await computeTrendData(last30Days());
+  const periodSel = document.getElementById('trendPeriodSelect');
+  const period = periodSel ? periodSel.value : '30';
+  const periodLabels = { '7':'laatste 7 dagen', '30':'laatste 30 dagen', 'week':'per week, laatste 12 weken', 'month':'per maand, laatste 12 maanden' };
+  if(titleEl) titleEl.textContent = 'Trend (' + (periodLabels[period]||'') + ')';
+
+  if(forceRefresh || !_trendDataCache || _trendCacheKey!==period){
+    _trendDataCache = (period==='week' || period==='month')
+      ? await computeTrendDataAggregated(period)
+      : await computeTrendDataDaily(lastNDays(Number(period)));
+    _trendCacheKey = period;
   }
 
   const selectEl = document.getElementById('trendMetricSelect');
@@ -1280,8 +1438,8 @@ async function renderTrendChart(forceRefresh){
 
   const meta = {
     weight: { label: 'Gewicht (kg)', color: '#96007A' },
-    dagscore: { label: 'Dagscore', color: '#19203B' },
-    balans: { label: 'Balans (kcal)', color: '#A4325C' }
+    dagscore: { label: 'Dagscore', color: '#8D85FF' },
+    balans: { label: 'Balans (kcal)', color: '#00A878' }
   }[metric];
 
   const rootStyles = getComputedStyle(document.documentElement);
@@ -1372,7 +1530,7 @@ async function renderDashboard(){
   const distanceKm = trainingDistanceKm(training);
   const sportKm = trainingDistanceByType(training);
   const sportMin = trainingDurationByType(training);
-  const sportIcon = {hardlopen:'\u{1F3C3}', fietsen:'\u{1F6B4}', zwemmen:'\u{1F3CA}'};
+  const sportIcon = {hardlopen:'\u{1F3C3}', fietsen:'\u{1F6B4}', zwemmen:'\u{1F3CA}', sportschool:'\u{1F3CB}\u{FE0F}'};
   if(!training){
     detailEl.innerHTML = '<div class="empty">Nog niet opgehaald voor deze dag.</div>';
   } else {
@@ -1384,7 +1542,7 @@ async function renderDashboard(){
           if(t==='hardlopen'){
             const pace = formatPace(a.km, a.durationMinutes);
             if(pace) extra += (extra ? ', ' : ' (') + pace;
-          } else if(t==='zwemmen'){
+          } else if(t==='zwemmen' || t==='sportschool'){
             const dur = formatMinutes(a.durationMinutes);
             if(dur) extra += (extra ? ', ' : ' (') + dur;
           }
@@ -1504,6 +1662,7 @@ async function renderDashboard(){
   );
   const tipEl = document.getElementById('nutritionTip');
   if(tipEl) tipEl.textContent = tipText;
+  showMotivationQuote();
 
   syncTeamEntry(dateStr, {
     dagscore: dagscoreVal,
@@ -1512,6 +1671,7 @@ async function renderDashboard(){
     kmZwemmen: sportKm.zwemmen,
     minHardlopen: sportMin.hardlopen,
     minZwemmen: sportMin.zwemmen,
+    minSportschool: sportMin.sportschool,
     hrv: vitals ? vitals.hrv : null,
     hrRest: vitals ? vitals.hrRest : null,
     sleepMinutes: vitals ? vitals.sleepMinutes : null
@@ -1625,6 +1785,7 @@ async function syncDateToTeamBoard(dateStr, preloadedTraining, preloadedVitals){
     kmZwemmen: byType.zwemmen,
     minHardlopen: byTypeMin.hardlopen,
     minZwemmen: byTypeMin.zwemmen,
+    minSportschool: byTypeMin.sportschool,
     hrv: vitals ? vitals.hrv : null,
     hrRest: vitals ? vitals.hrRest : null,
     sleepMinutes: vitals ? vitals.sleepMinutes : null
@@ -1729,7 +1890,7 @@ function trainingDistanceByType(training){
   return out;
 }
 function trainingDurationByType(training){
-  const out = {hardlopen:0, zwemmen:0};
+  const out = {hardlopen:0, zwemmen:0, sportschool:0};
   if(!training || !training.activities) return out;
   for(const a of training.activities){
     const t = (a.type||'').toLowerCase();
@@ -1782,6 +1943,7 @@ async function syncTeamEntry(dateStr, payload){
       km_zwemmen: payload.kmZwemmen || 0,
       min_hardlopen: payload.minHardlopen || 0,
       min_zwemmen: payload.minZwemmen || 0,
+      min_sportschool: payload.minSportschool || 0,
       hrv: payload.hrv,
       hr_rest: payload.hrRest,
       sleep_minutes: payload.sleepMinutes,
@@ -1810,6 +1972,7 @@ async function loadAllTeamEntries(){
     kmZwemmen: row.km_zwemmen,
     minHardlopen: row.min_hardlopen,
     minZwemmen: row.min_zwemmen,
+    minSportschool: row.min_sportschool,
     hrv: row.hrv,
     hrRest: row.hr_rest,
     sleepMinutes: row.sleep_minutes
@@ -1841,18 +2004,16 @@ function renderAchievements(elId, rows, emptyLabel, isAverage){
     { label: 'Hoogste dagscore'+suffix, field: 'dagscore', dir: 'desc', fmt: v => v.toFixed(1) },
     { label: 'Hoogste HRV'+suffix, field: 'hrv', dir: 'desc', fmt: v => Math.round(v)+' ms' },
     { label: 'Laagste rusthartslag'+suffix, field: 'hrRest', dir: 'asc', fmt: v => Math.round(v)+' bpm' },
-    { label: 'Meeste slaap'+suffix, field: 'sleepMinutes', dir: 'desc', fmt: v => Math.floor(v/60)+'u'+String(Math.round(v%60)).padStart(2,'0')+'m' },
   ];
   const cells = categories.map(cat=>{
     const winner = topRanking(rows, cat.field, cat.dir)[0];
-    if(!winner) return '';
     return `<div class="stat-row" style="border-bottom:none;flex-direction:column;align-items:flex-start;">
       <span class="stat-label">${cat.label}</span>
-      <span class="stat-val">${medalEmoji(0)} ${escapeHtml(winner.name)}</span>
-      <span class="meal-meta">${cat.fmt(winner[cat.field])}</span>
+      <span class="stat-val">${winner ? medalEmoji(0)+' '+escapeHtml(winner.name) : '\u2014'}</span>
+      <span class="meal-meta">${winner ? cat.fmt(winner[cat.field]) : '\u2014'}</span>
     </div>`;
-  }).filter(Boolean).join('');
-  container.innerHTML = cells ? `<div class="vitals-grid">${cells}</div>` : `<div class="empty">${emptyLabel}</div>`;
+  }).join('');
+  container.innerHTML = `<div class="vitals-grid" style="grid-template-columns:repeat(3,1fr);">${cells}</div>`;
 }
 
 // Somt/middelt de hele ploeg samen tot één teamscore per periode — anders
@@ -1873,31 +2034,37 @@ function renderTeamTotals(elId, rows, emptyLabel, isAverage){
   const kmZwemmen = sumOf(r=>r.kmZwemmen);
   const minHardlopen = sumOf(r=>r.minHardlopen);
   const minZwemmen = sumOf(r=>r.minZwemmen);
+  const minSportschool = sumOf(r=>r.minSportschool);
   const suffix = isAverage ? ' (gem.)' : '';
   const pace = formatPace(kmHardlopen, minHardlopen);
   const swimDur = formatMinutes(minZwemmen);
+  const gymDur = formatMinutes(minSportschool);
   const cells = [
-    dagscoreAvg!=null ? `<div class="stat-row" style="border-bottom:none;flex-direction:column;align-items:flex-start;">
+    `<div class="stat-row" style="border-bottom:none;flex-direction:column;align-items:flex-start;">
       <span class="stat-label">Teamscore${suffix}</span>
-      <span class="stat-val">${dagscoreAvg.toFixed(1)}</span>
+      <span class="stat-val">${dagscoreAvg!=null ? dagscoreAvg.toFixed(1) : '\u2014'}</span>
       <span class="meal-meta">${rows.length} personen</span>
-    </div>` : '',
-    kmHardlopen ? `<div class="stat-row" style="border-bottom:none;flex-direction:column;align-items:flex-start;">
+    </div>`,
+    `<div class="stat-row" style="border-bottom:none;flex-direction:column;align-items:flex-start;">
       <span class="stat-label">🏃 Team km hardlopen</span>
-      <span class="stat-val">${kmHardlopen.toFixed(1)} km</span>
+      <span class="stat-val">${kmHardlopen ? kmHardlopen.toFixed(1)+' km' : '\u2014'}</span>
       <span class="meal-meta">${pace ? pace : '\u2014'}</span>
-    </div>` : '',
-    kmFietsen ? `<div class="stat-row" style="border-bottom:none;flex-direction:column;align-items:flex-start;">
+    </div>`,
+    `<div class="stat-row" style="border-bottom:none;flex-direction:column;align-items:flex-start;">
       <span class="stat-label">🚴 Team km fietsen</span>
-      <span class="stat-val">${kmFietsen.toFixed(1)} km</span>
-    </div>` : '',
-    kmZwemmen ? `<div class="stat-row" style="border-bottom:none;flex-direction:column;align-items:flex-start;">
+      <span class="stat-val">${kmFietsen ? kmFietsen.toFixed(1)+' km' : '\u2014'}</span>
+    </div>`,
+    `<div class="stat-row" style="border-bottom:none;flex-direction:column;align-items:flex-start;">
       <span class="stat-label">🏊 Team km zwemmen</span>
-      <span class="stat-val">${kmZwemmen.toFixed(1)} km</span>
+      <span class="stat-val">${kmZwemmen ? kmZwemmen.toFixed(1)+' km' : '\u2014'}</span>
       <span class="meal-meta">${swimDur ? swimDur : '\u2014'}</span>
-    </div>` : '',
-  ].filter(Boolean).join('');
-  container.innerHTML = cells ? `<div class="vitals-grid">${cells}</div>` : `<div class="empty">${emptyLabel}</div>`;
+    </div>`,
+    `<div class="stat-row" style="border-bottom:none;flex-direction:column;align-items:flex-start;">
+      <span class="stat-label">🏋️ Team tijd sportschool</span>
+      <span class="stat-val">${gymDur ? gymDur : '\u2014'}</span>
+    </div>`,
+  ].join('');
+  container.innerHTML = `<div class="vitals-grid" style="grid-template-columns:repeat(5,1fr);">${cells}</div>`;
 }
 
 async function renderTeam(allEntries){
@@ -1919,7 +2086,7 @@ async function renderTeam(allEntries){
     const todayNormRows = rows.map(r=>({
       name: r.name, dagscore: r.dagscore, hrv: r.hrv, hrRest: r.hrRest, sleepMinutes: r.sleepMinutes,
       kmHardlopen: r.kmHardlopen, kmFietsen: r.kmFietsen, kmZwemmen: r.kmZwemmen,
-      minHardlopen: r.minHardlopen, minZwemmen: r.minZwemmen
+      minHardlopen: r.minHardlopen, minZwemmen: r.minZwemmen, minSportschool: r.minSportschool
     }));
     renderAchievements('achievementsToday', todayNormRows, 'Nog geen teamdata voor vandaag.');
     renderTeamTotals('teamTotalToday', todayNormRows, 'Nog geen teamdata voor vandaag.', false);
@@ -1934,9 +2101,9 @@ async function renderTeam(allEntries){
         <td>${sum(r=>r.kmHardlopen).toFixed(1)}${(()=>{const p=formatPace(sum(r=>r.kmHardlopen),sum(r=>r.minHardlopen)); return p?' <span style="color:var(--ink-soft);font-size:11px;">('+p+')</span>':'';})()}</td>
         <td>${sum(r=>r.kmFietsen).toFixed(1)}</td>
         <td>${sum(r=>r.kmZwemmen).toFixed(1)}${(()=>{const d=formatMinutes(sum(r=>r.minZwemmen)); return d?' <span style="color:var(--ink-soft);font-size:11px;">('+d+')</span>':'';})()}</td>
+        <td>${formatMinutes(sum(r=>r.minSportschool)) || '\u2014'}</td>
         <td>${(()=>{const v=avgOf(r=>r.hrv); return v!=null?Math.round(v)+' ms gem.':'\u2014';})()}</td>
         <td>${(()=>{const v=avgOf(r=>r.hrRest); return v!=null?Math.round(v)+' bpm gem.':'\u2014';})()}</td>
-        <td>${(()=>{const v=avgOf(r=>r.sleepMinutes); return v!=null?(Math.floor(v/60)+'u'+String(Math.round(v)%60).padStart(2,'0')+'m gem.'):'\u2014';})()}</td>
       </tr>` : '';
     bodyEl.innerHTML = rows.map(r=>`
       <tr>
@@ -1945,9 +2112,9 @@ async function renderTeam(allEntries){
         <td>${r.kmHardlopen ? r.kmHardlopen.toFixed(1)+(formatPace(r.kmHardlopen,r.minHardlopen)?' <span style="color:var(--ink-soft);font-size:11px;">('+formatPace(r.kmHardlopen,r.minHardlopen)+')</span>':'') : '\u2014'}</td>
         <td>${r.kmFietsen ? r.kmFietsen.toFixed(1) : '\u2014'}</td>
         <td>${r.kmZwemmen ? r.kmZwemmen.toFixed(1)+(formatMinutes(r.minZwemmen)?' <span style="color:var(--ink-soft);font-size:11px;">('+formatMinutes(r.minZwemmen)+')</span>':'') : '\u2014'}</td>
+        <td>${formatMinutes(r.minSportschool) || '\u2014'}</td>
         <td>${r.hrv!=null ? r.hrv+' ms' : '\u2014'}</td>
         <td>${r.hrRest!=null ? r.hrRest+' bpm' : '\u2014'}</td>
-        <td>${r.sleepMinutes ? (Math.floor(r.sleepMinutes/60)+'u'+String(r.sleepMinutes%60).padStart(2,'0')+'m') : '\u2014'}</td>
       </tr>`).join('') + totalRow;
   }catch(e){
     console.error(e);
@@ -1997,7 +2164,7 @@ function computePeriodRows(days, allEntries){
   const byName = {};
   for(const entry of relevant){
     const name = entry.name || '\u2014';
-    if(!byName[name]) byName[name] = { days:0, dagscores:[], kcalIns:[], burnedTotal:0, kmHardlopenTotal:0, kmFietsenTotal:0, kmZwemmenTotal:0, minHardlopenTotal:0, minZwemmenTotal:0, balansArr:[], hrvs:[], hrRests:[], sleepMins:[] };
+    if(!byName[name]) byName[name] = { days:0, dagscores:[], kcalIns:[], burnedTotal:0, kmHardlopenTotal:0, kmFietsenTotal:0, kmZwemmenTotal:0, minHardlopenTotal:0, minZwemmenTotal:0, minSportschoolTotal:0, balansArr:[], hrvs:[], hrRests:[], sleepMins:[] };
     const agg = byName[name];
     agg.days++;
     if(entry.dagscore!=null) agg.dagscores.push(entry.dagscore);
@@ -2008,6 +2175,7 @@ function computePeriodRows(days, allEntries){
     agg.kmZwemmenTotal += entry.kmZwemmen||0;
     agg.minHardlopenTotal += entry.minHardlopen||0;
     agg.minZwemmenTotal += entry.minZwemmen||0;
+    agg.minSportschoolTotal += entry.minSportschool||0;
     if(entry.balans!=null) agg.balansArr.push(entry.balans);
     if(entry.hrv!=null) agg.hrvs.push(entry.hrv);
     if(entry.hrRest!=null) agg.hrRests.push(entry.hrRest);
@@ -2027,6 +2195,7 @@ function computePeriodRows(days, allEntries){
       kmZwemmenTotal: agg.kmZwemmenTotal,
       minHardlopenTotal: agg.minHardlopenTotal,
       minZwemmenTotal: agg.minZwemmenTotal,
+      minSportschoolTotal: agg.minSportschoolTotal,
       balansAvg: avg(agg.balansArr),
       hrvAvg: avg(agg.hrvs),
       hrRestAvg: avg(agg.hrRests),
@@ -2045,7 +2214,7 @@ function renderTeamPeriod(days, bodyElId, emptyLabel, errorLabel, previousDays, 
       const normRows = rows.map(r=>({
         name: r.name, dagscore: r.dagscoreAvg, hrv: r.hrvAvg, hrRest: r.hrRestAvg, sleepMinutes: r.sleepAvg,
         kmHardlopen: r.kmHardlopenTotal, kmFietsen: r.kmFietsenTotal, kmZwemmen: r.kmZwemmenTotal,
-        minHardlopen: r.minHardlopenTotal, minZwemmen: r.minZwemmenTotal
+        minHardlopen: r.minHardlopenTotal, minZwemmen: r.minZwemmenTotal, minSportschool: r.minSportschoolTotal
       }));
       renderAchievements(achievementsElId, normRows, emptyLabel, true);
       if(teamTotalElId) renderTeamTotals(teamTotalElId, normRows, emptyLabel, true);
@@ -2092,9 +2261,9 @@ function renderTeamPeriod(days, bodyElId, emptyLabel, errorLabel, previousDays, 
         <td>${sum(r=>r.kmHardlopenTotal).toFixed(1)}${(()=>{const p=formatPace(sum(r=>r.kmHardlopenTotal),sum(r=>r.minHardlopenTotal)); return p?' <span style="color:var(--ink-soft);font-size:11px;">('+p+')</span>':'';})()}</td>
         <td>${sum(r=>r.kmFietsenTotal).toFixed(1)}</td>
         <td>${sum(r=>r.kmZwemmenTotal).toFixed(1)}${(()=>{const d=formatMinutes(sum(r=>r.minZwemmenTotal)); return d?' <span style="color:var(--ink-soft);font-size:11px;">('+d+')</span>':'';})()}</td>
+        <td>${formatMinutes(sum(r=>r.minSportschoolTotal)) || '\u2014'}</td>
         <td>${(()=>{const v=avgOf(r=>r.hrvAvg); return v!=null?Math.round(v)+' ms gem.':'\u2014';})()}</td>
         <td>${(()=>{const v=avgOf(r=>r.hrRestAvg); return v!=null?Math.round(v)+' bpm gem.':'\u2014';})()}</td>
-        <td>${(()=>{const v=avgOf(r=>r.sleepAvg); return v!=null?(Math.floor(v/60)+'u'+String(Math.round(v)%60).padStart(2,'0')+'m gem.'):'\u2014';})()}</td>
       </tr>` : '';
     bodyEl.innerHTML = rows.map(r=>`
       <tr>
@@ -2104,9 +2273,9 @@ function renderTeamPeriod(days, bodyElId, emptyLabel, errorLabel, previousDays, 
         <td>${r.kmHardlopenTotal ? r.kmHardlopenTotal.toFixed(1)+(formatPace(r.kmHardlopenTotal,r.minHardlopenTotal)?' <span style="color:var(--ink-soft);font-size:11px;">('+formatPace(r.kmHardlopenTotal,r.minHardlopenTotal)+')</span>':'') : '\u2014'}</td>
         <td>${r.kmFietsenTotal ? r.kmFietsenTotal.toFixed(1) : '\u2014'}</td>
         <td>${r.kmZwemmenTotal ? r.kmZwemmenTotal.toFixed(1)+(formatMinutes(r.minZwemmenTotal)?' <span style="color:var(--ink-soft);font-size:11px;">('+formatMinutes(r.minZwemmenTotal)+')</span>':'') : '\u2014'}</td>
+        <td>${formatMinutes(r.minSportschoolTotal) || '\u2014'}</td>
         <td>${r.hrvAvg!=null ? r.hrvAvg+' ms' : '\u2014'}</td>
         <td>${r.hrRestAvg!=null ? r.hrRestAvg+' bpm' : '\u2014'}</td>
-        <td>${r.sleepAvg ? (Math.floor(r.sleepAvg/60)+'u'+String(r.sleepAvg%60).padStart(2,'0')+'m') : '\u2014'}</td>
       </tr>`).join('') + totalRow;
   }catch(e){
     console.error(e);
@@ -2152,11 +2321,12 @@ function groupEntriesByPeriod(entries, keyFn, labelFn){
   for(const e of entries){
     const periodKey = keyFn(e.date);
     const groupKey = e.name+'|'+periodKey;
-    if(!groups[groupKey]) groups[groupKey] = { name: e.name, periodKey, dagscores:[], kmHardlopen:0, minZwemmen:0, hrvs:[], hrRests:[], sleeps:[] };
+    if(!groups[groupKey]) groups[groupKey] = { name: e.name, periodKey, dagscores:[], kmHardlopen:0, minZwemmen:0, minSportschool:0, hrvs:[], hrRests:[], sleeps:[] };
     const g = groups[groupKey];
     if(e.dagscore!=null) g.dagscores.push(e.dagscore);
     g.kmHardlopen += e.kmHardlopen||0;
     g.minZwemmen += e.minZwemmen||0;
+    g.minSportschool += e.minSportschool||0;
     if(e.hrv!=null) g.hrvs.push(e.hrv);
     if(e.hrRest!=null) g.hrRests.push(e.hrRest);
     if(e.sleepMinutes) g.sleeps.push(e.sleepMinutes);
@@ -2169,6 +2339,7 @@ function groupEntriesByPeriod(entries, keyFn, labelFn){
     dagscore: avg(g.dagscores),
     kmHardlopen: g.kmHardlopen,
     minZwemmen: g.minZwemmen,
+    minSportschool: g.minSportschool,
     hrv: avg(g.hrvs),
     hrRest: avg(g.hrRests),
     sleepMinutes: avg(g.sleeps)
@@ -2197,9 +2368,9 @@ const RECORD_METRICS = [
   { key:'dagscore', label:'Dagscore', dir:'desc', fmt:v=>v.toFixed(1) },
   { key:'kmHardlopen', label:'Meeste km hardlopen', dir:'desc', fmt:v=>v.toFixed(1)+' km' },
   { key:'minZwemmen', label:'Meeste tijd zwemmen', dir:'desc', fmt:v=>formatMinutes(v) },
+  { key:'minSportschool', label:'Meeste tijd sportschool', dir:'desc', fmt:v=>formatMinutes(v) },
   { key:'hrv', label:'Hoogste HRV', dir:'desc', fmt:v=>Math.round(v)+' ms' },
   { key:'hrRest', label:'Laagste rusthartslag', dir:'asc', fmt:v=>Math.round(v)+' bpm' },
-  { key:'sleepMinutes', label:'Meeste slaap', dir:'desc', fmt:v=>formatMinutes(v) },
 ];
 // Rendert één records-blokje (dag/week/maand/kwartaal) met alle 6 onderdelen
 // naast elkaar, plus (optioneel) de grootste stijging t.o.v. de vorige
@@ -2213,14 +2384,14 @@ function renderRecordsBlock(elId, rows){
   }
   let cells = RECORD_METRICS.map(m=>{
     const winner = topRanking(rows, m.key, m.dir)[0];
-    if(!winner || !winner[m.key]) return '';
+    const hasValue = winner && winner[m.key];
     return `<div class="stat-row" style="border-bottom:none;flex-direction:column;align-items:flex-start;">
       <span class="stat-label" style="font-size:10px;">${m.label}</span>
-      <span class="stat-val" style="font-size:13px;">${medalEmoji(0)} ${escapeHtml(winner.name)}</span>
-      <span class="meal-meta">${m.fmt(winner[m.key])} &middot; ${escapeHtml(winner.label)}</span>
+      <span class="stat-val" style="font-size:13px;">${hasValue ? medalEmoji(0)+' '+escapeHtml(winner.name) : '\u2014'}</span>
+      <span class="meal-meta">${hasValue ? m.fmt(winner[m.key])+' &middot; '+escapeHtml(winner.label) : '\u2014'}</span>
     </div>`;
   }).join('');
-  container.innerHTML = cells ? `<div class="vitals-grid" style="grid-template-columns:1fr 1fr;">${cells}</div>` : '<div class="empty">Nog geen teamdata.</div>';
+  container.innerHTML = `<div class="vitals-grid" style="grid-template-columns:1fr 1fr;">${cells}</div>`;
 }
 function renderAllTimeRecords(allEntries){
   if(!allEntries || allEntries.length===0){
@@ -2233,7 +2404,7 @@ function renderAllTimeRecords(allEntries){
   const monthLabel = key => { const [y,m] = key.split('-'); return new Date(Number(y),Number(m)-1,1).toLocaleDateString('nl-NL',{month:'long',year:'numeric'}); };
   const dayRows = allEntries.map(e=>({
     name: e.name, periodKey: e.date, label: new Date(e.date+'T00:00:00').toLocaleDateString('nl-NL',{day:'numeric',month:'short',year:'numeric'}),
-    dagscore: e.dagscore, kmHardlopen: e.kmHardlopen, minZwemmen: e.minZwemmen, hrv: e.hrv, hrRest: e.hrRest, sleepMinutes: e.sleepMinutes
+    dagscore: e.dagscore, kmHardlopen: e.kmHardlopen, minZwemmen: e.minZwemmen, minSportschool: e.minSportschool, hrv: e.hrv, hrRest: e.hrRest, sleepMinutes: e.sleepMinutes
   }));
   const weekRows = groupEntriesByPeriod(allEntries, e=>getMondayOf(e), key=>'week van '+new Date(key+'T00:00:00').toLocaleDateString('nl-NL',{day:'numeric',month:'short'}));
   const monthRows = groupEntriesByPeriod(allEntries, e=>e.slice(0,7), monthLabel);
@@ -3118,6 +3289,7 @@ if(!currentOwner()){
   maybeShowProfileOnboarding(currentOwner());
 }
 document.getElementById('trendMetricSelect').addEventListener('change', ()=>renderTrendChart());
+document.getElementById('trendPeriodSelect').addEventListener('change', ()=>renderTrendChart());
 document.getElementById('trendRefreshBtn').addEventListener('click', ()=>renderTrendChart(true));
 
 // ---- Tredict-koppelingsstatus tonen ----
