@@ -2391,7 +2391,7 @@ function renderRecordsBlock(elId, rows){
       <span class="meal-meta">${hasValue ? m.fmt(winner[m.key])+' &middot; '+escapeHtml(winner.label) : '\u2014'}</span>
     </div>`;
   }).join('');
-  container.innerHTML = `<div class="vitals-grid" style="grid-template-columns:1fr 1fr;">${cells}</div>`;
+  container.innerHTML = `<div class="vitals-grid" style="grid-template-columns:repeat(3,1fr);">${cells}</div>`;
 }
 function renderAllTimeRecords(allEntries){
   if(!allEntries || allEntries.length===0){
