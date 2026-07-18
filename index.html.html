@@ -501,10 +501,13 @@
         <div class="stat-row" data-default-key="lunch" style="border-bottom:1px solid var(--line);flex-direction:column;align-items:stretch;gap:8px;">
           <div>
             <div class="meal-desc">🥪 Broodje kipfilet</div>
-            <div class="meal-meta">1 volkoren broodje + 1 plakje kipfilet &middot; ~140 kcal per stuk</div>
+            <div class="meal-meta">volkoren broodje ~120 kcal &middot; plakje kipfilet ~20 kcal &middot; aantal van elk apart instelbaar</div>
           </div>
           <div style="display:flex;align-items:center;gap:6px;flex-wrap:nowrap;">
-            <input type="number" id="lunchQty" value="4" min="1" style="width:44px;padding:6px 4px;flex-shrink:0;">
+            <input type="number" id="lunchBreadQty" value="1" min="0" style="width:36px;padding:6px 4px;flex-shrink:0;">
+            <span style="font-size:11px;color:var(--ink-soft);flex-shrink:0;">broodjes</span>
+            <input type="number" id="lunchChickenQty" value="1" min="0" style="width:36px;padding:6px 4px;flex-shrink:0;">
+            <span style="font-size:11px;color:var(--ink-soft);flex-shrink:0;">plakjes</span>
             <select class="qaGroupSelect" data-key="lunch" style="font-size:11px;padding:5px 2px;border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--ink-soft);width:76px;flex-shrink:0;">
               <option value="Ontbijt">Ontbijt</option>
               <option value="Lunch" selected>Lunch</option>
@@ -1691,9 +1694,9 @@ async function renderDashboard(){
     listEl.innerHTML = meals.map((m,i)=>`
       <div class="meal-item">
         <div>
-          <div class="meal-desc">${escapeHtml(m.desc)}</div>
+          <div class="meal-desc">${getFoodEmoji(m.desc)} ${escapeHtml(m.desc)}</div>
           <div class="meal-meta">
-            <select class="mealTypeSelect" data-idx="${i}" style="font-size:12px;padding:3px 6px;border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--ink-soft);font-family:'Archivo',sans-serif;">
+            <select class="mealTypeSelect" data-idx="${i}" style="font-size:11px;font-weight:600;padding:3px 10px;border:none;border-radius:12px;background:var(--amber-soft);color:var(--amber);font-family:'Archivo',sans-serif;">
               ${['Ontbijt','Lunch','Diner','Snack','Drinken','Sportvoeding'].map(opt=>`<option value="${opt}" ${m.mealType===opt?'selected':''}>${opt}</option>`).join('')}
             </select>
             ${m.time?(' &middot; '+escapeHtml(m.time)):''}
@@ -3046,10 +3049,23 @@ document.getElementById('quickAddEggsLunch').addEventListener('click', (e)=>{
 });
 
 document.getElementById('quickAddLunch').addEventListener('click', (e)=>{
-  const qty = Math.max(1, Number(document.getElementById('lunchQty').value)||1);
+  const breadQty = Math.max(0, Number(document.getElementById('lunchBreadQty').value)||0);
+  const chickenQty = Math.max(0, Number(document.getElementById('lunchChickenQty').value)||0);
+  if(breadQty===0 && chickenQty===0){
+    document.getElementById('quickAddStatus').innerHTML = '<span class="status-err">Vul minstens 1 broodje of plakje in.</span>';
+    return;
+  }
+  const parts = [];
+  if(breadQty>0) parts.push(breadQty + 'x volkoren broodje');
+  if(chickenQty>0) parts.push(chickenQty + 'x plakje kipfilet');
   quickAdd({
-    desc: qty + 'x broodje kipfilet (volkoren + kipfilet)',
-    mealType: 'Lunch', kcal: 140*qty, protein: 8*qty, carbs: 24*qty, fat: 2*qty, time: ''
+    desc: parts.join(' + '),
+    mealType: 'Lunch',
+    kcal: breadQty*120 + chickenQty*20,
+    protein: breadQty*5 + chickenQty*3,
+    carbs: breadQty*24 + chickenQty*0,
+    fat: breadQty*1.5 + chickenQty*0.5,
+    time: ''
   }, document.getElementById('quickAddStatus'), e.target);
 });
 
