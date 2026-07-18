@@ -370,15 +370,9 @@
       <div id="motivationQuote" style="font-family:'Archivo',sans-serif;font-size:16px;font-weight:600;color:#F5F1E8;text-align:center;line-height:1.5;"></div>
     </div>
 
-    <div class="grid">
-      <div class="card">
-        <h3>Maaltijden</h3>
-        <div id="mealList"><div class="empty">Nog geen maaltijden ingevoerd voor deze dag.</div></div>
-      </div>
-      <div class="card">
-        <h3>Subtotalen per onderdeel</h3>
-        <div id="subtotalsList"></div>
-      </div>
+    <div class="card" style="margin-bottom:16px;">
+      <h3>Maaltijden</h3>
+      <div id="mealList"><div class="empty">Nog geen maaltijden ingevoerd voor deze dag.</div></div>
     </div>
 
     <div class="card" style="margin-bottom:16px;">
@@ -1521,7 +1515,6 @@ async function renderDashboard(){
   if(!owner){
     document.getElementById('trainingDetail').innerHTML = '<div class="empty">Vul eerst je naam in bij het tabblad Team om je persoonlijke dashboard te gebruiken.</div>';
     document.getElementById('mealList').innerHTML = '<div class="empty">Vul eerst je naam in bij het tabblad Team.</div>';
-    document.getElementById('subtotalsList').innerHTML = '';
     document.getElementById('macroBars').innerHTML = '';
     document.getElementById('dagscoreBreakdown').innerHTML = '';
     const tipElEarly = document.getElementById('nutritionTip');
@@ -1695,12 +1688,26 @@ async function renderDashboard(){
     const byGroup = {};
     meals.forEach((m,i)=>{
       const group = mealOrder.includes(m.mealType) ? m.mealType : 'Snack';
-      if(!byGroup[group]) byGroup[group] = [];
-      byGroup[group].push({...m, origIdx:i});
+      if(!byGroup[group]) byGroup[group] = { items: [], kcal:0, protein:0, carbs:0, fat:0 };
+      byGroup[group].items.push({...m, origIdx:i});
+      byGroup[group].kcal += Number(m.kcal)||0;
+      byGroup[group].protein += Number(m.protein)||0;
+      byGroup[group].carbs += Number(m.carbs)||0;
+      byGroup[group].fat += Number(m.fat)||0;
     });
+    const groupMacroLabel = (g) => {
+      const parts = [`${Math.round(g.kcal)} kcal`];
+      if(g.protein) parts.push(`${Math.round(g.protein)}g eiwit${pctLabel(g.protein, targetProtein)}`);
+      if(g.carbs) parts.push(`${Math.round(g.carbs)}g koolh.${pctLabel(g.carbs, targetCarbs)}`);
+      if(g.fat) parts.push(`${Math.round(g.fat)}g vet${pctLabel(g.fat, targetFat)}`);
+      return parts.join(' &middot; ');
+    };
     listEl.innerHTML = mealOrder.filter(g=>byGroup[g]).map(group=>`
-      <div class="qa-group-heading">${group}</div>
-      ${byGroup[group].map(m=>`
+      <div class="qa-group-heading" style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:4px 10px;">
+        <span>${group}</span>
+        <span style="font-weight:400;text-transform:none;letter-spacing:normal;color:var(--ink-soft);font-size:11px;">${groupMacroLabel(byGroup[group])}</span>
+      </div>
+      ${byGroup[group].items.map(m=>`
         <div class="meal-item">
           <div>
             <div class="meal-desc">${getFoodEmoji(m.desc)} ${escapeHtml(m.desc)}</div>
@@ -1736,27 +1743,6 @@ async function renderDashboard(){
         renderDashboard();
       });
     });
-  }
-
-  const subtotalEl = document.getElementById('subtotalsList');
-  const order = ['Ontbijt','Lunch','Diner','Snack','Drinken','Sportvoeding'];
-  const byType = {};
-  order.forEach(t=>byType[t]={kcal:0,count:0});
-  meals.forEach(m=>{
-    const t = order.includes(m.mealType) ? m.mealType : 'Snack';
-    byType[t].kcal += Number(m.kcal)||0;
-    byType[t].count += 1;
-  });
-  const rowsWithData = order.filter(t=>byType[t].count>0);
-  if(rowsWithData.length===0){
-    subtotalEl.innerHTML = '<div class="empty">Nog geen maaltijden ingevoerd voor deze dag.</div>';
-  } else {
-    subtotalEl.innerHTML = order.map(t=>`
-      <div class="stat-row">
-        <span class="stat-label">${t}${byType[t].count>0 ? ' ('+byType[t].count+'x)' : ''}</span>
-        <span class="stat-val">${byType[t].kcal} kcal</span>
-      </div>
-    `).join('');
   }
 
   const maxMacro = Math.max(totals.protein, totals.carbs, totals.fat, 1);
