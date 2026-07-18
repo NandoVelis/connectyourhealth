@@ -1691,22 +1691,32 @@ async function renderDashboard(){
   if(meals.length===0){
     listEl.innerHTML = '<div class="empty">Nog geen maaltijden ingevoerd voor deze dag.</div>';
   } else {
-    listEl.innerHTML = meals.map((m,i)=>`
-      <div class="meal-item">
-        <div>
-          <div class="meal-desc">${getFoodEmoji(m.desc)} ${escapeHtml(m.desc)}</div>
-          <div class="meal-meta">
-            <select class="mealTypeSelect" data-idx="${i}" style="font-size:11px;font-weight:600;padding:3px 10px;border:none;border-radius:12px;background:var(--amber-soft);color:var(--amber);font-family:'Archivo',sans-serif;">
-              ${['Ontbijt','Lunch','Diner','Snack','Drinken','Sportvoeding'].map(opt=>`<option value="${opt}" ${m.mealType===opt?'selected':''}>${opt}</option>`).join('')}
-            </select>
-            ${m.time?(' &middot; '+escapeHtml(m.time)):''}
+    const mealOrder = ['Ontbijt','Lunch','Diner','Snack','Drinken','Sportvoeding'];
+    const byGroup = {};
+    meals.forEach((m,i)=>{
+      const group = mealOrder.includes(m.mealType) ? m.mealType : 'Snack';
+      if(!byGroup[group]) byGroup[group] = [];
+      byGroup[group].push({...m, origIdx:i});
+    });
+    listEl.innerHTML = mealOrder.filter(g=>byGroup[g]).map(group=>`
+      <div class="qa-group-heading">${group}</div>
+      ${byGroup[group].map(m=>`
+        <div class="meal-item">
+          <div>
+            <div class="meal-desc">${getFoodEmoji(m.desc)} ${escapeHtml(m.desc)}</div>
+            <div class="meal-meta">
+              <select class="mealTypeSelect" data-idx="${m.origIdx}" style="font-size:12px;padding:3px 6px;border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--ink-soft);font-family:'Archivo',sans-serif;">
+                ${mealOrder.map(opt=>`<option value="${opt}" ${m.mealType===opt?'selected':''}>${opt}</option>`).join('')}
+              </select>
+              ${m.time?(' &middot; '+escapeHtml(m.time)):''}
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;">
+            <span class="meal-kcal">${m.kcal} kcal</span>
+            <button class="meal-del" data-idx="${m.origIdx}">verwijder</button>
           </div>
         </div>
-        <div style="display:flex;align-items:center;">
-          <span class="meal-kcal">${m.kcal} kcal</span>
-          <button class="meal-del" data-idx="${i}">verwijder</button>
-        </div>
-      </div>
+      `).join('')}
     `).join('');
     listEl.querySelectorAll('.mealTypeSelect').forEach(sel=>{
       sel.addEventListener('change', async (e)=>{
@@ -1714,6 +1724,7 @@ async function renderDashboard(){
         const current = await loadMeals(dateStr);
         current[idx].mealType = e.target.value;
         await saveMeals(dateStr, current);
+        renderDashboard();
       });
     });
     listEl.querySelectorAll('.meal-del').forEach(btn=>{
