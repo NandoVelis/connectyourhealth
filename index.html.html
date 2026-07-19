@@ -1506,6 +1506,22 @@ function macroKcal(meals){
   };
 }
 
+// Schat het dagelijkse rustverbruik (Mifflin-St Jeor x 1.31 zoals de
+// Tredict-sync serverside doet) zodat er ook zonder sync al een grove
+// dagelijkse kcal-behoefte is -- iedereen verbrandt immers kcal in rust,
+// ook zonder te sporten. Wordt alleen gebruikt als er nog geen echte
+// Tredict-data voor die dag is.
+function estimateRestKcalFromProfile(weightKg, birthdateStr, heightCm){
+  if(!weightKg || !birthdateStr || !heightCm) return null;
+  const birth = new Date(birthdateStr);
+  const now = new Date();
+  let age = now.getFullYear() - birth.getFullYear();
+  const m = now.getMonth() - birth.getMonth();
+  if(m<0 || (m===0 && now.getDate()<birth.getDate())) age--;
+  const bmr = 10*weightKg + 6.25*heightCm - 5*age + 5;
+  return Math.round(bmr*1.31);
+}
+
 async function renderDashboard(){
 
   const dateStr = fmtDate(state.currentDate);
@@ -1525,7 +1541,20 @@ async function renderDashboard(){
   const meals = await loadMeals(dateStr);
   const totals = macroKcal(meals);
   const training = await loadTraining(dateStr);
-  const burned = training ? training.totalKcal : null;
+  const weightEntry = await loadWeight(dateStr);
+  let burned = training ? training.totalKcal : null;
+  let burnedIsEstimate = false;
+  let estimatedRestKcal = null;
+  if(burned==null && weightEntry && weightEntry.kg){
+    const profile = await loadProfile(owner);
+    if(profile && profile.birthdate && profile.heightCm){
+      estimatedRestKcal = estimateRestKcalFromProfile(weightEntry.kg, profile.birthdate, profile.heightCm);
+      if(estimatedRestKcal){
+        burned = estimatedRestKcal;
+        burnedIsEstimate = true;
+      }
+    }
+  }
 
   document.getElementById('consumedVal').textContent = totals.kcal + ' kcal';
 
@@ -1534,7 +1563,15 @@ async function renderDashboard(){
   const sportKm = trainingDistanceByType(training);
   const sportMin = trainingDurationByType(training);
   const sportIcon = {hardlopen:'\u{1F3C3}', fietsen:'\u{1F6B4}', zwemmen:'\u{1F3CA}', sportschool:'\u{1F3CB}\u{FE0F}'};
-  if(!training){
+  if(!training && burnedIsEstimate){
+    detailEl.innerHTML = `
+      <div class="stat-row"><span class="stat-label">Geen training gesynchroniseerd</span><span class="stat-val">0 kcal</span></div>
+      <div class="stat-row" style="border-bottom:none;">
+        <span class="stat-label" style="font-weight:700;">Geschat rustverbruik</span>
+        <span class="stat-val">~${estimatedRestKcal} kcal</span>
+      </div>
+      <div class="meal-meta" style="margin-top:4px;">Nog niet gesynchroniseerd met Tredict &mdash; dit is een schatting op basis van je profiel, geen trainingen meegeteld.</div>`;
+  } else if(!training){
     detailEl.innerHTML = '<div class="empty">Nog niet opgehaald voor deze dag.</div>';
   } else {
     const actRows = (training.activities && training.activities.length>0)
@@ -1572,9 +1609,11 @@ async function renderDashboard(){
   const balansEl = document.getElementById('balansNum');
   balansEl.textContent = (balans>=0?'+':'') + balans;
   balansEl.className = 'balans-number ' + (balans>0 ? 'balans-neg' : 'balans-pos');
-  document.getElementById('balansSub').textContent = burned!==null
-    ? 'kcal ingenomen \u2212 verbrand (training)'
-    : 'kcal ingenomen (training nog niet opgehaald)';
+  document.getElementById('balansSub').textContent = burnedIsEstimate
+    ? 'kcal ingenomen \u2212 geschat rustverbruik (nog niet gesynchroniseerd)'
+    : burned!==null
+      ? 'kcal ingenomen \u2212 verbrand (training)'
+      : 'kcal ingenomen (training nog niet opgehaald)';
 
   const vitals = await loadVitals(dateStr);
   document.getElementById('vitalHrRest').textContent = (vitals && vitals.hrRest!=null) ? vitals.hrRest+' bpm' : '\u2014';
@@ -1626,7 +1665,6 @@ async function renderDashboard(){
         <span class="stat-val">${p.score.toFixed(1)}</span>
       </div>`).join('') : '<div class="empty">Nog onvoldoende data voor deze dag.</div>';
 
-  const weightEntry = await loadWeight(dateStr);
   let targetProtein = null, targetFat = null, targetCarbs = null;
   if(weightEntry && weightEntry.kg){
     let proteinFactor = 1.8;
