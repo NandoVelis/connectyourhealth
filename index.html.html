@@ -278,7 +278,7 @@
     <button
       id="syncTredictBtn"
       class="btn-primary"
-      style="background:#8D85FF;color:#FFFFFF;"
+      style="background:#96007A;color:#FFFFFF;"
     >
       🔄 Synchroniseer Tredict
     </button>
@@ -598,6 +598,44 @@
 
       <div id="qaGroup-Diner">
         <h4 class="qa-group-heading">Diner</h4>
+        <div class="stat-row" data-default-key="macaroni" data-owner-only="Nando" style="border-bottom:1px solid var(--line);flex-direction:column;align-items:stretch;gap:8px;">
+          <div>
+            <div class="meal-desc">🍝 Macaroni met kipfilet en groenten</div>
+            <div class="meal-meta">saus/pasta/groenten vast (752 kcal, 143g koolh., 33g eiwit, 4g vet per portie) &middot; alleen kipfilet aanpasbaar, onthoudt laatst ingevoerde aantal gram</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:6px;flex-wrap:nowrap;">
+            <input type="number" id="macaroniKipGrams" value="226" min="0" style="width:52px;padding:6px 4px;flex-shrink:0;">
+            <span style="font-size:11px;color:var(--ink-soft);flex-shrink:0;">g kip</span>
+            <select class="qaGroupSelect" data-key="macaroni" style="font-size:11px;padding:5px 2px;border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--ink-soft);width:76px;flex-shrink:0;">
+              <option value="Ontbijt">Ontbijt</option>
+              <option value="Lunch">Lunch</option>
+              <option value="Snack">Snack</option>
+              <option value="Diner" selected>Diner</option>
+              <option value="Drinken">Drinken</option>
+            </select>
+            <button class="btn-secondary" id="quickAddMacaroni" style="flex-shrink:0;padding:8px 10px;">+ Toevoegen</button>
+            <button class="btn-secondary defaultQuickAddRemove" data-key="macaroni" title="Verwijderen uit Snel toevoegen" style="padding:6px 10px;flex-shrink:0;">&times;</button>
+          </div>
+        </div>
+        <div class="stat-row" data-default-key="kipfilet" style="border-bottom:1px solid var(--line);flex-direction:column;align-items:stretch;gap:8px;">
+          <div>
+            <div class="meal-desc">🍗 Kipfilet (gebakken)</div>
+            <div class="meal-meta">~165 kcal, 31g eiwit per 100g gegaard &middot; aantal gram aanpasbaar</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:6px;flex-wrap:nowrap;">
+            <input type="number" id="kipfiletGrams" value="225" min="1" style="width:52px;padding:6px 4px;flex-shrink:0;">
+            <span style="font-size:11px;color:var(--ink-soft);flex-shrink:0;">g</span>
+            <select class="qaGroupSelect" data-key="kipfilet" style="font-size:11px;padding:5px 2px;border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--ink-soft);width:76px;flex-shrink:0;">
+              <option value="Ontbijt">Ontbijt</option>
+              <option value="Lunch">Lunch</option>
+              <option value="Snack">Snack</option>
+              <option value="Diner" selected>Diner</option>
+              <option value="Drinken">Drinken</option>
+            </select>
+            <button class="btn-secondary" id="quickAddKipfilet" style="flex-shrink:0;padding:8px 10px;">+ Toevoegen</button>
+            <button class="btn-secondary defaultQuickAddRemove" data-key="kipfilet" title="Verwijderen uit Snel toevoegen" style="padding:6px 10px;flex-shrink:0;">&times;</button>
+          </div>
+        </div>
         <div id="customQuickAddList"></div>
       </div>
 
@@ -623,9 +661,11 @@
         <div class="stat-row" data-default-key="leffe" style="border-bottom:1px solid var(--line);">
           <div>
             <div class="meal-desc">🍺 Leffe Blond 0.0</div>
-            <div class="meal-meta">1 blikje (330ml), alcoholvrij &middot; ~86 kcal</div>
+            <div class="meal-meta">alcoholvrij &middot; ~0,26 kcal/ml &middot; aantal ml aanpasbaar</div>
           </div>
           <div style="display:flex;align-items:center;gap:6px;flex-wrap:nowrap;">
+            <input type="number" id="leffeMl" value="330" min="1" style="width:52px;padding:6px 4px;flex-shrink:0;">
+            <span style="font-size:11px;color:var(--ink-soft);flex-shrink:0;">ml</span>
             <select class="qaGroupSelect" data-key="leffe" style="font-size:11px;padding:5px 2px;border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--ink-soft);width:76px;flex-shrink:0;">
               <option value="Ontbijt">Ontbijt</option>
               <option value="Lunch">Lunch</option>
@@ -698,7 +738,7 @@
         <input type="checkbox" id="fSaveAsQuickAdd" style="width:auto;">
         <label for="fSaveAsQuickAdd" style="margin:0;text-transform:none;letter-spacing:normal;font-weight:400;color:var(--ink);">Ook bewaren bij "Snel toevoegen" voor volgende keer</label>
       </div>
-      <button class="btn-primary" id="saveMeal" style="background:#8D85FF;color:#FFFFFF;">Opslaan</button>
+      <button class="btn-primary" id="saveMeal" style="background:#96007A;color:#FFFFFF;">Opslaan</button>
       <div class="status-msg" id="saveStatus"></div>
     </div>
   </section>
@@ -758,7 +798,7 @@
       </div>
       <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
         <input type="text" id="teamNameInput" placeholder="Voornaam" style="max-width:220px;padding:10px 12px;border:1px solid var(--line);border-radius:8px;">
-        <button class="btn-primary" id="teamNameSaveBtn" style="background:#8D85FF;color:#FFFFFF;">Opslaan</button>
+        <button class="btn-primary" id="teamNameSaveBtn" style="background:#96007A;color:#FFFFFF;">Opslaan</button>
         <div class="status-msg" id="teamNameStatus"></div>
       </div>
       <div id="profileOnboarding" style="display:none;margin-top:14px;padding-top:14px;border-top:1px solid var(--line);">
@@ -2861,7 +2901,8 @@ async function loadCustomQuickAdds(){
       protein: item.protein,
       carbs: item.carbs,
       fat: item.fat,
-      baseGrams: item.base_grams
+      baseGrams: item.base_grams,
+      baseMl: item.base_ml
     }));
   }catch(e){ console.error('Laden snel-toevoegen-lijst', e); return []; }
 }
@@ -2873,6 +2914,8 @@ async function addCustomQuickAdd(meal){
     // onthoud die als basis zodat het aantal gram later aanpasbaar is bij Snel toevoegen.
     const gramsMatch = (meal.desc||'').match(/^(\d+)\s*g\b/i);
     const baseGrams = gramsMatch ? Number(gramsMatch[1]) : null;
+    const mlMatch = (meal.desc||'').match(/(\d+)\s*ml\b/i);
+    const baseMl = mlMatch ? Number(mlMatch[1]) : null;
     // Zelfde omschrijving? Dan de bestaande vervangen i.p.v. dupliceren.
     await supabaseClient.from('quick_adds').delete().eq('owner', owner).ilike('description', meal.desc);
     await supabaseClient.from('quick_adds').insert([{
@@ -2883,7 +2926,8 @@ async function addCustomQuickAdd(meal){
       protein: meal.protein,
       carbs: meal.carbs,
       fat: meal.fat,
-      base_grams: baseGrams
+      base_grams: baseGrams,
+      base_ml: baseMl
     }]);
   }catch(e){ console.error('Opslaan snel-toevoegen-item', e); }
   await renderCustomQuickAdds();
@@ -2974,20 +3018,25 @@ async function renderCustomQuickAdds(){
       if(m.fat) metaParts.push(`${m.fat}g vet`);
       const isLast = i===items.length-1;
       const gramInputId = `customGrams-${group}-${m.origIdx}`;
+      const mlInputId = `customMl-${group}-${m.origIdx}`;
       // Herkende gram-hoeveelheid (bijv. "700g krieltjes") wordt aanpasbaar
       // i.p.v. altijd dezelfde vaste macro's toe te voegen.
       const gramInput = m.baseGrams
         ? `<input type="number" id="${gramInputId}" value="${m.baseGrams}" min="1" style="width:52px;padding:6px 4px;flex-shrink:0;"><span style="font-size:11px;color:var(--ink-soft);flex-shrink:0;">g</span>`
         : '';
+      const mlInput = m.baseMl
+        ? `<input type="number" id="${mlInputId}" value="${m.baseMl}" min="1" style="width:52px;padding:6px 4px;flex-shrink:0;"><span style="font-size:11px;color:var(--ink-soft);flex-shrink:0;">ml</span>`
+        : '';
       return `
         <div class="stat-row" style="border-bottom:${isLast?'none':'1px solid var(--line)'};">
           <div>
             <div class="meal-desc">${getFoodEmoji(m.desc)} ${escapeHtml(m.desc)}</div>
-            <div class="meal-meta">${escapeHtml(metaParts.join(' &middot; '))}${m.baseGrams ? ' (bij '+m.baseGrams+'g)' : ''}</div>
+            <div class="meal-meta">${escapeHtml(metaParts.join(' &middot; '))}${m.baseGrams ? ' (bij '+m.baseGrams+'g)' : ''}${m.baseMl ? ' (bij '+m.baseMl+'ml)' : ''}</div>
           </div>
           <div style="display:flex;align-items:center;gap:6px;flex-wrap:nowrap;">
             ${gramInput}
-            <button class="btn-secondary customQuickAddBtn" data-idx="${m.origIdx}" data-gram-input="${gramInputId}" style="flex-shrink:0;">+ Toevoegen</button>
+            ${mlInput}
+            <button class="btn-secondary customQuickAddBtn" data-idx="${m.origIdx}" data-gram-input="${gramInputId}" data-ml-input="${mlInputId}" style="flex-shrink:0;">+ Toevoegen</button>
             <button class="btn-secondary customQuickAddRemove" data-desc="${escapeHtml(m.desc)}" title="Verwijderen uit Snel toevoegen" style="padding:6px 10px;flex-shrink:0;">&times;</button>
           </div>
         </div>`;
@@ -2997,12 +3046,26 @@ async function renderCustomQuickAdds(){
         const meal = list[Number(e.target.dataset.idx)];
         const gramInputId = e.target.dataset.gramInput;
         const gramInputEl = gramInputId ? document.getElementById(gramInputId) : null;
+        const mlInputId = e.target.dataset.mlInput;
+        const mlInputEl = mlInputId ? document.getElementById(mlInputId) : null;
         if(meal.baseGrams && gramInputEl){
           const enteredGrams = Math.max(1, Number(gramInputEl.value)||meal.baseGrams);
           const scale = enteredGrams / meal.baseGrams;
           const scaledMeal = {
             ...meal,
             desc: meal.desc.replace(/^\d+\s*g\b/i, enteredGrams+'g'),
+            kcal: Math.round(meal.kcal*scale),
+            protein: Math.round(meal.protein*scale*10)/10,
+            carbs: Math.round(meal.carbs*scale*10)/10,
+            fat: Math.round(meal.fat*scale*10)/10
+          };
+          quickAdd(scaledMeal, document.getElementById('quickAddStatus'), e.target);
+        } else if(meal.baseMl && mlInputEl){
+          const enteredMl = Math.max(1, Number(mlInputEl.value)||meal.baseMl);
+          const scale = enteredMl / meal.baseMl;
+          const scaledMeal = {
+            ...meal,
+            desc: meal.desc.replace(/\d+\s*ml\b/i, enteredMl+'ml'),
             kcal: Math.round(meal.kcal*scale),
             protein: Math.round(meal.protein*scale*10)/10,
             carbs: Math.round(meal.carbs*scale*10)/10,
@@ -3022,6 +3085,15 @@ async function renderCustomQuickAdds(){
   });
 }
 renderCustomQuickAdds();
+
+// Vul het laatst gebruikte aantal gram kip weer in bij het laden van de pagina.
+(function(){
+  try{
+    const saved = localStorage.getItem('infood-macaroni-kip-grams');
+    const inputEl = document.getElementById('macaroniKipGrams');
+    if(saved!=null && inputEl) inputEl.value = saved;
+  }catch(e){}
+})();
 
 // ---- Snel toevoegen: standaardopties verbergen ----
 // De 6 vaste items (havermout, eieren, broodje, banaan, shake, Leffe) staan
@@ -3165,9 +3237,15 @@ document.getElementById('quickAddShake').addEventListener('click', (e)=>{
 });
 
 document.getElementById('quickAddLeffe').addEventListener('click', (e)=>{
+  const ml = Math.max(1, Number(document.getElementById('leffeMl').value)||330);
   quickAdd({
-    desc: 'Leffe Blond 0.0 (blikje, 330ml)',
-    mealType: 'Snack', kcal: 86, protein: 0.7, carbs: 17, fat: 0, time: ''
+    desc: ml + 'ml Leffe Blond 0.0',
+    mealType: 'Drinken',
+    kcal: Math.round(ml*(86/330)),
+    protein: Math.round(ml*(0.7/330)*10)/10,
+    carbs: Math.round(ml*(17/330)*10)/10,
+    fat: 0,
+    time: ''
   }, document.getElementById('quickAddStatus'), e.target);
 });
 
@@ -3203,6 +3281,38 @@ document.getElementById('quickAddCombo2').addEventListener('click', (e)=>{
     protein: oatProtein + bananas*1,
     carbs: oatCarbs + bananas*27,
     fat: oatFat,
+    time: ''
+  }, document.getElementById('quickAddStatus'), e.target);
+});
+
+document.getElementById('quickAddMacaroni').addEventListener('click', (e)=>{
+  const grams = Math.max(0, Number(document.getElementById('macaroniKipGrams').value)||0);
+  // Onthoud het laatst ingevoerde aantal gram kip, want dat verschilt elke
+  // keer per batch — de saus/pasta/groenten blijven altijd hetzelfde.
+  try{ localStorage.setItem('infood-macaroni-kip-grams', String(grams)); }catch(err){}
+  const kipKcal = Math.round(grams*1.2);
+  const kipProtein = Math.round(grams*0.225*10)/10;
+  const kipFat = Math.round(grams*0.026*10)/10;
+  quickAdd({
+    desc: 'Macaroni met kipfilet en groenten (' + grams + 'g kipfilet)',
+    mealType: 'Diner',
+    kcal: 752 + kipKcal,
+    protein: Math.round((33.3 + kipProtein)*10)/10,
+    carbs: 143,
+    fat: Math.round((4 + kipFat)*10)/10,
+    time: ''
+  }, document.getElementById('quickAddStatus'), e.target);
+});
+
+document.getElementById('quickAddKipfilet').addEventListener('click', (e)=>{
+  const grams = Math.max(1, Number(document.getElementById('kipfiletGrams').value)||225);
+  quickAdd({
+    desc: grams + 'g kipfilet (gebakken)',
+    mealType: 'Diner',
+    kcal: Math.round(grams*1.65),
+    protein: Math.round(grams*0.31*10)/10,
+    carbs: 0,
+    fat: Math.round(grams*0.036*10)/10,
     time: ''
   }, document.getElementById('quickAddStatus'), e.target);
 });
