@@ -438,7 +438,7 @@ Deno.serve(async (req) => {
     for (const dateStr of allSyncDates) {
       const activities = activitiesByDate[dateStr] || [];
       const kmByType = { hardlopen: 0, fietsen: 0, zwemmen: 0 } as Record<string, number>;
-      const minByType = { hardlopen: 0, zwemmen: 0, sportschool: 0 } as Record<string, number>;
+      const minByType = { hardlopen: 0, fietsen: 0, zwemmen: 0, sportschool: 0 } as Record<string, number>;
       let activityKcalSum = 0;
       for (const a of activities as any[]) {
         activityKcalSum += a.kcal || 0;
@@ -467,6 +467,7 @@ Deno.serve(async (req) => {
         km_fietsen: kmByType.fietsen,
         km_zwemmen: kmByType.zwemmen,
         min_hardlopen: minByType.hardlopen,
+        min_fietsen: minByType.fietsen,
         min_zwemmen: minByType.zwemmen,
         min_sportschool: minByType.sportschool,
         hrv: dayVitals?.hrv ?? null,
