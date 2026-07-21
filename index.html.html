@@ -911,85 +911,32 @@
 
   <!-- PRESTATIES -->
   <section id="tab-prestaties" style="display:none;">
-    <div class="grid-3">
-      <div class="card">
-        <h3>🏆 Prestaties &mdash; vandaag</h3>
-        <div id="achievementsToday"><div class="empty">Nog geen teamdata voor vandaag.</div></div>
-      </div>
-      <div class="card">
-        <h3>🏅 Records &mdash; beste dag ooit</h3>
-        <div id="recordsDay"><div class="empty">Nog geen teamdata.</div></div>
-      </div>
-      <div class="card">
-        <h3>👥 Teamscore &mdash; vandaag</h3>
-        <div id="teamTotalToday"><div class="empty">Nog geen teamdata voor vandaag.</div></div>
-      </div>
-    </div>
-
-    <div class="grid-3" style="margin-top:16px;">
-      <div class="card">
-        <h3>🏆 Prestaties &mdash; deze week</h3>
-        <div id="achievementsWeek"><div class="empty">Nog geen teamdata deze week.</div></div>
-      </div>
-      <div class="card">
-        <h3>🏅 Records &mdash; beste week ooit</h3>
-        <div id="recordsWeek"><div class="empty">Nog geen teamdata.</div></div>
-      </div>
-      <div class="card">
-        <h3>👥 Teamscore &mdash; deze week</h3>
-        <div id="teamTotalWeek"><div class="empty">Nog geen teamdata deze week.</div></div>
+    <div class="card" style="margin-bottom:16px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
+        <h3 style="margin:0;">Periode</h3>
+        <select id="prestatiesPeriodSelect" style="padding:8px 10px;border:1px solid var(--line);border-radius:8px;font-family:'Archivo',sans-serif;font-size:13px;background:var(--card);color:var(--ink);">
+          <option value="today">Vandaag</option>
+          <option value="week" selected>Deze week</option>
+          <option value="lastWeek">Vorige week</option>
+          <option value="month">Deze maand</option>
+          <option value="lastMonth">Vorige maand</option>
+          <option value="quarter">Dit kwartaal</option>
+        </select>
       </div>
     </div>
 
-    <div class="grid" style="margin-top:16px;">
+    <div class="grid-3" id="prestatiesGrid">
       <div class="card">
-        <h3>🏆 Prestaties &mdash; vorige week</h3>
-        <div id="achievementsLastWeek"><div class="empty">Nog geen teamdata voor vorige week.</div></div>
+        <h3>🏆 Prestaties</h3>
+        <div id="achievementsCurrent"><div class="empty">Nog geen teamdata.</div></div>
+      </div>
+      <div class="card" id="recordsCardWrap">
+        <h3 id="recordsCardTitle">🏅 Records &mdash; aller tijden</h3>
+        <div id="recordsCurrent"><div class="empty">Nog geen teamdata.</div></div>
       </div>
       <div class="card">
-        <h3>👥 Teamscore &mdash; vorige week</h3>
-        <div id="teamTotalLastWeek"><div class="empty">Nog geen teamdata voor vorige week.</div></div>
-      </div>
-    </div>
-
-    <div class="grid-3" style="margin-top:16px;">
-      <div class="card">
-        <h3>🏆 Prestaties &mdash; deze maand</h3>
-        <div id="achievementsMonth"><div class="empty">Nog geen teamdata deze maand.</div></div>
-      </div>
-      <div class="card">
-        <h3>🏅 Records &mdash; beste maand ooit</h3>
-        <div id="recordsMonth"><div class="empty">Nog geen teamdata.</div></div>
-      </div>
-      <div class="card">
-        <h3>👥 Teamscore &mdash; deze maand</h3>
-        <div id="teamTotalMonth"><div class="empty">Nog geen teamdata deze maand.</div></div>
-      </div>
-    </div>
-
-    <div class="grid" style="margin-top:16px;">
-      <div class="card">
-        <h3>🏆 Prestaties &mdash; vorige maand</h3>
-        <div id="achievementsLastMonth"><div class="empty">Nog geen teamdata voor vorige maand.</div></div>
-      </div>
-      <div class="card">
-        <h3>👥 Teamscore &mdash; vorige maand</h3>
-        <div id="teamTotalLastMonth"><div class="empty">Nog geen teamdata voor vorige maand.</div></div>
-      </div>
-    </div>
-
-    <div class="grid-3" style="margin-top:16px;">
-      <div class="card">
-        <h3>🏆 Prestaties &mdash; dit kwartaal</h3>
-        <div id="achievementsQuarter"><div class="empty">Nog geen teamdata dit kwartaal.</div></div>
-      </div>
-      <div class="card">
-        <h3>🏅 Records &mdash; beste kwartaal ooit</h3>
-        <div id="recordsQuarter"><div class="empty">Nog geen teamdata.</div></div>
-      </div>
-      <div class="card">
-        <h3>👥 Teamscore &mdash; dit kwartaal</h3>
-        <div id="teamTotalQuarter"><div class="empty">Nog geen teamdata dit kwartaal.</div></div>
+        <h3>👥 Teamscore</h3>
+        <div id="teamTotalCurrent"><div class="empty">Nog geen teamdata.</div></div>
       </div>
     </div>
   </section>
@@ -2160,17 +2107,8 @@ async function renderTeam(allEntries){
     const rows = entries.filter(e=>e.date===todayStr);
     if(rows.length===0){
       bodyEl.innerHTML = '<tr><td colspan="8" class="empty">Nog geen teamdata voor vandaag.</td></tr>';
-      renderAchievements('achievementsToday', [], 'Nog geen teamdata voor vandaag.');
-      renderTeamTotals('teamTotalToday', [], 'Nog geen teamdata voor vandaag.');
       return;
     }
-    const todayNormRows = rows.map(r=>({
-      name: r.name, dagscore: r.dagscore, hrv: r.hrv, hrRest: r.hrRest, sleepMinutes: r.sleepMinutes,
-      kmHardlopen: r.kmHardlopen, kmFietsen: r.kmFietsen, kmZwemmen: r.kmZwemmen,
-      minHardlopen: r.minHardlopen, minFietsen: r.minFietsen, minZwemmen: r.minZwemmen, minSportschool: r.minSportschool
-    }));
-    renderAchievements('achievementsToday', todayNormRows, 'Nog geen teamdata voor vandaag.');
-    renderTeamTotals('teamTotalToday', todayNormRows, 'Nog geen teamdata voor vandaag.', false);
     rows.sort((a,b)=>(b.dagscore||0)-(a.dagscore||0));
     const n = rows.length;
     const sum = f => rows.reduce((a,r)=>a+(Number(f(r))||0),0);
@@ -2479,12 +2417,10 @@ function renderRecordsBlock(elId, rows){
   }).join('');
   container.innerHTML = `<div class="vitals-grid" style="grid-template-columns:repeat(3,1fr);">${cells}</div>`;
 }
-function renderAllTimeRecords(allEntries){
+let _prestatiesRecordsCache = null;
+function computeAllTimeRecordsCache(allEntries){
   if(!allEntries || allEntries.length===0){
-    renderRecordsBlock('recordsDay', []);
-    renderRecordsBlock('recordsWeek', []);
-    renderRecordsBlock('recordsMonth', []);
-    renderRecordsBlock('recordsQuarter', []);
+    _prestatiesRecordsCache = { today: [], week: [], month: [], quarter: [] };
     return;
   }
   const monthLabel = key => { const [y,m] = key.split('-'); return new Date(Number(y),Number(m)-1,1).toLocaleDateString('nl-NL',{month:'long',year:'numeric'}); };
@@ -2496,10 +2432,63 @@ function renderAllTimeRecords(allEntries){
   const monthRows = groupEntriesByPeriod(allEntries, e=>e.slice(0,7), monthLabel);
   const quarterRows = groupEntriesByPeriod(allEntries, e=>quarterKeyOf(e), key=>key);
 
-  renderRecordsBlock('recordsDay', dayRows);
-  renderRecordsBlock('recordsWeek', weekRows);
-  renderRecordsBlock('recordsMonth', monthRows);
-  renderRecordsBlock('recordsQuarter', quarterRows);
+  _prestatiesRecordsCache = { today: dayRows, week: weekRows, month: monthRows, quarter: quarterRows };
+}
+
+// ---- Prestaties-tabblad: één set kaarten die wisselt met de gekozen periode ----
+// i.p.v. alle 6 periodes tegelijk onder elkaar (was onoverzichtelijk/lang).
+let _prestatiesAllEntries = [];
+function renderPrestatiesForPeriod(period){
+  const allEntries = _prestatiesAllEntries;
+  const todayStr = fmtDate(new Date());
+
+  const periodConfig = {
+    today: { days: null, label: 'Nog geen teamdata voor vandaag.' },
+    week: { days: weekDates(new Date()), label: 'Nog geen teamdata deze week.' },
+    lastWeek: { days: lastWeekDates(new Date()), label: 'Nog geen teamdata voor vorige week.' },
+    month: { days: monthDates(new Date()), label: 'Nog geen teamdata deze maand.' },
+    lastMonth: { days: lastMonthDates(new Date()), label: 'Nog geen teamdata voor vorige maand.' },
+    quarter: { days: quarterDates(new Date()), label: 'Nog geen teamdata dit kwartaal.' },
+  };
+  const cfg = periodConfig[period] || periodConfig.week;
+
+  let normRows, isAverage;
+  if(period==='today'){
+    const rows = allEntries.filter(e=>e.date===todayStr);
+    normRows = rows.map(r=>({
+      name: r.name, dagscore: r.dagscore, hrv: r.hrv, hrRest: r.hrRest, sleepMinutes: r.sleepMinutes,
+      kmHardlopen: r.kmHardlopen, kmFietsen: r.kmFietsen, kmZwemmen: r.kmZwemmen,
+      minHardlopen: r.minHardlopen, minFietsen: r.minFietsen, minZwemmen: r.minZwemmen, minSportschool: r.minSportschool
+    }));
+    isAverage = false;
+  } else {
+    const byNameRows = computePeriodRows(cfg.days, allEntries);
+    const rows = Object.values(byNameRows);
+    normRows = rows.map(r=>({
+      name: r.name, dagscore: r.dagscoreAvg, hrv: r.hrvAvg, hrRest: r.hrRestAvg, sleepMinutes: r.sleepAvg,
+      kmHardlopen: r.kmHardlopenTotal, kmFietsen: r.kmFietsenTotal, kmZwemmen: r.kmZwemmenTotal,
+      minHardlopen: r.minHardlopenTotal, minFietsen: r.minFietsenTotal, minZwemmen: r.minZwemmenTotal, minSportschool: r.minSportschoolTotal
+    }));
+    isAverage = true;
+  }
+
+  renderAchievements('achievementsCurrent', normRows, cfg.label, isAverage);
+  renderTeamTotals('teamTotalCurrent', normRows, cfg.label, isAverage);
+
+  // Records (aller tijden) bestaat alleen op dag/week/maand/kwartaal-niveau,
+  // niet apart voor "vorige week/maand" — dan verbergen we die kaart.
+  const recordsCardWrap = document.getElementById('recordsCardWrap');
+  const recordsTitle = document.getElementById('recordsCardTitle');
+  const recordsLevelMap = { today: ['today','beste dag ooit'], week: ['week','beste week ooit'], month: ['month','beste maand ooit'], quarter: ['quarter','beste kwartaal ooit'] };
+  if(recordsLevelMap[period]){
+    const [cacheKey, titleSuffix] = recordsLevelMap[period];
+    if(recordsCardWrap) recordsCardWrap.style.display = '';
+    if(recordsTitle) recordsTitle.textContent = '🏅 Records \u2014 ' + titleSuffix;
+    const rowsForRecords = _prestatiesRecordsCache ? _prestatiesRecordsCache[cacheKey] : [];
+    renderRecordsBlock('recordsCurrent', rowsForRecords);
+  } else {
+    if(recordsCardWrap) recordsCardWrap.style.display = 'none';
+  }
 }
 
 async function renderAllTeamViews(){
@@ -2509,13 +2498,16 @@ async function renderAllTeamViews(){
   }catch(e){
     console.error('Ophalen teamdata', e);
   }
-  renderAllTimeRecords(allEntries);
+  _prestatiesAllEntries = allEntries;
+  computeAllTimeRecordsCache(allEntries);
+  const periodSel = document.getElementById('prestatiesPeriodSelect');
+  renderPrestatiesForPeriod(periodSel ? periodSel.value : 'week');
   await renderTeam(allEntries);
-  renderTeamPeriod(weekDates(new Date()), 'teamWeekBody', 'Nog geen teamdata deze week.', 'Teamweekoverzicht kon niet geladen worden.', lastWeekDates(new Date()), allEntries, 'achievementsWeek', 'teamTotalWeek');
-  renderTeamPeriod(lastWeekDates(new Date()), 'teamLastWeekBody', 'Nog geen teamdata voor vorige week.', 'Teamoverzicht vorige week kon niet geladen worden.', undefined, allEntries, 'achievementsLastWeek', 'teamTotalLastWeek');
-  renderTeamPeriod(monthDates(new Date()), 'teamMonthBody', 'Nog geen teamdata deze maand.', 'Teammaandoverzicht kon niet geladen worden.', lastMonthDates(new Date()), allEntries, 'achievementsMonth', 'teamTotalMonth');
-  renderTeamPeriod(lastMonthDates(new Date()), 'teamLastMonthBody', 'Nog geen teamdata voor vorige maand.', 'Teamoverzicht vorige maand kon niet geladen worden.', undefined, allEntries, 'achievementsLastMonth', 'teamTotalLastMonth');
-  renderTeamPeriod(quarterDates(new Date()), 'teamQuarterBody', 'Nog geen teamdata dit kwartaal.', 'Teamkwartaaloverzicht kon niet geladen worden.', undefined, allEntries, 'achievementsQuarter', 'teamTotalQuarter');
+  renderTeamPeriod(weekDates(new Date()), 'teamWeekBody', 'Nog geen teamdata deze week.', 'Teamweekoverzicht kon niet geladen worden.', lastWeekDates(new Date()), allEntries);
+  renderTeamPeriod(lastWeekDates(new Date()), 'teamLastWeekBody', 'Nog geen teamdata voor vorige week.', 'Teamoverzicht vorige week kon niet geladen worden.', undefined, allEntries);
+  renderTeamPeriod(monthDates(new Date()), 'teamMonthBody', 'Nog geen teamdata deze maand.', 'Teammaandoverzicht kon niet geladen worden.', lastMonthDates(new Date()), allEntries);
+  renderTeamPeriod(lastMonthDates(new Date()), 'teamLastMonthBody', 'Nog geen teamdata voor vorige maand.', 'Teamoverzicht vorige maand kon niet geladen worden.', undefined, allEntries);
+  renderTeamPeriod(quarterDates(new Date()), 'teamQuarterBody', 'Nog geen teamdata dit kwartaal.', 'Teamkwartaaloverzicht kon niet geladen worden.', undefined, allEntries);
 }
 
 // ---- Profiel (eenmalig: geboortedatum + lengte, nodig voor kcal-berekening) ----
@@ -3522,6 +3514,7 @@ if(!currentOwner()){
 }
 document.getElementById('trendMetricSelect').addEventListener('change', ()=>renderTrendChart());
 document.getElementById('trendPeriodSelect').addEventListener('change', ()=>renderTrendChart());
+document.getElementById('prestatiesPeriodSelect')?.addEventListener('change', (e)=>renderPrestatiesForPeriod(e.target.value));
 document.getElementById('trendRefreshBtn').addEventListener('click', ()=>renderTrendChart(true));
 
 // ---- Tredict-koppelingsstatus tonen ----
