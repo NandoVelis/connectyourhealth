@@ -6,6 +6,9 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
 <title>InFood = Output Dashboard</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='50' fill='%2396007A'/%3E%3Ctext x='30' y='62' font-size='42' text-anchor='middle'%3E%F0%9F%8D%8C%3C/text%3E%3Ctext x='68' y='68' font-size='42' text-anchor='middle'%3E%F0%9F%8F%83%3C/text%3E%3C/svg%3E">
+<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='50' fill='%2396007A'/%3E%3Ctext x='30' y='62' font-size='42' text-anchor='middle'%3E%F0%9F%8D%8C%3C/text%3E%3Ctext x='68' y='68' font-size='42' text-anchor='middle'%3E%F0%9F%8F%83%3C/text%3E%3C/svg%3E">
+<meta name="theme-color" content="#96007A">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&family=Martian+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
@@ -367,15 +370,9 @@
       <div id="motivationQuote" style="font-family:'Archivo',sans-serif;font-size:16px;font-weight:600;color:#F5F1E8;text-align:center;line-height:1.5;"></div>
     </div>
 
-    <div class="grid">
-      <div class="card">
-        <h3>Maaltijden</h3>
-        <div id="mealList"><div class="empty">Nog geen maaltijden ingevoerd voor deze dag.</div></div>
-      </div>
-      <div class="card">
-        <h3>Subtotalen per onderdeel</h3>
-        <div id="subtotalsList"></div>
-      </div>
+    <div class="card" style="margin-bottom:16px;">
+      <h3>Maaltijden</h3>
+      <div id="mealList"><div class="empty">Nog geen maaltijden ingevoerd voor deze dag.</div></div>
     </div>
 
     <div class="card" style="margin-bottom:16px;">
@@ -1515,6 +1512,22 @@ function macroKcal(meals){
   };
 }
 
+// Schat het dagelijkse rustverbruik (Mifflin-St Jeor x 1.31 zoals de
+// Tredict-sync serverside doet) zodat er ook zonder sync al een grove
+// dagelijkse kcal-behoefte is -- iedereen verbrandt immers kcal in rust,
+// ook zonder te sporten. Wordt alleen gebruikt als er nog geen echte
+// Tredict-data voor die dag is.
+function estimateRestKcalFromProfile(weightKg, birthdateStr, heightCm){
+  if(!weightKg || !birthdateStr || !heightCm) return null;
+  const birth = new Date(birthdateStr);
+  const now = new Date();
+  let age = now.getFullYear() - birth.getFullYear();
+  const m = now.getMonth() - birth.getMonth();
+  if(m<0 || (m===0 && now.getDate()<birth.getDate())) age--;
+  const bmr = 10*weightKg + 6.25*heightCm - 5*age + 5;
+  return Math.round(bmr*1.31);
+}
+
 async function renderDashboard(){
 
   const dateStr = fmtDate(state.currentDate);
@@ -1524,7 +1537,6 @@ async function renderDashboard(){
   if(!owner){
     document.getElementById('trainingDetail').innerHTML = '<div class="empty">Vul eerst je naam in bij het tabblad Team om je persoonlijke dashboard te gebruiken.</div>';
     document.getElementById('mealList').innerHTML = '<div class="empty">Vul eerst je naam in bij het tabblad Team.</div>';
-    document.getElementById('subtotalsList').innerHTML = '';
     document.getElementById('macroBars').innerHTML = '';
     document.getElementById('dagscoreBreakdown').innerHTML = '';
     const tipElEarly = document.getElementById('nutritionTip');
@@ -1535,7 +1547,23 @@ async function renderDashboard(){
   const meals = await loadMeals(dateStr);
   const totals = macroKcal(meals);
   const training = await loadTraining(dateStr);
-  const burned = training ? training.totalKcal : null;
+  const weightEntry = await loadWeight(dateStr);
+  let burned = training ? training.totalKcal : null;
+  let burnedIsEstimate = false;
+  let estimatedRestKcal = null;
+  if(burned==null){
+    const fallbackWeight = (weightEntry && weightEntry.kg) ? weightEntry : await loadMostRecentWeight(dateStr);
+    if(fallbackWeight && fallbackWeight.kg){
+      const profile = await loadProfile(owner);
+      if(profile && profile.birthdate && profile.heightCm){
+        estimatedRestKcal = estimateRestKcalFromProfile(fallbackWeight.kg, profile.birthdate, profile.heightCm);
+        if(estimatedRestKcal){
+          burned = estimatedRestKcal;
+          burnedIsEstimate = true;
+        }
+      }
+    }
+  }
 
   document.getElementById('consumedVal').textContent = totals.kcal + ' kcal';
 
@@ -1544,7 +1572,15 @@ async function renderDashboard(){
   const sportKm = trainingDistanceByType(training);
   const sportMin = trainingDurationByType(training);
   const sportIcon = {hardlopen:'\u{1F3C3}', fietsen:'\u{1F6B4}', zwemmen:'\u{1F3CA}', sportschool:'\u{1F3CB}\u{FE0F}'};
-  if(!training){
+  if(!training && burnedIsEstimate){
+    detailEl.innerHTML = `
+      <div class="stat-row"><span class="stat-label">Geen training gesynchroniseerd</span><span class="stat-val">0 kcal</span></div>
+      <div class="stat-row" style="border-bottom:none;">
+        <span class="stat-label" style="font-weight:700;">Geschat rustverbruik</span>
+        <span class="stat-val">~${estimatedRestKcal} kcal</span>
+      </div>
+      <div class="meal-meta" style="margin-top:4px;">Nog niet gesynchroniseerd met Tredict &mdash; dit is een schatting op basis van je profiel, geen trainingen meegeteld.</div>`;
+  } else if(!training){
     detailEl.innerHTML = '<div class="empty">Nog niet opgehaald voor deze dag.</div>';
   } else {
     const actRows = (training.activities && training.activities.length>0)
@@ -1585,9 +1621,11 @@ async function renderDashboard(){
   const balansEl = document.getElementById('balansNum');
   balansEl.textContent = (balans>=0?'+':'') + balans;
   balansEl.className = 'balans-number ' + (balans>0 ? 'balans-neg' : 'balans-pos');
-  document.getElementById('balansSub').textContent = burned!==null
-    ? 'kcal ingenomen \u2212 verbrand (training)'
-    : 'kcal ingenomen (training nog niet opgehaald)';
+  document.getElementById('balansSub').textContent = burnedIsEstimate
+    ? 'kcal ingenomen \u2212 geschat rustverbruik (nog niet gesynchroniseerd)'
+    : burned!==null
+      ? 'kcal ingenomen \u2212 verbrand (training)'
+      : 'kcal ingenomen (training nog niet opgehaald)';
 
   const vitals = await loadVitals(dateStr);
   document.getElementById('vitalHrRest').textContent = (vitals && vitals.hrRest!=null) ? vitals.hrRest+' bpm' : '\u2014';
@@ -1639,7 +1677,6 @@ async function renderDashboard(){
         <span class="stat-val">${p.score.toFixed(1)}</span>
       </div>`).join('') : '<div class="empty">Nog onvoldoende data voor deze dag.</div>';
 
-  const weightEntry = await loadWeight(dateStr);
   let targetProtein = null, targetFat = null, targetCarbs = null;
   if(weightEntry && weightEntry.kg){
     let proteinFactor = 1.8;
@@ -1698,22 +1735,46 @@ async function renderDashboard(){
   if(meals.length===0){
     listEl.innerHTML = '<div class="empty">Nog geen maaltijden ingevoerd voor deze dag.</div>';
   } else {
-    listEl.innerHTML = meals.map((m,i)=>`
-      <div class="meal-item">
-        <div>
-          <div class="meal-desc">${escapeHtml(m.desc)}</div>
-          <div class="meal-meta">
-            <select class="mealTypeSelect" data-idx="${i}" style="font-size:12px;padding:3px 6px;border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--ink-soft);font-family:'Archivo',sans-serif;">
-              ${['Ontbijt','Lunch','Diner','Snack','Drinken','Sportvoeding'].map(opt=>`<option value="${opt}" ${m.mealType===opt?'selected':''}>${opt}</option>`).join('')}
-            </select>
-            ${m.time?(' &middot; '+escapeHtml(m.time)):''}
+    const mealOrder = ['Ontbijt','Lunch','Diner','Snack','Drinken','Sportvoeding'];
+    const byGroup = {};
+    meals.forEach((m,i)=>{
+      const group = mealOrder.includes(m.mealType) ? m.mealType : 'Snack';
+      if(!byGroup[group]) byGroup[group] = { items: [], kcal:0, protein:0, carbs:0, fat:0 };
+      byGroup[group].items.push({...m, origIdx:i});
+      byGroup[group].kcal += Number(m.kcal)||0;
+      byGroup[group].protein += Number(m.protein)||0;
+      byGroup[group].carbs += Number(m.carbs)||0;
+      byGroup[group].fat += Number(m.fat)||0;
+    });
+    const groupMacroLabel = (g) => {
+      const parts = [`${Math.round(g.kcal)} kcal`];
+      if(g.protein) parts.push(`${Math.round(g.protein)}g eiwit${pctLabel(g.protein, targetProtein)}`);
+      if(g.carbs) parts.push(`${Math.round(g.carbs)}g koolh.${pctLabel(g.carbs, targetCarbs)}`);
+      if(g.fat) parts.push(`${Math.round(g.fat)}g vet${pctLabel(g.fat, targetFat)}`);
+      return parts.join(' &middot; ');
+    };
+    listEl.innerHTML = mealOrder.filter(g=>byGroup[g]).map(group=>`
+      <div class="qa-group-heading" style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:4px 10px;">
+        <span>${group}</span>
+        <span style="font-weight:400;text-transform:none;letter-spacing:normal;color:var(--ink-soft);font-size:11px;">${groupMacroLabel(byGroup[group])}</span>
+      </div>
+      ${byGroup[group].items.map(m=>`
+        <div class="meal-item">
+          <div>
+            <div class="meal-desc">${getFoodEmoji(m.desc)} ${escapeHtml(m.desc)}</div>
+            <div class="meal-meta">
+              <select class="mealTypeSelect" data-idx="${m.origIdx}" style="font-size:12px;padding:3px 6px;border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--ink-soft);font-family:'Archivo',sans-serif;">
+                ${mealOrder.map(opt=>`<option value="${opt}" ${m.mealType===opt?'selected':''}>${opt}</option>`).join('')}
+              </select>
+              ${m.time?(' &middot; '+escapeHtml(m.time)):''}
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;">
+            <span class="meal-kcal">${m.kcal} kcal</span>
+            <button class="meal-del" data-idx="${m.origIdx}">verwijder</button>
           </div>
         </div>
-        <div style="display:flex;align-items:center;">
-          <span class="meal-kcal">${m.kcal} kcal</span>
-          <button class="meal-del" data-idx="${i}">verwijder</button>
-        </div>
-      </div>
+      `).join('')}
     `).join('');
     listEl.querySelectorAll('.mealTypeSelect').forEach(sel=>{
       sel.addEventListener('change', async (e)=>{
@@ -1721,6 +1782,7 @@ async function renderDashboard(){
         const current = await loadMeals(dateStr);
         current[idx].mealType = e.target.value;
         await saveMeals(dateStr, current);
+        renderDashboard();
       });
     });
     listEl.querySelectorAll('.meal-del').forEach(btn=>{
@@ -1732,27 +1794,6 @@ async function renderDashboard(){
         renderDashboard();
       });
     });
-  }
-
-  const subtotalEl = document.getElementById('subtotalsList');
-  const order = ['Ontbijt','Lunch','Diner','Snack','Drinken','Sportvoeding'];
-  const byType = {};
-  order.forEach(t=>byType[t]={kcal:0,count:0});
-  meals.forEach(m=>{
-    const t = order.includes(m.mealType) ? m.mealType : 'Snack';
-    byType[t].kcal += Number(m.kcal)||0;
-    byType[t].count += 1;
-  });
-  const rowsWithData = order.filter(t=>byType[t].count>0);
-  if(rowsWithData.length===0){
-    subtotalEl.innerHTML = '<div class="empty">Nog geen maaltijden ingevoerd voor deze dag.</div>';
-  } else {
-    subtotalEl.innerHTML = order.map(t=>`
-      <div class="stat-row">
-        <span class="stat-label">${t}${byType[t].count>0 ? ' ('+byType[t].count+'x)' : ''}</span>
-        <span class="stat-val">${byType[t].kcal} kcal</span>
-      </div>
-    `).join('');
   }
 
   const maxMacro = Math.max(totals.protein, totals.carbs, totals.fat, 1);
@@ -1879,6 +1920,23 @@ return null;
 return {
 kg: data.kg
 };
+}
+// Valt terug op het meest recente bekende gewicht op of v\u00f3\u00f3r deze datum
+// (zelfde aanpak als de Tredict-sync server-side) -- zodat een schatting
+// niet meteen wegvalt op een dag dat je toevallig niet exact gewogen hebt.
+async function loadMostRecentWeight(dateStr){
+  const owner = currentOwner();
+  if(!owner) return null;
+  const { data, error } = await supabaseClient
+    .from('weight')
+    .select('*')
+    .eq('owner', owner)
+    .lte('weight_date', dateStr)
+    .order('weight_date', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if(error || !data) return null;
+  return { kg: data.kg };
 }
 async function saveWeight(dateStr, kg){
   const owner = currentOwner();
