@@ -487,6 +487,25 @@
             <button class="btn-secondary defaultQuickAddRemove" data-key="eggs" title="Verwijderen uit Snel toevoegen" style="padding:6px 10px;flex-shrink:0;">&times;</button>
           </div>
         </div>
+        <div class="stat-row" data-default-key="blueberries" style="border-bottom:1px solid var(--line);flex-direction:column;align-items:stretch;gap:8px;">
+          <div>
+            <div class="meal-desc">🫐 Blauwe bessen</div>
+            <div class="meal-meta">~57 kcal per 100g &middot; aantal gram aanpasbaar</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:6px;flex-wrap:nowrap;">
+            <input type="number" id="blueberriesGrams" value="50" min="1" style="width:52px;padding:6px 4px;flex-shrink:0;">
+            <span style="font-size:11px;color:var(--ink-soft);flex-shrink:0;">g</span>
+            <select class="qaGroupSelect" data-key="blueberries" style="font-size:11px;padding:5px 2px;border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--ink-soft);width:76px;flex-shrink:0;">
+              <option value="Ontbijt" selected>Ontbijt</option>
+              <option value="Lunch">Lunch</option>
+              <option value="Snack">Snack</option>
+              <option value="Diner">Diner</option>
+              <option value="Drinken">Drinken</option>
+            </select>
+            <button class="btn-secondary" id="quickAddBlueberries" style="flex-shrink:0;padding:8px 10px;">+ Toevoegen</button>
+            <button class="btn-secondary defaultQuickAddRemove" data-key="blueberries" title="Verwijderen uit Snel toevoegen" style="padding:6px 10px;flex-shrink:0;">&times;</button>
+          </div>
+        </div>
         <div id="customQuickAddList-Ontbijt"></div>
       </div>
 
@@ -498,9 +517,9 @@
             <div class="meal-meta">volkoren broodje ~120 kcal &middot; plakje kipfilet ~20 kcal &middot; aantal van elk apart instelbaar</div>
           </div>
           <div style="display:flex;align-items:center;gap:6px;flex-wrap:nowrap;">
-            <input type="number" id="lunchBreadQty" value="1" min="0" style="width:36px;padding:6px 4px;flex-shrink:0;">
+            <input type="number" id="lunchBreadQty" value="4" min="0" style="width:36px;padding:6px 4px;flex-shrink:0;">
             <span style="font-size:11px;color:var(--ink-soft);flex-shrink:0;">broodjes</span>
-            <input type="number" id="lunchChickenQty" value="1" min="0" style="width:36px;padding:6px 4px;flex-shrink:0;">
+            <input type="number" id="lunchChickenQty" value="4" min="0" style="width:36px;padding:6px 4px;flex-shrink:0;">
             <span style="font-size:11px;color:var(--ink-soft);flex-shrink:0;">plakjes</span>
             <select class="qaGroupSelect" data-key="lunch" style="font-size:11px;padding:5px 2px;border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--ink-soft);width:76px;flex-shrink:0;">
               <option value="Ontbijt">Ontbijt</option>
@@ -3000,6 +3019,7 @@ const FOOD_EMOJI_KEYWORDS = [
   ['kip', '\u{1F357}'], ['kalkoen', '\u{1F357}'],
   ['shake', '\u{1F964}'], ['smoothie', '\u{1F964}'],
   ['aardbei', '\u{1F353}'],
+  ['blauwe bes', '\u{1FAD0}'], ['bosbes', '\u{1FAD0}'],
   ['ei', '\u{1F95A}'],
   ['banaan', '\u{1F34C}'],
   ['aardappel', '\u{1F954}'], ['sinaasappel', '\u{1F34A}'], ['mandarijn', '\u{1F34A}'],
@@ -3012,6 +3032,9 @@ const FOOD_EMOJI_KEYWORDS = [
   ['rijst', '\u{1F35A}'],
   ['patat', '\u{1F35F}'],
   ['salade', '\u{1F957}'], ['sla', '\u{1F957}'], ['groente', '\u{1F957}'],
+  ['broccoli', '\u{1F966}'],
+  ['spinazie', '\u{1F96C}'],
+  ['krieltje', '\u{1F954}'],
   ['kaas', '\u{1F9C0}'],
   ['noot', '\u{1F95C}'], ['noten', '\u{1F95C}'], ['pinda', '\u{1F95C}'], ['amandel', '\u{1F95C}'],
   ['gehakt', '\u{1F969}'], ['biefstuk', '\u{1F969}'], ['vlees', '\u{1F969}'],
@@ -3216,6 +3239,19 @@ document.getElementById('quickAddOats').addEventListener('click', (e)=>{
     protein: oatProtein + 25,
     carbs: oatCarbs + 10,
     fat: oatFat + 1,
+    time: ''
+  }, document.getElementById('quickAddStatus'), e.target);
+});
+
+document.getElementById('quickAddBlueberries').addEventListener('click', (e)=>{
+  const grams = Math.max(1, Number(document.getElementById('blueberriesGrams').value)||50);
+  quickAdd({
+    desc: grams + 'g blauwe bessen',
+    mealType: 'Ontbijt',
+    kcal: Math.round(grams*0.57),
+    protein: Math.round(grams*0.007*10)/10,
+    carbs: Math.round(grams*0.14*10)/10,
+    fat: Math.round(grams*0.003*10)/10,
     time: ''
   }, document.getElementById('quickAddStatus'), e.target);
 });
