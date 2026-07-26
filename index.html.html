@@ -188,6 +188,12 @@
   .meal-kcal{font-family:'Martian Mono',monospace;font-size:14px;font-weight:700;white-space:nowrap;margin-left:12px;}
   .meal-del{background:none;border:none;color:var(--clay);cursor:pointer;font-size:12px;margin-left:10px;}
   .empty{color:var(--ink-soft);font-size:13px;font-style:italic;padding:8px 0;}
+  .tip-row{margin-bottom:8px;line-height:1.5;}
+  .tip-row:last-child{margin-bottom:0;}
+  .tip-row strong{color:var(--ink);}
+  .tip-total{font-weight:600;}
+  .tip-combined{padding-top:8px;margin-top:2px;border-top:1px solid var(--line);}
+  .tip-extra{padding-top:8px;margin-top:4px;border-top:1px solid var(--line);color:var(--ink-soft);}
 
   .refresh-btn{
     font-family:'Martian Mono',monospace;font-size:11px;border:1px solid var(--line);
@@ -1465,7 +1471,7 @@ function showMotivationQuote(){
 
 function generateNutritionTip(totals, targets, burned, vitals, trainingHadActivity, recoveryConcern, openMealMoments, weightKg, runningStats, customItems){
   if(targets.protein==null){
-    return "Vul je gewicht in (via de Tredict-sync) zodat ik een tip op maat kan geven.";
+    return escapeHtml("Vul je gewicht in (via de Tredict-sync) zodat ik een tip op maat kan geven.");
   }
 
   const remainingKcal = burned!=null ? Math.round(burned - totals.kcal) : null;
@@ -1474,38 +1480,31 @@ function generateNutritionTip(totals, targets, burned, vitals, trainingHadActivi
   const needsProtein = remainingProtein!=null && remainingProtein > 15;
   const needsCarbs = remainingCarbs!=null && remainingCarbs > 40;
 
-  const tips = [];
-  const openLabel = (openMealMoments && openMealMoments.length) ? openMealMoments.join(' + ') : null;
+  // Overzichtelijk blok: totaal nog nodig, dan per openstaand moment een
+  // eigen regel met opties, en tot slot wat de gecombineerde keuze samen
+  // oplevert \u2014 i.p.v. alles in één lopende zin te proppen.
+  const blocks = [];
 
-  // Combineert eiwit én koolhydraten in één tip, en telt het tekort op over
-  // ALLE nog openstaande maaltijdmomenten samen (bijv. Lunch + Diner + Snack)
-  // i.p.v. één los quick-add-item te noemen met een klein aantal grammen dat
-  // de indruk wekte dat dat ene item het hele tekort al dekte.
   if(needsProtein || needsCarbs){
-    const macroParts = [];
-    if(needsProtein) macroParts.push(`~${remainingProtein}g eiwit`);
-    if(needsCarbs) macroParts.push(`~${remainingCarbs}g koolhydraten`);
-    const macroText = macroParts.join(' en ');
-    if(openLabel){
-      tips.push(`voor ${openLabel} heb je samen nog ${macroText} nodig`);
-    } else {
-      tips.push(`nog ${macroText} nodig vandaag`);
-    }
+    const totalParts = [];
+    if(needsProtein) totalParts.push(`${remainingProtein}g eiwit`);
+    if(needsCarbs) totalParts.push(`${remainingCarbs}g koolhydraten`);
+    blocks.push(`<div class="tip-row tip-total"><strong>Totaal nog nodig (eiwit/koolhydraten):</strong> ${escapeHtml(totalParts.join(' \u2014 '))}</div>`);
+
     const combo = (openMealMoments && openMealMoments.length>=2)
       ? findMealComboForMoments(needsProtein?remainingProtein:0, needsCarbs?remainingCarbs:0, openMealMoments, customItems)
       : null;
+
     if(combo){
-      // Per moment gegroepeerd weergeven, in dezelfde volgorde als de
-      // openstaande momenten (bijv. "Lunch: ... \u2014 Diner: ... + ... + ...")
-      // zodat meerdere onderdelen bij één moment (zoals bij Diner) samen
-      // getoond worden i.p.v. willekeurig verspreid.
-      const parts = openMealMoments
-        .filter(m => combo.byMoment[m])
-        .map(m => `${m}: ${combo.byMoment[m].join(' + ')}`);
-      const comboMacroParts = [];
-      if(needsProtein) comboMacroParts.push(`${Math.round(combo.sumP)}g eiwit`);
-      if(needsCarbs) comboMacroParts.push(`${Math.round(combo.sumC)}g koolhydraten`);
-      tips.push(`bijvoorbeeld \u2014 ${parts.join(', ')} \u2014 samen ongeveer ${comboMacroParts.join(' en ')}`);
+      openMealMoments.forEach(m=>{
+        if(combo.byMoment[m]){
+          blocks.push(`<div class="tip-row"><strong>Opties ${escapeHtml(m)}:</strong> ${escapeHtml(combo.byMoment[m].join(' + '))}</div>`);
+        }
+      });
+      const comboParts = [];
+      if(needsProtein) comboParts.push(`${Math.round(combo.sumP)}g eiwit`);
+      if(needsCarbs) comboParts.push(`${Math.round(combo.sumC)}g koolhydraten`);
+      blocks.push(`<div class="tip-row tip-combined"><strong>Gecombineerde opties samen:</strong> ${escapeHtml(comboParts.join(' \u2014 '))}</div>`);
     } else {
       const ideas = [];
       if(needsProtein){
@@ -1517,12 +1516,14 @@ function generateNutritionTip(totals, targets, burned, vitals, trainingHadActivi
         if(s) ideas.push(`${s} voor koolhydraten`);
       }
       if(ideas.length){
-        tips.push(`denk bijvoorbeeld aan ${ideas.join(' en ')}, verspreid over die maaltijden`);
+        blocks.push(`<div class="tip-row"><strong>Opties:</strong> ${escapeHtml(ideas.join(' en '))}</div>`);
       }
     }
   }
-  if(remainingKcal!=null && remainingKcal > 300 && tips.length===0){
-    tips.push(`je hebt nog ongeveer ${remainingKcal} kcal ruimte vandaag`);
+
+  const extraLines = [];
+  if(remainingKcal!=null && remainingKcal > 300 && blocks.length===0){
+    extraLines.push(`je hebt nog ongeveer ${remainingKcal} kcal ruimte vandaag`);
   }
   if(remainingKcal!=null && remainingKcal < -200){
     const excessKcal = Math.abs(remainingKcal);
@@ -1532,19 +1533,25 @@ function generateNutritionTip(totals, targets, burned, vitals, trainingHadActivi
       const basis = (kcalPerKm && runningStats.avgSpeedKmh)
         ? `op basis van je gemiddelde tempo van ${runningStats.avgSpeedKmh} km/u`
         : (kcalPerKm ? 'op basis van je gemiddelde verbruik per km' : 'bij een schatting van 10 km/u');
-      tips.push(`je zit al ${excessKcal} kcal boven je verbruik \u2014 dat staat ongeveer gelijk aan ${runKm} km hardlopen (${basis})`);
+      extraLines.push(`je zit al ${excessKcal} kcal boven je verbruik \u2014 dat staat ongeveer gelijk aan ${runKm} km hardlopen (${basis})`);
     } else {
-      tips.push(`je zit al ${excessKcal} kcal boven je verbruik \u2014 hou de rest van de dag wat lichter`);
+      extraLines.push(`je zit al ${excessKcal} kcal boven je verbruik \u2014 hou de rest van de dag wat lichter`);
     }
   }
   if(recoveryConcern){
-    tips.push(`je herstel (slaap/HRV/rust-HR) is wat lager dan je weekgemiddelde \u2014 extra hydratatie en op tijd naar bed kunnen helpen`);
+    extraLines.push(`je herstel (slaap/HRV/rust-HR) is wat lager dan je weekgemiddelde \u2014 extra hydratatie en op tijd naar bed kunnen helpen`);
   }
 
-  if(tips.length===0){
-    return "Je zit mooi in balans voor vandaag \u2014 geen aanvullingen nodig.";
+  if(blocks.length===0 && extraLines.length===0){
+    return escapeHtml("Je zit mooi in balans voor vandaag \u2014 geen aanvullingen nodig.");
   }
-  return tips.map((t,i)=> i===0 ? t.charAt(0).toUpperCase()+t.slice(1) : t).join('. ') + '.';
+
+  let html = blocks.join('');
+  if(extraLines.length){
+    const extraText = extraLines.map((t,i)=> i===0 ? t.charAt(0).toUpperCase()+t.slice(1) : t).join('. ') + '.';
+    html += `<div class="tip-row tip-extra">${escapeHtml(extraText)}</div>`;
+  }
+  return html;
 }
 
 function last30Days(){
@@ -1986,7 +1993,7 @@ async function renderDashboard(){
     customItemsForTip
   );
   const tipEl = document.getElementById('nutritionTip');
-  if(tipEl) tipEl.textContent = tipText;
+  if(tipEl) tipEl.innerHTML = tipText;
   showMotivationQuote();
 
   syncTeamEntry(dateStr, {
