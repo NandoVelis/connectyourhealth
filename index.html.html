@@ -157,6 +157,7 @@
     letter-spacing:.06em;color:var(--amber);
   }
   #qaGroup-Ontbijt .qa-group-heading{margin-top:0;}
+  .qa-toggle-arrow{display:inline-block;transition:transform 0.15s ease;font-size:13px;}
   .balans-number{
     font-family:'Archivo',sans-serif;font-size:58px;font-weight:600;line-height:1;
     letter-spacing:-0.02em;
@@ -406,7 +407,11 @@
       <h3>Snel toevoegen</h3>
 
       <div id="qaGroup-Ontbijt">
-        <h4 class="qa-group-heading">Ontbijt</h4>
+        <h4 class="qa-group-heading qa-toggle-heading" data-group="Ontbijt" style="cursor:pointer;display:flex;justify-content:space-between;align-items:center;">
+          <span>Ontbijt</span>
+          <span class="qa-toggle-arrow" id="qaArrow-Ontbijt">&#9662;</span>
+        </h4>
+        <div class="qa-group-content" id="qaGroupContent-Ontbijt">
         <div class="stat-row" data-default-key="combo1" data-owner-only="Nando" style="border-bottom:1px solid var(--line);padding-top:0;flex-direction:column;align-items:stretch;gap:8px;">
           <div>
             <div class="meal-desc">🥣🍌🍶 Havermout+banaan+kwark shake</div>
@@ -507,10 +512,15 @@
           </div>
         </div>
         <div id="customQuickAddList-Ontbijt"></div>
+        </div>
       </div>
 
       <div id="qaGroup-Lunch">
-        <h4 class="qa-group-heading">Lunch</h4>
+        <h4 class="qa-group-heading qa-toggle-heading" data-group="Lunch" style="cursor:pointer;display:flex;justify-content:space-between;align-items:center;">
+          <span>Lunch</span>
+          <span class="qa-toggle-arrow" id="qaArrow-Lunch">&#9662;</span>
+        </h4>
+        <div class="qa-group-content" id="qaGroupContent-Lunch">
         <div class="stat-row" data-default-key="lunch" style="border-bottom:1px solid var(--line);flex-direction:column;align-items:stretch;gap:8px;">
           <div>
             <div class="meal-desc">🥪 Broodje kipfilet</div>
@@ -552,10 +562,15 @@
           </div>
         </div>
         <div id="customQuickAddList-Lunch"></div>
+        </div>
       </div>
 
       <div id="qaGroup-Snack">
-        <h4 class="qa-group-heading">Snack</h4>
+        <h4 class="qa-group-heading qa-toggle-heading" data-group="Snack" style="cursor:pointer;display:flex;justify-content:space-between;align-items:center;">
+          <span>Snack</span>
+          <span class="qa-toggle-arrow" id="qaArrow-Snack">&#9662;</span>
+        </h4>
+        <div class="qa-group-content" id="qaGroupContent-Snack">
         <div class="stat-row" data-default-key="banana" style="border-bottom:1px solid var(--line);">
           <div>
             <div class="meal-desc">🍌 Banaan</div>
@@ -610,10 +625,15 @@
           </div>
         </div>
         <div id="customQuickAddList-Snack"></div>
+        </div>
       </div>
 
       <div id="qaGroup-Diner">
-        <h4 class="qa-group-heading">Diner</h4>
+        <h4 class="qa-group-heading qa-toggle-heading" data-group="Diner" style="cursor:pointer;display:flex;justify-content:space-between;align-items:center;">
+          <span>Diner</span>
+          <span class="qa-toggle-arrow" id="qaArrow-Diner">&#9662;</span>
+        </h4>
+        <div class="qa-group-content" id="qaGroupContent-Diner">
         <div class="stat-row" data-default-key="macaroni" data-owner-only="Nando" style="border-bottom:1px solid var(--line);flex-direction:column;align-items:stretch;gap:8px;">
           <div>
             <div class="meal-desc">🍝 Macaroni met kipfilet en groenten</div>
@@ -653,10 +673,15 @@
           </div>
         </div>
         <div id="customQuickAddList"></div>
+        </div>
       </div>
 
       <div id="qaGroup-Drinken">
-        <h4 class="qa-group-heading">Drinken</h4>
+        <h4 class="qa-group-heading qa-toggle-heading" data-group="Drinken" style="cursor:pointer;display:flex;justify-content:space-between;align-items:center;">
+          <span>Drinken</span>
+          <span class="qa-toggle-arrow" id="qaArrow-Drinken">&#9662;</span>
+        </h4>
+        <div class="qa-group-content" id="qaGroupContent-Drinken">
         <div class="stat-row" data-default-key="shake" style="border-bottom:1px solid var(--line);">
           <div>
             <div class="meal-desc">🥤 Eiwitshake</div>
@@ -694,6 +719,7 @@
           </div>
         </div>
         <div id="customQuickAddList-Drinken"></div>
+        </div>
       </div>
 
       <div class="status-msg" id="quickAddStatus"></div>
@@ -1210,14 +1236,15 @@ function computeDagscore(consumedKcal, training, vitals){
 // tip op het Persoonlijk Dashboard concrete, aanklikbare suggesties kan
 // noemen in plaats van alleen generieke productcategorieën.
 const QUICK_ADD_REFERENCE = [
-  { name: 'Havermout + kwark', kcal: 263, protein: 30, carbs: 34, fat: 4 },
-  { name: 'Gekookt ei', kcal: 78, protein: 6, carbs: 1, fat: 5 },
-  { name: 'Broodje kipfilet', kcal: 140, protein: 8, carbs: 24, fat: 2 },
-  { name: 'Banaan', kcal: 105, protein: 1, carbs: 27, fat: 0 },
-  { name: 'Appel', kcal: 95, protein: 0, carbs: 25, fat: 0 },
-  { name: 'Eiwitshake', kcal: 120, protein: 24, carbs: 3, fat: 1.5 },
-  { name: 'Havermout+banaan+kwark shake', kcal: 368, protein: 31, carbs: 61, fat: 4, ownerOnly: 'Nando' },
-  { name: 'Havermout banaan shake', kcal: 255, protein: 6, carbs: 51, fat: 3, ownerOnly: 'Nando' },
+  { name: 'Havermout + kwark', kcal: 263, protein: 30, carbs: 34, fat: 4, moment: 'Ontbijt' },
+  { name: 'Gekookt ei', kcal: 78, protein: 6, carbs: 1, fat: 5, moment: 'Ontbijt', baseUnits: 1 },
+  { name: 'Broodje kipfilet', kcal: 140, protein: 8, carbs: 24, fat: 2, moment: 'Lunch', baseUnits: 1 },
+  { name: 'Banaan', kcal: 105, protein: 1, carbs: 27, fat: 0, moment: 'Snack' },
+  { name: 'Appel', kcal: 95, protein: 0, carbs: 25, fat: 0, moment: 'Snack' },
+  { name: 'Eiwitshake', kcal: 120, protein: 24, carbs: 3, fat: 1.5, moment: 'Snack' },
+  { name: 'Kipfilet (gebakken)', kcal: 371, protein: 69.8, carbs: 0, fat: 8.1, moment: 'Diner', baseGrams: 225 },
+  { name: 'Havermout+banaan+kwark shake', kcal: 368, protein: 31, carbs: 61, fat: 4, ownerOnly: 'Nando', moment: 'Ontbijt' },
+  { name: 'Havermout banaan shake', kcal: 255, protein: 6, carbs: 51, fat: 3, ownerOnly: 'Nando', moment: 'Ontbijt' },
 ];
 function suggestQuickAddItems(byField, count){
   const owner = currentOwner();
@@ -1226,8 +1253,82 @@ function suggestQuickAddItems(byField, count){
     .filter(item => item[byField] > 0)
     .sort((a,b) => b[byField]-a[byField])
     .slice(0, count);
-  const unit = byField==='protein' ? 'g eiwit' : 'g koolh.';
-  return top.map(item => `${item.name} (${item[byField]}${unit})`).join(' of ');
+  return top.map(item => item.name).join(' of ');
+}
+function round1(n){ return Math.round(n*10)/10; }
+// Zet één item (eigen opgeslagen quick-add of vaste referentie) om in een
+// paar realistische hoeveelheid-varianten, zodat de combinatie hierna een
+// passende hoeveelheid kan kiezen i.p.v. altijd de standaardportie.
+function buildQuantityVariants(item){
+  const name = item.desc || item.name;
+  const baseName = stripLeadingQuantity(name);
+  if(item.baseGrams){
+    return [0.5,1,1.5,2].map(f=>({
+      protein: round1(item.protein*f), carbs: round1(item.carbs*f), kcal: Math.round(item.kcal*f),
+      label: `${Math.round(item.baseGrams*f)}g ${baseName}`
+    }));
+  }
+  if(item.baseMl){
+    return [0.5,1,1.5,2].map(f=>({
+      protein: round1(item.protein*f), carbs: round1(item.carbs*f), kcal: Math.round(item.kcal*f),
+      label: `${Math.round(item.baseMl*f)}ml ${baseName}`
+    }));
+  }
+  if(item.baseUnits){
+    return [1,2,3,4].map(f=>({
+      protein: round1(item.protein*f), carbs: round1(item.carbs*f), kcal: Math.round(item.kcal*f),
+      label: `${Math.round(item.baseUnits*f)}x ${baseName}`
+    }));
+  }
+  return [{ protein: item.protein, carbs: item.carbs, kcal: item.kcal, label: name }];
+}
+// Zoekt, wanneer er meerdere maaltijdmomenten nog open staan (bijv. Lunch +
+// Snack + Diner), stap voor stap het item (uit iemands EIGEN opgeslagen
+// quick-add-items per moment, aangevuld met de vaste referentielijst) dat
+// het resterende eiwit- en koolhydraattekort het best verkleint, met een
+// passende hoeveelheid. Resultaat wordt gegroepeerd per moment weergegeven
+// (bijv. Diner met meerdere onderdelen samen), i.p.v. willekeurig één item
+// per moment te forceren.
+function findMealComboForMoments(remainingProtein, remainingCarbs, openMealMoments, customItems){
+  if(!openMealMoments || openMealMoments.length<2) return null;
+  const owner = currentOwner();
+  let pool = [];
+  openMealMoments.forEach(moment=>{
+    const custom = (customItems||[]).filter(it=>it.mealType===moment);
+    const reference = QUICK_ADD_REFERENCE.filter(it=>(!it.ownerOnly||it.ownerOnly===owner) && it.moment===moment);
+    [...custom, ...reference].forEach(it=>{
+      buildQuantityVariants(it).forEach(v=>pool.push({...v, moment}));
+    });
+  });
+  if(pool.length===0) return null;
+
+  let remP = Math.max(remainingProtein,0), remC = Math.max(remainingCarbs,0);
+  const chosen = [];
+  const maxSlots = 4;
+  for(let i=0;i<maxSlots;i++){
+    if(remP<=10 && remC<=20) break;
+    let best = null;
+    for(const v of pool){
+      const diffP = v.protein - remP;
+      const diffC = v.carbs - remC;
+      const score = (diffP<0 ? Math.abs(diffP)*1.5 : diffP) + (diffC<0 ? Math.abs(diffC)*0.5 : diffC*0.3);
+      if(!best || score < best.score) best = { ...v, score };
+    }
+    if(!best) break;
+    chosen.push(best);
+    remP -= best.protein;
+    remC -= best.carbs;
+  }
+  if(chosen.length===0) return null;
+
+  const sumP = chosen.reduce((a,i)=>a+i.protein,0);
+  const sumC = chosen.reduce((a,i)=>a+i.carbs,0);
+  const byMoment = {};
+  chosen.forEach(c=>{
+    if(!byMoment[c.moment]) byMoment[c.moment] = [];
+    byMoment[c.moment].push(c.label);
+  });
+  return { sumP, sumC, byMoment };
 }
 
 // Losstaand van de voedingstip: puur een positieve boost, geen advies of
@@ -1318,7 +1419,7 @@ function showMotivationQuote(){
   el.innerHTML = escapeHtml(q.text) + (q.author ? `<div style="margin-top:8px;font-size:12px;font-weight:400;opacity:.75;">\u2014 ${escapeHtml(q.author)}</div>` : '');
 }
 
-function generateNutritionTip(totals, targets, burned, vitals, trainingHadActivity, recoveryConcern){
+function generateNutritionTip(totals, targets, burned, vitals, trainingHadActivity, recoveryConcern, openMealMoments, weightKg, runningStats, customItems){
   if(targets.protein==null){
     return "Vul je gewicht in (via de Tredict-sync) zodat ik een tip op maat kan geven.";
   }
@@ -1326,22 +1427,71 @@ function generateNutritionTip(totals, targets, burned, vitals, trainingHadActivi
   const remainingKcal = burned!=null ? Math.round(burned - totals.kcal) : null;
   const remainingProtein = targets.protein!=null ? Math.round(targets.protein - totals.protein) : null;
   const remainingCarbs = targets.carbs!=null ? Math.round(targets.carbs - totals.carbs) : null;
+  const needsProtein = remainingProtein!=null && remainingProtein > 15;
+  const needsCarbs = remainingCarbs!=null && remainingCarbs > 40;
 
   const tips = [];
+  const openLabel = (openMealMoments && openMealMoments.length) ? openMealMoments.join(' + ') : null;
 
-  if(remainingProtein!=null && remainingProtein > 15){
-    const suggestion = suggestQuickAddItems('protein', 2);
-    tips.push(`nog ~${remainingProtein}g eiwit nodig \u2014 bijvoorbeeld ${suggestion} uit je snel-toevoegen-lijst`);
-  }
-  if(remainingCarbs!=null && remainingCarbs > 40 && trainingHadActivity){
-    const suggestion = suggestQuickAddItems('carbs', 2);
-    tips.push(`na je training kun je nog ~${remainingCarbs}g koolhydraten gebruiken voor herstel \u2014 bijvoorbeeld ${suggestion}`);
+  // Combineert eiwit én koolhydraten in één tip, en telt het tekort op over
+  // ALLE nog openstaande maaltijdmomenten samen (bijv. Lunch + Diner + Snack)
+  // i.p.v. één los quick-add-item te noemen met een klein aantal grammen dat
+  // de indruk wekte dat dat ene item het hele tekort al dekte.
+  if(needsProtein || needsCarbs){
+    const macroParts = [];
+    if(needsProtein) macroParts.push(`~${remainingProtein}g eiwit`);
+    if(needsCarbs) macroParts.push(`~${remainingCarbs}g koolhydraten`);
+    const macroText = macroParts.join(' en ');
+    if(openLabel){
+      tips.push(`voor ${openLabel} heb je samen nog ${macroText} nodig`);
+    } else {
+      tips.push(`nog ${macroText} nodig vandaag`);
+    }
+    const combo = (openMealMoments && openMealMoments.length>=2)
+      ? findMealComboForMoments(needsProtein?remainingProtein:0, needsCarbs?remainingCarbs:0, openMealMoments, customItems)
+      : null;
+    if(combo){
+      // Per moment gegroepeerd weergeven, in dezelfde volgorde als de
+      // openstaande momenten (bijv. "Lunch: ... \u2014 Diner: ... + ... + ...")
+      // zodat meerdere onderdelen bij één moment (zoals bij Diner) samen
+      // getoond worden i.p.v. willekeurig verspreid.
+      const parts = openMealMoments
+        .filter(m => combo.byMoment[m])
+        .map(m => `${m}: ${combo.byMoment[m].join(' + ')}`);
+      const comboMacroParts = [];
+      if(needsProtein) comboMacroParts.push(`${Math.round(combo.sumP)}g eiwit`);
+      if(needsCarbs) comboMacroParts.push(`${Math.round(combo.sumC)}g koolhydraten`);
+      tips.push(`bijvoorbeeld \u2014 ${parts.join(', ')} \u2014 samen ongeveer ${comboMacroParts.join(' en ')}`);
+    } else {
+      const ideas = [];
+      if(needsProtein){
+        const s = suggestQuickAddItems('protein', 2);
+        if(s) ideas.push(`${s} voor eiwit`);
+      }
+      if(needsCarbs){
+        const s = suggestQuickAddItems('carbs', 2);
+        if(s) ideas.push(`${s} voor koolhydraten`);
+      }
+      if(ideas.length){
+        tips.push(`denk bijvoorbeeld aan ${ideas.join(' en ')}, verspreid over die maaltijden`);
+      }
+    }
   }
   if(remainingKcal!=null && remainingKcal > 300 && tips.length===0){
     tips.push(`je hebt nog ongeveer ${remainingKcal} kcal ruimte vandaag`);
   }
   if(remainingKcal!=null && remainingKcal < -200){
-    tips.push(`je zit al ${Math.abs(remainingKcal)} kcal boven je verbruik \u2014 hou de rest van de dag wat lichter`);
+    const excessKcal = Math.abs(remainingKcal);
+    const kcalPerKm = runningStats ? runningStats.kcalPerKm : null;
+    const runKm = estimateRunKmToBurn(excessKcal, weightKg, kcalPerKm);
+    if(runKm){
+      const basis = (kcalPerKm && runningStats.avgSpeedKmh)
+        ? `op basis van je gemiddelde tempo van ${runningStats.avgSpeedKmh} km/u`
+        : (kcalPerKm ? 'op basis van je gemiddelde verbruik per km' : 'bij een schatting van 10 km/u');
+      tips.push(`je zit al ${excessKcal} kcal boven je verbruik \u2014 dat staat ongeveer gelijk aan ${runKm} km hardlopen (${basis})`);
+    } else {
+      tips.push(`je zit al ${excessKcal} kcal boven je verbruik \u2014 hou de rest van de dag wat lichter`);
+    }
   }
   if(recoveryConcern){
     tips.push(`je herstel (slaap/HRV/rust-HR) is wat lager dan je weekgemiddelde \u2014 extra hydratatie en op tijd naar bed kunnen helpen`);
@@ -1547,6 +1697,46 @@ function estimateRestKcalFromProfile(weightKg, birthdateStr, heightCm){
   return Math.round(bmr*1.31);
 }
 
+// Berekent iemands gemiddelde hardloopstatistieken op basis van zijn eigen
+// gelogde Tredict-activiteiten: kcal/km (incl. eigen tempo en gewicht) én
+// het gemiddelde tempo zelf in km/u \u2014 nauwkeuriger dan een generieke
+// schatting. Gebruikt voor de "km hardlopen"-tip bij een kcal-overschot.
+async function loadAverageRunningStats(){
+  const owner = currentOwner();
+  if(!owner) return null;
+  try{
+    const { data, error } = await supabaseClient
+      .from('training')
+      .select('kcal, km, duration_minutes')
+      .eq('owner', owner)
+      .eq('activity_type', 'hardlopen')
+      .gt('km', 0);
+    if(error || !data || data.length===0) return null;
+    const totalKcal = data.reduce((a,r)=>a+(Number(r.kcal)||0),0);
+    const totalKm = data.reduce((a,r)=>a+(Number(r.km)||0),0);
+    const totalMinutes = data.reduce((a,r)=>a+(Number(r.duration_minutes)||0),0);
+    if(totalKm<=0) return null;
+    return {
+      kcalPerKm: totalKcal/totalKm,
+      avgSpeedKmh: totalMinutes>0 ? Math.round((totalKm/(totalMinutes/60))*10)/10 : null
+    };
+  }catch(e){ console.error('Laden gemiddelde hardloopstatistieken', e); return null; }
+}
+// Zet een kcal-overschot om in een aantal km hardlopen. Met een bekend eigen
+// kcal/km (uit loadAverageRunningStats) gebruikt dit het eigen tempo;
+// zonder gelogde hardloopactiviteiten valt dit terug op een schatting bij
+// 10 km/u (MET \u2248 9.8, kcal/km \u2248 MET x 3.5 x kg / 200 x 6).
+function estimateRunKmToBurn(kcalToBurn, weightKg, kcalPerKm){
+  if(!kcalToBurn || kcalToBurn<=0) return null;
+  let perKm = kcalPerKm;
+  if(!perKm){
+    if(!weightKg) return null;
+    perKm = 9.8 * 3.5 * weightKg / 200 * 6; // \u2248 1.03 kcal/kg/km, bij 10 km/u
+  }
+  if(!perKm || perKm<=0) return null;
+  return Math.round((kcalToBurn/perKm)*10)/10;
+}
+
 async function renderDashboard(){
 
   const dateStr = fmtDate(state.currentDate);
@@ -1724,13 +1914,32 @@ async function renderDashboard(){
     if(vitals.sleepMinutes && vitals.sleepMinutes < 360) recoveryConcern = true;
   }
   const trainingHadActivity = !!(training && training.activities && training.activities.some(a=>Number(a.kcal)>0));
+  // Welke maaltijdmomenten van vandaag nog niets bevatten, zodat de tip het
+  // resterende tekort kan combineren over die openstaande momenten samen
+  // (bijv. "voor Lunch + Diner + Snack heb je samen nog ~70g eiwit nodig")
+  // i.p.v. te doen alsof één los quick-add-item de hele kloof dicht.
+  const loggedMealTypes = new Set(meals.map(m=>m.mealType));
+  const openMealMoments = ['Ontbijt','Lunch','Snack','Diner'].filter(t=>!loggedMealTypes.has(t));
+  // Gewicht voor de "km hardlopen"-tip bij een kcal-overschot: gebruikt het
+  // gewicht van vandaag, anders het meest recent bekende gewicht. Het eigen
+  // tempo/kcal-per-km komt uit de gelogde hardloopactiviteiten (indien
+  // aanwezig). customItemsForTip zijn iemands eigen opgeslagen quick-add-
+  // items per moment (bijv. krieltjes/kipfilet/broccoli bij Diner), zodat de
+  // combinatietip daaruit kan putten i.p.v. alleen de generieke lijst.
+  const weightForTip = (weightEntry && weightEntry.kg) ? weightEntry.kg : (await loadMostRecentWeight(dateStr))?.kg || null;
+  const runningStatsForTip = await loadAverageRunningStats();
+  const customItemsForTip = await loadCustomQuickAdds();
   const tipText = generateNutritionTip(
     totals,
     { protein: targetProtein, carbs: targetCarbs, fat: targetFat },
     burned,
     vitals,
     trainingHadActivity,
-    recoveryConcern
+    recoveryConcern,
+    openMealMoments,
+    weightForTip,
+    runningStatsForTip,
+    customItemsForTip
   );
   const tipEl = document.getElementById('nutritionTip');
   if(tipEl) tipEl.textContent = tipText;
@@ -3204,6 +3413,48 @@ async function renderCustomQuickAdds(){
 }
 renderCustomQuickAdds();
 
+// ---- Snel toevoegen: secties in-/uitklappen op basis van tijdstip ----
+// Bij het laden van de pagina staat elke groep (Ontbijt/Lunch/Snack/Diner/
+// Drinken) automatisch open of dicht, afhankelijk van hoe waarschijnlijk dat
+// moment nu is (bijv. Ontbijt na 12:00 dicht). Handmatig openklikken kan
+// altijd — dat overschrijft de automatische stand voor de rest van dit bezoek.
+function currentAmsterdamHour(){
+  const parts = new Intl.DateTimeFormat('nl-NL', { timeZone: 'Europe/Amsterdam', hour: '2-digit', hour12: false }).formatToParts(new Date());
+  const hourPart = parts.find(p => p.type === 'hour');
+  return hourPart ? Number(hourPart.value) : new Date().getHours();
+}
+function isQaGroupOpenByTime(group, hour){
+  switch(group){
+    case 'Ontbijt': return hour < 12;
+    case 'Lunch': return hour >= 11 && hour < 15;
+    case 'Snack': return true;
+    case 'Diner': return hour >= 16;
+    case 'Drinken': return true;
+    default: return true;
+  }
+}
+function setQaGroupOpen(group, open){
+  const content = document.getElementById('qaGroupContent-' + group);
+  const arrow = document.getElementById('qaArrow-' + group);
+  if(content) content.style.display = open ? '' : 'none';
+  if(arrow) arrow.style.transform = open ? 'rotate(0deg)' : 'rotate(-90deg)';
+}
+function initQaGroupsByTime(){
+  const hour = currentAmsterdamHour();
+  ['Ontbijt','Lunch','Snack','Diner','Drinken'].forEach(group=>{
+    setQaGroupOpen(group, isQaGroupOpenByTime(group, hour));
+  });
+}
+initQaGroupsByTime();
+document.querySelectorAll('.qa-toggle-heading').forEach(heading=>{
+  heading.addEventListener('click', ()=>{
+    const group = heading.dataset.group;
+    const content = document.getElementById('qaGroupContent-' + group);
+    const isOpen = content && content.style.display !== 'none';
+    setQaGroupOpen(group, !isOpen);
+  });
+});
+
 // Vul het laatst gebruikte aantal gram kip weer in bij het laden van de pagina.
 (function(){
   try{
@@ -3265,8 +3516,8 @@ document.querySelectorAll('.defaultQuickAddRemove').forEach(btn=>{
 document.querySelectorAll('.qaGroupSelect').forEach(sel=>{
   sel.addEventListener('change', (e)=>{
     const row = e.target.closest('.stat-row');
-    const target = document.getElementById('qaGroup-' + e.target.value);
-    if(row && target) target.appendChild(row);
+    const target = document.getElementById('qaGroupContent-' + e.target.value);
+    if(row && target) target.insertBefore(row, target.lastElementChild);
   });
 });
 
