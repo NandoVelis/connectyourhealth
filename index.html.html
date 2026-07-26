@@ -1282,11 +1282,29 @@ function buildQuantityVariants(item){
   }
   return [{ protein: item.protein, carbs: item.carbs, kcal: item.kcal, label: name, itemKey: baseName }];
 }
+// Categoriseert een Diner-item op trefwoord in koolhydraatbron/vlees/groente,
+// zodat de Diner-suggestie altijd een compleet bord kan voorstellen i.p.v.
+// toevallig 2x vlees of geen groente te kiezen puur op macro-getallen.
+const DINER_CATEGORY_KEYWORDS = {
+  koolhydraat: ['rijst','pasta','aardappel','krieltje','macaroni','spaghetti','patat'],
+  vlees: ['kip','vlees','biefstuk','gehakt','vis','zalm','tonijn','makreel','kalkoen'],
+  groente: ['broccoli','spinazie','sla','salade','groente','wortel','paprika']
+};
+function categorizeDinerItem(name){
+  const lower = (name||'').toLowerCase();
+  for(const [cat, keywords] of Object.entries(DINER_CATEGORY_KEYWORDS)){
+    if(keywords.some(k=>lower.includes(k))) return cat;
+  }
+  return null;
+}
 // Zoekt, wanneer er meerdere maaltijdmomenten nog open staan (bijv. Lunch +
 // Diner), voor ELK openstaand moment een eigen passend item (uit iemands
 // EIGEN opgeslagen quick-add-items per moment, aangevuld met de vaste
 // referentielijst) \u2014 zodat bijv. Lunch niet wordt overgeslagen alleen omdat
-// Diner-items toevallig het hele tekort al zouden kunnen dekken. Is er
+// Diner-items toevallig het hele tekort al zouden kunnen dekken. Bij Diner
+// specifiek wordt, indien beschikbaar, altijd één koolhydraatbron (rijst/
+// pasta/aardappels) + één vlees/eiwitbron + één groente gekozen, zodat het
+// een compleet bord voorstelt i.p.v. losse macro-optimale items. Is er
 // daarna nog een duidelijk tekort over, dan mag er maximaal 1 extra item bij
 // (nooit een tweede variant van hetzelfde item, en nooit meer dan ~1,25x de
 // eigen basisportie), zodat de hoeveelheden realistisch blijven.
@@ -1319,24 +1337,31 @@ function findMealComboForMoments(remainingProtein, remainingCarbs, openMealMomen
     }
     return best;
   }
-
-  openMealMoments.forEach(moment=>{
-    const best = pickBestFrom(poolByMoment[moment]);
+  function pickAndCommit(candidates){
+    const best = pickBestFrom(candidates);
     if(best){
       chosen.push(best);
       chosenKeys.add(best.itemKey);
       remP -= best.protein;
       remC -= best.carbs;
     }
+    return best;
+  }
+
+  openMealMoments.forEach(moment=>{
+    if(moment==='Diner'){
+      ['koolhydraat','vlees','groente'].forEach(cat=>{
+        const candidates = poolByMoment[moment].filter(v=>categorizeDinerItem(v.itemKey)===cat);
+        pickAndCommit(candidates);
+      });
+    } else {
+      pickAndCommit(poolByMoment[moment]);
+    }
   });
 
   if(remP>10 || remC>20){
     const allRemaining = openMealMoments.flatMap(m=>poolByMoment[m]);
-    const extra = pickBestFrom(allRemaining);
-    if(extra){
-      chosen.push(extra);
-      chosenKeys.add(extra.itemKey);
-    }
+    pickAndCommit(allRemaining);
   }
 
   if(chosen.length===0) return null;
