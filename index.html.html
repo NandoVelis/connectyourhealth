@@ -1263,64 +1263,83 @@ function buildQuantityVariants(item){
   const name = item.desc || item.name;
   const baseName = stripLeadingQuantity(name);
   if(item.baseGrams){
-    return [0.5,1,1.5,2].map(f=>({
+    return [0.5,0.75,1,1.25].map(f=>({
       protein: round1(item.protein*f), carbs: round1(item.carbs*f), kcal: Math.round(item.kcal*f),
-      label: `${Math.round(item.baseGrams*f)}g ${baseName}`
+      label: `${Math.round(item.baseGrams*f)}g ${baseName}`, itemKey: baseName
     }));
   }
   if(item.baseMl){
-    return [0.5,1,1.5,2].map(f=>({
+    return [0.5,0.75,1,1.25].map(f=>({
       protein: round1(item.protein*f), carbs: round1(item.carbs*f), kcal: Math.round(item.kcal*f),
-      label: `${Math.round(item.baseMl*f)}ml ${baseName}`
+      label: `${Math.round(item.baseMl*f)}ml ${baseName}`, itemKey: baseName
     }));
   }
   if(item.baseUnits){
-    return [1,2,3,4].map(f=>({
+    return [1,2,3].map(f=>({
       protein: round1(item.protein*f), carbs: round1(item.carbs*f), kcal: Math.round(item.kcal*f),
-      label: `${Math.round(item.baseUnits*f)}x ${baseName}`
+      label: `${Math.round(item.baseUnits*f)}x ${baseName}`, itemKey: baseName
     }));
   }
-  return [{ protein: item.protein, carbs: item.carbs, kcal: item.kcal, label: name }];
+  return [{ protein: item.protein, carbs: item.carbs, kcal: item.kcal, label: name, itemKey: baseName }];
 }
 // Zoekt, wanneer er meerdere maaltijdmomenten nog open staan (bijv. Lunch +
-// Snack + Diner), stap voor stap het item (uit iemands EIGEN opgeslagen
-// quick-add-items per moment, aangevuld met de vaste referentielijst) dat
-// het resterende eiwit- en koolhydraattekort het best verkleint, met een
-// passende hoeveelheid. Resultaat wordt gegroepeerd per moment weergegeven
-// (bijv. Diner met meerdere onderdelen samen), i.p.v. willekeurig één item
-// per moment te forceren.
+// Diner), voor ELK openstaand moment een eigen passend item (uit iemands
+// EIGEN opgeslagen quick-add-items per moment, aangevuld met de vaste
+// referentielijst) \u2014 zodat bijv. Lunch niet wordt overgeslagen alleen omdat
+// Diner-items toevallig het hele tekort al zouden kunnen dekken. Is er
+// daarna nog een duidelijk tekort over, dan mag er maximaal 1 extra item bij
+// (nooit een tweede variant van hetzelfde item, en nooit meer dan ~1,25x de
+// eigen basisportie), zodat de hoeveelheden realistisch blijven.
 function findMealComboForMoments(remainingProtein, remainingCarbs, openMealMoments, customItems){
   if(!openMealMoments || openMealMoments.length<2) return null;
   const owner = currentOwner();
-  let pool = [];
+  const poolByMoment = {};
   openMealMoments.forEach(moment=>{
     const custom = (customItems||[]).filter(it=>it.mealType===moment);
     const reference = QUICK_ADD_REFERENCE.filter(it=>(!it.ownerOnly||it.ownerOnly===owner) && it.moment===moment);
+    const variants = [];
     [...custom, ...reference].forEach(it=>{
-      buildQuantityVariants(it).forEach(v=>pool.push({...v, moment}));
+      buildQuantityVariants(it).forEach(v=>variants.push({...v, moment}));
     });
+    poolByMoment[moment] = variants;
   });
-  if(pool.length===0) return null;
 
   let remP = Math.max(remainingProtein,0), remC = Math.max(remainingCarbs,0);
   const chosen = [];
-  const maxSlots = 4;
-  for(let i=0;i<maxSlots;i++){
-    if(remP<=10 && remC<=20) break;
+  const chosenKeys = new Set();
+
+  function pickBestFrom(candidates){
     let best = null;
-    for(const v of pool){
+    for(const v of candidates){
+      if(chosenKeys.has(v.itemKey)) continue; // geen 2 varianten van hetzelfde item
       const diffP = v.protein - remP;
       const diffC = v.carbs - remC;
       const score = (diffP<0 ? Math.abs(diffP)*1.5 : diffP) + (diffC<0 ? Math.abs(diffC)*0.5 : diffC*0.3);
       if(!best || score < best.score) best = { ...v, score };
     }
-    if(!best) break;
-    chosen.push(best);
-    remP -= best.protein;
-    remC -= best.carbs;
+    return best;
   }
-  if(chosen.length===0) return null;
 
+  openMealMoments.forEach(moment=>{
+    const best = pickBestFrom(poolByMoment[moment]);
+    if(best){
+      chosen.push(best);
+      chosenKeys.add(best.itemKey);
+      remP -= best.protein;
+      remC -= best.carbs;
+    }
+  });
+
+  if(remP>10 || remC>20){
+    const allRemaining = openMealMoments.flatMap(m=>poolByMoment[m]);
+    const extra = pickBestFrom(allRemaining);
+    if(extra){
+      chosen.push(extra);
+      chosenKeys.add(extra.itemKey);
+    }
+  }
+
+  if(chosen.length===0) return null;
   const sumP = chosen.reduce((a,i)=>a+i.protein,0);
   const sumC = chosen.reduce((a,i)=>a+i.carbs,0);
   const byMoment = {};
