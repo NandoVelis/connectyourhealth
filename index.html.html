@@ -409,7 +409,7 @@
         <h4 class="qa-group-heading">Ontbijt</h4>
         <div class="stat-row" data-default-key="combo1" data-owner-only="Nando" style="border-bottom:1px solid var(--line);padding-top:0;flex-direction:column;align-items:stretch;gap:8px;">
           <div>
-            <div class="meal-desc">🥣 Havermout+banaan+kwark shake</div>
+            <div class="meal-desc">🥣🍌🍶 Havermout+banaan+kwark shake</div>
             <div class="meal-meta">250ml magere kwark vast &middot; havermout en aantal bananen aanpasbaar</div>
           </div>
           <div style="display:flex;align-items:center;gap:6px;flex-wrap:nowrap;">
@@ -430,7 +430,7 @@
         </div>
         <div class="stat-row" data-default-key="combo2" data-owner-only="Nando" style="border-bottom:1px solid var(--line);flex-direction:column;align-items:stretch;gap:8px;">
           <div>
-            <div class="meal-desc">🥣 Havermout banaan shake</div>
+            <div class="meal-desc">🥣🍌 Havermout banaan shake</div>
             <div class="meal-meta">zonder kwark &middot; havermout en aantal bananen aanpasbaar</div>
           </div>
           <div style="display:flex;align-items:center;gap:6px;flex-wrap:nowrap;">
@@ -451,7 +451,7 @@
         </div>
         <div class="stat-row" data-default-key="oats" style="border-bottom:1px solid var(--line);flex-direction:column;align-items:stretch;gap:8px;">
           <div>
-            <div class="meal-desc">🥣 Havermout + magere kwark</div>
+            <div class="meal-desc">🥣🍶 Havermout + magere kwark</div>
             <div class="meal-meta">250ml magere kwark vast &middot; havermout aanpasbaar</div>
           </div>
           <div style="display:flex;align-items:center;gap:6px;flex-wrap:nowrap;">
@@ -2971,9 +2971,17 @@ async function loadCustomQuickAdds(){
       carbs: item.carbs,
       fat: item.fat,
       baseGrams: item.base_grams,
-      baseMl: item.base_ml
+      baseMl: item.base_ml,
+      baseUnits: item.base_units
     }));
   }catch(e){ console.error('Laden snel-toevoegen-lijst', e); return []; }
+}
+// Haalt een eventuele hoeveelheid (g/ml/x) vooraan een naam weg, zodat we
+// bij het schalen altijd een schone basisnaam overhouden om de nieuwe
+// hoeveelheid vóór te plakken — ongeacht of de opgeslagen naam zelf al een
+// hoeveelheid bevat (bijv. "Krieltjes" of nog het oude "700g krieltjes").
+function stripLeadingQuantity(desc){
+  return (desc||'').replace(/^\d+(\.\d+)?\s*(g|ml|x)\b\s*/i, '');
 }
 async function addCustomQuickAdd(meal){
   const owner = currentOwner();
@@ -2985,6 +2993,8 @@ async function addCustomQuickAdd(meal){
     const baseGrams = gramsMatch ? Number(gramsMatch[1]) : null;
     const mlMatch = (meal.desc||'').match(/(\d+)\s*ml\b/i);
     const baseMl = mlMatch ? Number(mlMatch[1]) : null;
+    const unitsMatch = (meal.desc||'').match(/^(\d+)\s*x\b/i);
+    const baseUnits = (!baseGrams && !baseMl && unitsMatch) ? Number(unitsMatch[1]) : null;
     // Zelfde omschrijving? Dan de bestaande vervangen i.p.v. dupliceren.
     await supabaseClient.from('quick_adds').delete().eq('owner', owner).ilike('description', meal.desc);
     await supabaseClient.from('quick_adds').insert([{
@@ -2996,7 +3006,8 @@ async function addCustomQuickAdd(meal){
       carbs: meal.carbs,
       fat: meal.fat,
       base_grams: baseGrams,
-      base_ml: baseMl
+      base_ml: baseMl,
+      base_units: baseUnits
     }]);
   }catch(e){ console.error('Opslaan snel-toevoegen-item', e); }
   await renderCustomQuickAdds();
@@ -3023,11 +3034,12 @@ const FOOD_EMOJI_KEYWORDS = [
   ['ei', '\u{1F95A}'],
   ['banaan', '\u{1F34C}'],
   ['aardappel', '\u{1F954}'], ['sinaasappel', '\u{1F34A}'], ['mandarijn', '\u{1F34A}'],
+  ['appelstroop', '\u{1F36F}'],
   ['appel', '\u{1F34E}'],
   ['druif', '\u{1F347}'],
   ['broodje', '\u{1F96A}'], ['sandwich', '\u{1F96A}'], ['brood', '\u{1F35E}'],
   ['havermout', '\u{1F963}'], ['muesli', '\u{1F963}'], ['oats', '\u{1F963}'],
-  ['kwark', '\u{1F963}'], ['yoghurt', '\u{1F963}'],
+  ['kwark', '\u{1F376}'], ['yoghurt', '\u{1F376}'],
   ['macaroni', '\u{1F35D}'], ['pasta', '\u{1F35D}'], ['spaghetti', '\u{1F35D}'],
   ['rijst', '\u{1F35A}'],
   ['patat', '\u{1F35F}'],
@@ -3038,7 +3050,7 @@ const FOOD_EMOJI_KEYWORDS = [
   ['kaas', '\u{1F9C0}'],
   ['noot', '\u{1F95C}'], ['noten', '\u{1F95C}'], ['pinda', '\u{1F95C}'], ['amandel', '\u{1F95C}'],
   ['gehakt', '\u{1F969}'], ['biefstuk', '\u{1F969}'], ['vlees', '\u{1F969}'],
-  ['bier', '\u{1F37A}'], ['leffe', '\u{1F37A}'], ['corona', '\u{1F37A}'], ['wijn', '\u{1F377}'],
+  ['bier', '\u{1F37A}'], ['leffe', '\u{1F37A}'], ['corona', '\u{1F37A}'], ['gerardus', '\u{1F37A}'], ['wijn', '\u{1F377}'],
   ['ijsje', '\u{1F366}'],
   ['koffie', '\u2615'],
   ['thee', '\u{1F375}'],
@@ -3049,12 +3061,24 @@ const FOOD_EMOJI_KEYWORDS = [
   ['chocolade', '\u{1F36B}'],
   ['winegum', '\u{1F36C}'], ['snoep', '\u{1F36C}'], ['drop', '\u{1F36C}'],
 ];
-function getFoodEmoji(name){
-  const lower = (name||'').toLowerCase();
+function getSingleFoodEmoji(text){
+  const lower = (text||'').toLowerCase();
   for(const [keyword, emoji] of FOOD_EMOJI_KEYWORDS){
     if(lower.includes(keyword)) return emoji;
   }
-  return '\u{1F37D}\uFE0F'; // neutraal bord-icoontje als fallback
+  return null;
+}
+// Combinatie-maaltijden ("40g havermout + 250ml kwark + 1x banaan") krijgen
+// per onderdeel (gesplitst op "+") een eigen icoon achter elkaar, i.p.v. maar
+// één icoon voor de hele omschrijving.
+function getFoodEmoji(name){
+  const segments = (name||'').split('+');
+  const emojis = [];
+  for(const seg of segments){
+    const e = getSingleFoodEmoji(seg);
+    if(e && emojis[emojis.length-1] !== e) emojis.push(e);
+  }
+  return emojis.length ? emojis.join('') : '\u{1F37D}\uFE0F'; // neutraal bord-icoontje als fallback
 }
 
 async function renderCustomQuickAdds(){
@@ -3092,24 +3116,31 @@ async function renderCustomQuickAdds(){
       const isLast = i===items.length-1;
       const gramInputId = `customGrams-${group}-${m.origIdx}`;
       const mlInputId = `customMl-${group}-${m.origIdx}`;
-      // Herkende gram-hoeveelheid (bijv. "700g krieltjes") wordt aanpasbaar
-      // i.p.v. altijd dezelfde vaste macro's toe te voegen.
+      const unitInputId = `customUnits-${group}-${m.origIdx}`;
+      // Herkende hoeveelheid (gram/ml/stuks) wordt aanpasbaar i.p.v. altijd
+      // dezelfde vaste macro's toe te voegen. De naam zelf hoeft de
+      // hoeveelheid niet te bevatten — die staat al in dit invoerveld en in
+      // de "(bij X)"-tekst hieronder.
       const gramInput = m.baseGrams
         ? `<input type="number" id="${gramInputId}" value="${m.baseGrams}" min="1" style="width:52px;padding:6px 4px;flex-shrink:0;"><span style="font-size:11px;color:var(--ink-soft);flex-shrink:0;">g</span>`
         : '';
       const mlInput = m.baseMl
         ? `<input type="number" id="${mlInputId}" value="${m.baseMl}" min="1" style="width:52px;padding:6px 4px;flex-shrink:0;"><span style="font-size:11px;color:var(--ink-soft);flex-shrink:0;">ml</span>`
         : '';
+      const unitInput = m.baseUnits
+        ? `<input type="number" id="${unitInputId}" value="${m.baseUnits}" min="1" style="width:44px;padding:6px 4px;flex-shrink:0;"><span style="font-size:11px;color:var(--ink-soft);flex-shrink:0;">stuks</span>`
+        : '';
       return `
         <div class="stat-row" style="border-bottom:${isLast?'none':'1px solid var(--line)'};">
           <div>
             <div class="meal-desc">${getFoodEmoji(m.desc)} ${escapeHtml(m.desc)}</div>
-            <div class="meal-meta">${escapeHtml(metaParts.join(' &middot; '))}${m.baseGrams ? ' (bij '+m.baseGrams+'g)' : ''}${m.baseMl ? ' (bij '+m.baseMl+'ml)' : ''}</div>
+            <div class="meal-meta">${escapeHtml(metaParts.join(', '))}</div>
           </div>
           <div style="display:flex;align-items:center;gap:6px;flex-wrap:nowrap;">
             ${gramInput}
             ${mlInput}
-            <button class="btn-secondary customQuickAddBtn" data-idx="${m.origIdx}" data-gram-input="${gramInputId}" data-ml-input="${mlInputId}" style="flex-shrink:0;">+ Toevoegen</button>
+            ${unitInput}
+            <button class="btn-secondary customQuickAddBtn" data-idx="${m.origIdx}" data-gram-input="${gramInputId}" data-ml-input="${mlInputId}" data-unit-input="${unitInputId}" style="flex-shrink:0;">+ Toevoegen</button>
             <button class="btn-secondary customQuickAddRemove" data-desc="${escapeHtml(m.desc)}" title="Verwijderen uit Snel toevoegen" style="padding:6px 10px;flex-shrink:0;">&times;</button>
           </div>
         </div>`;
@@ -3121,12 +3152,14 @@ async function renderCustomQuickAdds(){
         const gramInputEl = gramInputId ? document.getElementById(gramInputId) : null;
         const mlInputId = e.target.dataset.mlInput;
         const mlInputEl = mlInputId ? document.getElementById(mlInputId) : null;
+        const unitInputId = e.target.dataset.unitInput;
+        const unitInputEl = unitInputId ? document.getElementById(unitInputId) : null;
         if(meal.baseGrams && gramInputEl){
           const enteredGrams = Math.max(1, Number(gramInputEl.value)||meal.baseGrams);
           const scale = enteredGrams / meal.baseGrams;
           const scaledMeal = {
             ...meal,
-            desc: meal.desc.replace(/^\d+\s*g\b/i, enteredGrams+'g'),
+            desc: enteredGrams + 'g ' + stripLeadingQuantity(meal.desc),
             kcal: Math.round(meal.kcal*scale),
             protein: Math.round(meal.protein*scale*10)/10,
             carbs: Math.round(meal.carbs*scale*10)/10,
@@ -3138,7 +3171,19 @@ async function renderCustomQuickAdds(){
           const scale = enteredMl / meal.baseMl;
           const scaledMeal = {
             ...meal,
-            desc: meal.desc.replace(/\d+\s*ml\b/i, enteredMl+'ml'),
+            desc: enteredMl + 'ml ' + stripLeadingQuantity(meal.desc),
+            kcal: Math.round(meal.kcal*scale),
+            protein: Math.round(meal.protein*scale*10)/10,
+            carbs: Math.round(meal.carbs*scale*10)/10,
+            fat: Math.round(meal.fat*scale*10)/10
+          };
+          quickAdd(scaledMeal, document.getElementById('quickAddStatus'), e.target);
+        } else if(meal.baseUnits && unitInputEl){
+          const enteredUnits = Math.max(1, Number(unitInputEl.value)||meal.baseUnits);
+          const scale = enteredUnits / meal.baseUnits;
+          const scaledMeal = {
+            ...meal,
+            desc: enteredUnits + 'x ' + stripLeadingQuantity(meal.desc),
             kcal: Math.round(meal.kcal*scale),
             protein: Math.round(meal.protein*scale*10)/10,
             carbs: Math.round(meal.carbs*scale*10)/10,
