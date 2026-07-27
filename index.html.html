@@ -3297,7 +3297,12 @@ const FOOD_EMOJI_KEYWORDS = [
   ['appelstroop', '\u{1F36F}'],
   ['appel', '\u{1F34E}'],
   ['druif', '\u{1F347}'],
-  ['broodje', '\u{1F96A}'], ['sandwich', '\u{1F96A}'], ['brood', '\u{1F35E}'],
+  ['broodje', '\u{1F96A}'], ['sandwich', '\u{1F96A}'],
+  // Geen kant-en-klare emoji voor een donkerbruin bolletje beschikbaar (bread-emoji
+  // oogt te licht, croissant/baguette kloppen niet qua vorm) -> eigen SVG-icoontje.
+  ['granenbol', '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="1em" height="1em" style="vertical-align:-0.15em;"><ellipse cx="12" cy="14" rx="10" ry="7" fill="#5c3417"/><ellipse cx="12" cy="11" rx="9" ry="6" fill="#7a4a23"/><path d="M7 10 Q9 13 7 16 M12 9 Q13 13 12 17 M17 10 Q15 13 17 16" stroke="#3d220e" stroke-width="1" fill="none" stroke-linecap="round"/></svg>'],
+  ['bolletje', '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="1em" height="1em" style="vertical-align:-0.15em;"><ellipse cx="12" cy="14" rx="10" ry="7" fill="#5c3417"/><ellipse cx="12" cy="11" rx="9" ry="6" fill="#7a4a23"/><path d="M7 10 Q9 13 7 16 M12 9 Q13 13 12 17 M17 10 Q15 13 17 16" stroke="#3d220e" stroke-width="1" fill="none" stroke-linecap="round"/></svg>'],
+  ['brood', '\u{1F35E}'],
   ['havermout', '\u{1F963}'], ['muesli', '\u{1F963}'], ['oats', '\u{1F963}'],
   ['kwark', '\u{1F376}'], ['yoghurt', '\u{1F376}'],
   ['macaroni', '\u{1F35D}'], ['pasta', '\u{1F35D}'], ['spaghetti', '\u{1F35D}'],
@@ -3324,7 +3329,12 @@ const FOOD_EMOJI_KEYWORDS = [
 function getSingleFoodEmoji(text){
   const lower = (text||'').toLowerCase();
   for(const [keyword, emoji] of FOOD_EMOJI_KEYWORDS){
-    if(lower.includes(keyword)) return emoji;
+    // Korte trefwoorden (zoals "ei" of "sla") mogen alleen als los woord
+    // matchen, anders herkent bijv. "onbereid" of "slagroom" ze per ongeluk
+    // als ei/sla en krijgt het verkeerde icoontje.
+    if(keyword.length <= 3){
+      if(new RegExp(`\\b${keyword}\\b`).test(lower)) return emoji;
+    } else if(lower.includes(keyword)) return emoji;
   }
   return null;
 }
