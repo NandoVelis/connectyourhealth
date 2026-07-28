@@ -421,11 +421,13 @@
         <div class="stat-row" data-default-key="combo1" data-owner-only="Nando" style="border-bottom:1px solid var(--line);padding-top:0;flex-direction:column;align-items:stretch;gap:8px;">
           <div>
             <div class="meal-desc">🥣🍌🍶 Havermout+banaan+kwark shake</div>
-            <div class="meal-meta">250ml magere kwark vast &middot; havermout en aantal bananen aanpasbaar</div>
+            <div class="meal-meta">havermout, kwark en aantal bananen aanpasbaar</div>
           </div>
           <div style="display:flex;align-items:center;gap:6px;flex-wrap:nowrap;">
             <input type="number" id="combo1OatsGrams" value="40" min="1" style="width:44px;padding:6px 4px;flex-shrink:0;">
             <span style="font-size:11px;color:var(--ink-soft);flex-shrink:0;">g</span>
+            <input type="number" id="combo1KwarkMl" value="250" min="0" style="width:44px;padding:6px 4px;flex-shrink:0;">
+            <span style="font-size:11px;color:var(--ink-soft);flex-shrink:0;">ml</span>
             <input type="number" id="combo1BananaQty" value="1" min="0" style="width:36px;padding:6px 4px;flex-shrink:0;">
             <span style="font-size:14px;flex-shrink:0;">&#127820;</span>
             <select class="qaGroupSelect" data-key="combo1" style="font-size:11px;padding:5px 2px;border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--ink-soft);width:76px;flex-shrink:0;">
@@ -463,11 +465,13 @@
         <div class="stat-row" data-default-key="oats" style="border-bottom:1px solid var(--line);flex-direction:column;align-items:stretch;gap:8px;">
           <div>
             <div class="meal-desc">🥣🍶 Havermout + magere kwark</div>
-            <div class="meal-meta">250ml magere kwark vast &middot; havermout aanpasbaar</div>
+            <div class="meal-meta">havermout en kwark aanpasbaar</div>
           </div>
           <div style="display:flex;align-items:center;gap:6px;flex-wrap:nowrap;">
             <input type="number" id="oatsGrams" value="40" min="1" style="width:44px;padding:6px 4px;flex-shrink:0;">
             <span style="font-size:11px;color:var(--ink-soft);flex-shrink:0;">g</span>
+            <input type="number" id="oatsKwarkMl" value="250" min="0" style="width:44px;padding:6px 4px;flex-shrink:0;">
+            <span style="font-size:11px;color:var(--ink-soft);flex-shrink:0;">ml</span>
             <select class="qaGroupSelect" data-key="oats" style="font-size:11px;padding:5px 2px;border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--ink-soft);width:76px;flex-shrink:0;">
               <option value="Ontbijt" selected>Ontbijt</option>
               <option value="Lunch">Lunch</option>
@@ -3585,17 +3589,22 @@ document.querySelectorAll('.qaGroupSelect').forEach(sel=>{
 
 document.getElementById('quickAddOats').addEventListener('click', (e)=>{
   const grams = Math.max(1, Number(document.getElementById('oatsGrams').value)||40);
+  const kwarkMl = Math.max(0, Number(document.getElementById('oatsKwarkMl').value)||0);
   const oatKcal = Math.round(grams/100*375);
   const oatProtein = Math.round(grams/100*13);
   const oatCarbs = Math.round(grams/100*61);
   const oatFat = Math.round(grams/100*7);
+  const kwarkKcal = Math.round(kwarkMl*0.452);
+  const kwarkProtein = Math.round(kwarkMl*0.10);
+  const kwarkCarbs = Math.round(kwarkMl*0.04);
+  const kwarkFat = Math.round(kwarkMl*0.004);
   quickAdd({
-    desc: grams + 'g havermout + 250ml magere kwark',
+    desc: grams + 'g havermout + ' + kwarkMl + 'ml magere kwark',
     mealType: 'Ontbijt',
-    kcal: oatKcal + 113,
-    protein: oatProtein + 25,
-    carbs: oatCarbs + 10,
-    fat: oatFat + 1,
+    kcal: oatKcal + kwarkKcal,
+    protein: oatProtein + kwarkProtein,
+    carbs: oatCarbs + kwarkCarbs,
+    fat: oatFat + kwarkFat,
     time: ''
   }, document.getElementById('quickAddStatus'), e.target);
 });
@@ -3694,18 +3703,23 @@ document.getElementById('quickAddLeffe').addEventListener('click', (e)=>{
 
 document.getElementById('quickAddCombo1').addEventListener('click', (e)=>{
   const grams = Math.max(1, Number(document.getElementById('combo1OatsGrams').value)||40);
+  const kwarkMl = Math.max(0, Number(document.getElementById('combo1KwarkMl').value)||0);
   const bananas = Math.max(0, Number(document.getElementById('combo1BananaQty').value)||0);
   const oatKcal = Math.round(grams/100*375);
   const oatProtein = Math.round(grams/100*13);
   const oatCarbs = Math.round(grams/100*61);
   const oatFat = Math.round(grams/100*7);
+  const kwarkKcal = Math.round(kwarkMl*0.452);
+  const kwarkProtein = Math.round(kwarkMl*0.10);
+  const kwarkCarbs = Math.round(kwarkMl*0.04);
+  const kwarkFat = Math.round(kwarkMl*0.004);
   quickAdd({
-    desc: grams + 'g havermout + 250ml magere kwark + ' + bananas + 'x banaan',
+    desc: grams + 'g havermout + ' + kwarkMl + 'ml magere kwark + ' + bananas + 'x banaan',
     mealType: 'Ontbijt',
-    kcal: oatKcal + 113 + bananas*105,
-    protein: oatProtein + 25 + bananas*1,
-    carbs: oatCarbs + 10 + bananas*27,
-    fat: oatFat + 1,
+    kcal: oatKcal + kwarkKcal + bananas*105,
+    protein: oatProtein + kwarkProtein + bananas*1,
+    carbs: oatCarbs + kwarkCarbs + bananas*27,
+    fat: oatFat + kwarkFat,
     time: ''
   }, document.getElementById('quickAddStatus'), e.target);
 });
