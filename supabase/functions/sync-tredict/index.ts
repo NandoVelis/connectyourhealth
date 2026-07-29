@@ -289,6 +289,17 @@ Deno.serve(async (req) => {
       misc: "sportschool", // Tredict tagt handmatig gelogde/krachttraining-sessies vaak zo
     };
 
+    // Dagen die handmatig gecorrigeerd zijn (bijv. een Tredict-activiteit die
+    // per ongeluk 20 uur lang bleef doorlopen) mogen een volgende sync niet
+    // stilzwijgend weer overschrijven met dezelfde foute bron-data — zowel
+    // niet in de training-tabel als niet op het teambord.
+    const { data: overrideRows } = await supabase
+      .from("training")
+      .select("training_date")
+      .eq("owner", owner)
+      .eq("manual_override", true);
+    const overriddenDates = new Set((overrideRows || []).map((r: any) => r.training_date));
+
     const activityListResponse = await fetchWithTimeout(
       "https://www.tredict.com/api/oauth/v2/activityList?pageSize=100",
       { headers: authHeaders }
@@ -350,6 +361,8 @@ Deno.serve(async (req) => {
     }
 
     for (const [dateStr, activities] of Object.entries(activitiesByDate)) {
+      if (overriddenDates.has(dateStr)) continue; // handmatig gecorrigeerd, niet overschrijven
+
       const activityKcalSum = activities.reduce(
         (sum, a: any) => sum + (a.kcal || 0),
         0
@@ -436,6 +449,8 @@ Deno.serve(async (req) => {
 
     const teamEntryRows: any[] = [];
     for (const dateStr of allSyncDates) {
+      if (overriddenDates.has(dateStr)) continue; // handmatig gecorrigeerd, teambord voor deze dag met rust laten
+
       const activities = activitiesByDate[dateStr] || [];
       const kmByType = { hardlopen: 0, fietsen: 0, zwemmen: 0 } as Record<string, number>;
       const minByType = { hardlopen: 0, fietsen: 0, zwemmen: 0, sportschool: 0 } as Record<string, number>;
