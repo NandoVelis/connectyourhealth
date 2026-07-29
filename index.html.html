@@ -526,6 +526,25 @@
             <button class="btn-secondary defaultQuickAddRemove" data-key="blueberries" title="Verwijderen uit Snel toevoegen" style="padding:6px 10px;flex-shrink:0;">&times;</button>
           </div>
         </div>
+        <div class="stat-row" data-default-key="kwark" style="border-bottom:1px solid var(--line);flex-direction:column;align-items:stretch;gap:8px;">
+          <div>
+            <div class="meal-desc">🍶 Magere kwark</div>
+            <div class="meal-meta">~45 kcal per 100ml &middot; aantal ml aanpasbaar</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:6px;flex-wrap:nowrap;">
+            <input type="number" id="kwarkMl" value="250" min="0" style="width:52px;padding:6px 4px;flex-shrink:0;">
+            <span style="font-size:11px;color:var(--ink-soft);flex-shrink:0;">ml</span>
+            <select class="qaGroupSelect" data-key="kwark" style="font-size:11px;padding:5px 2px;border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--ink-soft);width:76px;flex-shrink:0;">
+              <option value="Ontbijt" selected>Ontbijt</option>
+              <option value="Lunch">Lunch</option>
+              <option value="Snack">Snack</option>
+              <option value="Diner">Diner</option>
+              <option value="Drinken">Drinken</option>
+            </select>
+            <button class="btn-secondary" id="quickAddKwark" style="flex-shrink:0;padding:8px 10px;">+ Toevoegen</button>
+            <button class="btn-secondary defaultQuickAddRemove" data-key="kwark" title="Verwijderen uit Snel toevoegen" style="padding:6px 10px;flex-shrink:0;">&times;</button>
+          </div>
+        </div>
         <div id="customQuickAddList-Ontbijt"></div>
         </div>
       </div>
@@ -3700,9 +3719,23 @@ document.querySelectorAll('.qaGroupSelect').forEach(sel=>{
 });
 
 
+// Leest een hoeveelheid-invoerveld, met een fallback als het veld leeg of
+// ongeldig is. Belangrijk: gebruikt niet "|| fallback", want dat behandelt
+// een bewust ingevulde 0 als "leeg" en vervangt 'm alsnog door de fallback
+// (bijv. 0g havermout invullen om het uit een combi te laten, pakte dan
+// alsnog de standaard 40g).
+function numOrDefault(elId, fallback, min){
+  const el = document.getElementById(elId);
+  const raw = el ? el.value : '';
+  if(raw === '' || raw == null) return fallback;
+  const n = Number(raw);
+  if(isNaN(n)) return fallback;
+  return min!=null ? Math.max(min, n) : n;
+}
+
 document.getElementById('quickAddOats').addEventListener('click', (e)=>{
-  const grams = Math.max(1, Number(document.getElementById('oatsGrams').value)||40);
-  const kwarkMl = Math.max(0, Number(document.getElementById('oatsKwarkMl').value)||0);
+  const grams = numOrDefault('oatsGrams', 40, 0);
+  const kwarkMl = numOrDefault('oatsKwarkMl', 0, 0);
   const oatKcal = Math.round(grams/100*375);
   const oatProtein = Math.round(grams/100*13);
   const oatCarbs = Math.round(grams/100*61);
@@ -3723,7 +3756,7 @@ document.getElementById('quickAddOats').addEventListener('click', (e)=>{
 });
 
 document.getElementById('quickAddBlueberries').addEventListener('click', (e)=>{
-  const grams = Math.max(1, Number(document.getElementById('blueberriesGrams').value)||50);
+  const grams = numOrDefault('blueberriesGrams', 50, 0);
   quickAdd({
     desc: grams + 'g blauwe bessen',
     mealType: 'Ontbijt',
@@ -3735,8 +3768,21 @@ document.getElementById('quickAddBlueberries').addEventListener('click', (e)=>{
   }, document.getElementById('quickAddStatus'), e.target);
 });
 
+document.getElementById('quickAddKwark').addEventListener('click', (e)=>{
+  const ml = numOrDefault('kwarkMl', 250, 0);
+  quickAdd({
+    desc: ml + 'ml magere kwark',
+    mealType: 'Ontbijt',
+    kcal: Math.round(ml*0.452),
+    protein: Math.round(ml*0.10),
+    carbs: Math.round(ml*0.04),
+    fat: Math.round(ml*0.004*10)/10,
+    time: ''
+  }, document.getElementById('quickAddStatus'), e.target);
+});
+
 document.getElementById('quickAddEggs').addEventListener('click', (e)=>{
-  const qty = Math.max(1, Number(document.getElementById('eggQty').value)||2);
+  const qty = numOrDefault('eggQty', 2, 0);
   quickAdd({
     desc: qty + 'x gekookt ei',
     mealType: 'Ontbijt', kcal: 78*qty, protein: 6*qty, carbs: 1*qty, fat: 5*qty, time: ''
@@ -3744,7 +3790,7 @@ document.getElementById('quickAddEggs').addEventListener('click', (e)=>{
 });
 
 document.getElementById('quickAddEggsLunch').addEventListener('click', (e)=>{
-  const qty = Math.max(1, Number(document.getElementById('eggQtyLunch').value)||2);
+  const qty = numOrDefault('eggQtyLunch', 2, 0);
   quickAdd({
     desc: qty + 'x gekookt ei',
     mealType: 'Lunch', kcal: 78*qty, protein: 6*qty, carbs: 1*qty, fat: 5*qty, time: ''
@@ -3752,8 +3798,8 @@ document.getElementById('quickAddEggsLunch').addEventListener('click', (e)=>{
 });
 
 document.getElementById('quickAddLunch').addEventListener('click', (e)=>{
-  const breadQty = Math.max(0, Number(document.getElementById('lunchBreadQty').value)||0);
-  const chickenQty = Math.max(0, Number(document.getElementById('lunchChickenQty').value)||0);
+  const breadQty = numOrDefault('lunchBreadQty', 0, 0);
+  const chickenQty = numOrDefault('lunchChickenQty', 0, 0);
   if(breadQty===0 && chickenQty===0){
     document.getElementById('quickAddStatus').innerHTML = '<span class="status-err">Vul minstens 1 broodje of plakje in.</span>';
     return;
@@ -3787,7 +3833,7 @@ document.getElementById('quickAddApple').addEventListener('click', (e)=>{
 });
 
 document.getElementById('quickAddWinegum').addEventListener('click', (e)=>{
-  const qty = Math.max(1, Number(document.getElementById('winegumQty').value)||5);
+  const qty = numOrDefault('winegumQty', 5, 0);
   quickAdd({
     desc: qty + 'x winegum',
     mealType: 'Snack', kcal: 15*qty, protein: 0, carbs: 3.5*qty, fat: 0, time: ''
@@ -3802,7 +3848,7 @@ document.getElementById('quickAddShake').addEventListener('click', (e)=>{
 });
 
 document.getElementById('quickAddLeffe').addEventListener('click', (e)=>{
-  const ml = Math.max(1, Number(document.getElementById('leffeMl').value)||330);
+  const ml = numOrDefault('leffeMl', 330, 0);
   quickAdd({
     desc: ml + 'ml Leffe Blond 0.0',
     mealType: 'Drinken',
@@ -3815,9 +3861,9 @@ document.getElementById('quickAddLeffe').addEventListener('click', (e)=>{
 });
 
 document.getElementById('quickAddCombo1').addEventListener('click', (e)=>{
-  const grams = Math.max(1, Number(document.getElementById('combo1OatsGrams').value)||40);
-  const kwarkMl = Math.max(0, Number(document.getElementById('combo1KwarkMl').value)||0);
-  const bananas = Math.max(0, Number(document.getElementById('combo1BananaQty').value)||0);
+  const grams = numOrDefault('combo1OatsGrams', 40, 0);
+  const kwarkMl = numOrDefault('combo1KwarkMl', 0, 0);
+  const bananas = numOrDefault('combo1BananaQty', 0, 0);
   const oatKcal = Math.round(grams/100*375);
   const oatProtein = Math.round(grams/100*13);
   const oatCarbs = Math.round(grams/100*61);
@@ -3838,8 +3884,8 @@ document.getElementById('quickAddCombo1').addEventListener('click', (e)=>{
 });
 
 document.getElementById('quickAddCombo2').addEventListener('click', (e)=>{
-  const grams = Math.max(1, Number(document.getElementById('combo2OatsGrams').value)||40);
-  const bananas = Math.max(0, Number(document.getElementById('combo2BananaQty').value)||0);
+  const grams = numOrDefault('combo2OatsGrams', 40, 0);
+  const bananas = numOrDefault('combo2BananaQty', 0, 0);
   const oatKcal = Math.round(grams/100*375);
   const oatProtein = Math.round(grams/100*13);
   const oatCarbs = Math.round(grams/100*61);
@@ -3856,7 +3902,7 @@ document.getElementById('quickAddCombo2').addEventListener('click', (e)=>{
 });
 
 document.getElementById('quickAddMacaroni').addEventListener('click', (e)=>{
-  const grams = Math.max(0, Number(document.getElementById('macaroniKipGrams').value)||0);
+  const grams = numOrDefault('macaroniKipGrams', 0, 0);
   // Onthoud het laatst ingevoerde aantal gram kip, want dat verschilt elke
   // keer per batch — de saus/pasta/groenten blijven altijd hetzelfde.
   try{ localStorage.setItem('infood-macaroni-kip-grams', String(grams)); }catch(err){}
@@ -3875,7 +3921,7 @@ document.getElementById('quickAddMacaroni').addEventListener('click', (e)=>{
 });
 
 document.getElementById('quickAddKipfilet').addEventListener('click', (e)=>{
-  const grams = Math.max(1, Number(document.getElementById('kipfiletGrams').value)||225);
+  const grams = numOrDefault('kipfiletGrams', 225, 0);
   quickAdd({
     desc: grams + 'g kipfilet (gebakken)',
     mealType: 'Diner',
