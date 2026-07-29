@@ -57,7 +57,7 @@
     background:linear-gradient(115deg,#7A0A66 0%,#4B1F6B 30%,#1A1240 60%,#000725 100%);
     display:flex;
     align-items:center;
-    justify-content:center;
+    justify-content:space-between;
     gap:28px;
     overflow:hidden;
     text-align:center;
@@ -78,34 +78,36 @@
   .brand-banner-mark{
     position:relative;
     width:72px;
-    height:72px;
+    height:90px;
     flex-shrink:0;
   }
-  .petal{
-    position:absolute;
-    width:36px;
-    height:36px;
+  /* Blad bovenaan: twee gespiegelde "komma"-vormen (dezelfde
+     hoek-radius-truc als de losse petals hieronder) die samen een
+     gekruld blad vormen. */
+  .mark-leaf{ position:relative; width:72px; height:44px; }
+  .leaf-lobe{ position:absolute; width:40px; height:40px; background:#00A878; }
+  .leaf-lobe-a{ top:0; right:0; border-radius:0 100% 0 100%; }
+  .leaf-lobe-b{ top:14px; left:0; border-radius:100% 0 100% 0; }
+  /* Onderste rij: links twee gestapelde magenta bogen, rechts een
+     windmolen van 4 kwartcirkels rond een gedeeld middelpunt. */
+  .mark-bottom{ position:relative; width:72px; height:48px; }
+  .dome{ position:absolute; left:0; width:24px; height:24px; background:#96007A; border-radius:0 0 50% 50%; }
+  .dome-1{ top:0; }
+  .dome-2{ top:24px; }
+  .pin{ position:absolute; width:24px; height:24px; }
+  .pin-tl{ top:0; left:24px; background:#8D85FF; border-radius:100% 0 0 0; }
+  .pin-tr{ top:0; left:48px; background:#6B63D6; border-radius:0 100% 0 0; }
+  .pin-bl{ top:24px; left:24px; background:#6B63D6; border-radius:0 0 0 100%; }
+  .pin-br{ top:24px; left:48px; background:#8D85FF; border-radius:0 0 100% 0; }
+  /* "CY"-badge linksboven: doorschijnend wit rondje met witte letters. */
+  .cy-badge{
+    display:flex;align-items:center;justify-content:center;
+    width:48px;height:48px;border-radius:50%;flex-shrink:0;
+    background:rgba(255,255,255,.16);
+    border:1.5px solid rgba(255,255,255,.55);
+    color:#FFFFFF;font-family:'Archivo',sans-serif;font-weight:700;
+    font-size:16px;letter-spacing:.02em;
   }
-  .petal-teal{
-    top:0; right:0;
-    background:#00A878;
-    border-radius:0 100% 0 100%;
-  }
-  .petal-magenta{
-    bottom:0; left:0;
-    background:#96007A;
-    border-radius:0 100% 0 100%;
-  }
-  .petal-split{
-    position:absolute;
-    bottom:0; right:0;
-    width:36px; height:36px;
-    border-radius:100% 0 0 0;
-    overflow:hidden;
-  }
-  .tri{ position:absolute; width:100%; height:100%; }
-  .tri-light{ background:#8D85FF; clip-path:polygon(0 0,100% 0,0 100%); }
-  .tri-dark{ background:#6B63D6; clip-path:polygon(100% 0,100% 100%,0 100%); }
   @media(max-width:480px){
     .brand-banner{ flex-direction:column; padding:22px 20px; }
   }
@@ -270,17 +272,24 @@
 <body>
 <div class="wrap">
   <div class="brand-banner">
+    <div class="cy-badge" aria-hidden="true">CY</div>
     <div class="brand-banner-text">
       <div class="brand-title">ConnectYourHealth</div>
       <div class="brand-subtitle">InFood = Output</div>
     </div>
     <div class="brand-banner-mark" aria-hidden="true">
-      <span class="petal petal-teal"></span>
-      <span class="petal petal-magenta"></span>
-      <span class="petal-split">
-        <span class="tri tri-light"></span>
-        <span class="tri tri-dark"></span>
-      </span>
+      <div class="mark-leaf">
+        <span class="leaf-lobe leaf-lobe-a"></span>
+        <span class="leaf-lobe leaf-lobe-b"></span>
+      </div>
+      <div class="mark-bottom">
+        <span class="dome dome-1"></span>
+        <span class="dome dome-2"></span>
+        <span class="pin pin-tl"></span>
+        <span class="pin pin-tr"></span>
+        <span class="pin pin-bl"></span>
+        <span class="pin pin-br"></span>
+      </div>
     </div>
   </div>
 
