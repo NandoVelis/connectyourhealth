@@ -75,30 +75,19 @@
     color:#C9C4F0;
     margin-top:2px;
   }
+  /* Echte beeldmerk-afbeelding (zelfde bestand als in het ConnectYou
+     Control Center), met de donkere achtergrond er lokaal uitgeknipt
+     (echte transparantie i.p.v. mix-blend-mode, want die liet nog een
+     zichtbaar donker vlak achter op onze paarse banner-achtergrond). */
   .brand-banner-mark{
     position:relative;
-    width:72px;
-    height:90px;
+    width:90px;
+    height:110px;
     flex-shrink:0;
   }
-  /* Blad bovenaan: twee gespiegelde "komma"-vormen (dezelfde
-     hoek-radius-truc als de losse petals hieronder) die samen een
-     gekruld blad vormen. */
-  .mark-leaf{ position:relative; width:72px; height:44px; }
-  .leaf-lobe{ position:absolute; width:40px; height:40px; background:#00A878; }
-  .leaf-lobe-a{ top:0; right:0; border-radius:0 100% 0 100%; }
-  .leaf-lobe-b{ top:14px; left:0; border-radius:100% 0 100% 0; }
-  /* Onderste rij: links twee gestapelde magenta bogen, rechts een
-     windmolen van 4 kwartcirkels rond een gedeeld middelpunt. */
-  .mark-bottom{ position:relative; width:72px; height:48px; }
-  .dome{ position:absolute; left:0; width:24px; height:24px; background:#96007A; border-radius:0 0 50% 50%; }
-  .dome-1{ top:0; }
-  .dome-2{ top:24px; }
-  .pin{ position:absolute; width:24px; height:24px; }
-  .pin-tl{ top:0; left:24px; background:#8D85FF; border-radius:100% 0 0 0; }
-  .pin-tr{ top:0; left:48px; background:#6B63D6; border-radius:0 100% 0 0; }
-  .pin-bl{ top:24px; left:24px; background:#6B63D6; border-radius:0 0 0 100%; }
-  .pin-br{ top:24px; left:48px; background:#8D85FF; border-radius:0 0 100% 0; }
+  .brand-banner-mark img{
+    width:100%;height:100%;object-fit:contain;display:block;
+  }
   /* "CY"-badge linksboven: doorschijnend wit rondje met witte letters. */
   .cy-badge{
     display:flex;align-items:center;justify-content:center;
@@ -278,18 +267,7 @@
       <div class="brand-subtitle">InFood = Output</div>
     </div>
     <div class="brand-banner-mark" aria-hidden="true">
-      <div class="mark-leaf">
-        <span class="leaf-lobe leaf-lobe-a"></span>
-        <span class="leaf-lobe leaf-lobe-b"></span>
-      </div>
-      <div class="mark-bottom">
-        <span class="dome dome-1"></span>
-        <span class="dome dome-2"></span>
-        <span class="pin pin-tl"></span>
-        <span class="pin pin-tr"></span>
-        <span class="pin pin-bl"></span>
-        <span class="pin pin-br"></span>
-      </div>
+      <img src="assets/logo-mark.png" alt="">
     </div>
   </div>
 
