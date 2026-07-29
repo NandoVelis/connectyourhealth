@@ -373,6 +373,11 @@
       <div id="nutritionTip" class="meal-meta" style="font-size:14px;color:var(--ink);"></div>
     </div>
 
+    <div class="card" style="margin-bottom:16px;">
+      <h3>&#127939; Trainingstip</h3>
+      <div id="trainingTip" class="meal-meta" style="font-size:14px;color:var(--ink);"></div>
+    </div>
+
     <div class="card" style="margin-bottom:16px;background:linear-gradient(115deg,#7A0A66 0%,#4B1F6B 40%,#1A1240 100%);border:none;">
       <div id="motivationQuote" style="font-family:'Archivo',sans-serif;font-size:16px;font-weight:600;color:#F5F1E8;text-align:center;line-height:1.5;"></div>
     </div>
@@ -1473,6 +1478,109 @@ function showMotivationQuote(){
   el.innerHTML = escapeHtml(q.text) + (q.author ? `<div style="margin-top:8px;font-size:12px;font-weight:400;opacity:.75;">\u2014 ${escapeHtml(q.author)}</div>` : '');
 }
 
+// Haalt de trainingen van de afgelopen `days` dagen op (alle sporttypes),
+// als basis voor de trainingstip. Los van loadTraining (die alleen één dag
+// teruggeeft) omdat de tip juist een trend over meerdere weken nodig heeft.
+async function loadRecentTrainingForTip(days){
+  const owner = currentOwner();
+  if(!owner) return [];
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - days);
+  const cutoffStr = fmtDate(cutoff);
+  try{
+    const { data, error } = await supabaseClient
+      .from('training')
+      .select('training_date, activity_type, km, duration_minutes, kcal')
+      .eq('owner', owner)
+      .gte('training_date', cutoffStr)
+      .order('training_date', { ascending: true });
+    if(error || !data) return [];
+    return data.map(r => ({
+      date: r.training_date,
+      type: r.activity_type,
+      km: Number(r.km)||0,
+      minutes: Number(r.duration_minutes)||0,
+      kcal: Number(r.kcal)||0
+    })).filter(r => r.type); // rustdag-placeholder rijen (activity_type null) overslaan
+  }catch(e){ console.error('Laden recente trainingen voor tip', e); return []; }
+}
+
+// Genereert een concrete, onderbouwde trainingstip op basis van de trend in
+// de laatste `days` dagen: tempo-ontwikkeling bij hardlopen, trainings-
+// consistentie (aantal actieve dagen) en variatie tussen disciplines.
+// Puur gebaseerd op de eigen gelogde data -- geen medisch/sportief advies,
+// alleen patronen die uit de cijfers zelf blijken.
+function generateTrainingTip(activities, days, recoveryConcern){
+  if(!activities || activities.length===0){
+    return escapeHtml('Nog geen trainingen gelogd in de afgelopen ' + days + ' dagen. Zodra er wat data binnenkomt (via Tredict-sync of handmatig) geef ik hier een tip op maat.');
+  }
+
+  const activeDates = new Set(activities.map(a=>a.date));
+  const consistencyPct = Math.round(activeDates.size / days * 100);
+
+  const runs = activities.filter(a => a.type==='hardlopen' && a.km>0 && a.minutes>0);
+  const byType = {};
+  for(const a of activities){ byType[a.type] = (byType[a.type]||0) + 1; }
+  const typesUsed = Object.keys(byType);
+
+  const tips = [];
+
+  // 1) Tempo-trend bij hardlopen: eerste helft van de periode vergelijken
+  // met de tweede helft, zodat de tip een écht signaal geeft i.p.v. ruis
+  // van één losse (trage/snelle) sessie.
+  if(runs.length >= 4){
+    const sorted = [...runs].sort((a,b)=>a.date.localeCompare(b.date));
+    const mid = Math.floor(sorted.length/2);
+    const firstHalf = sorted.slice(0, mid);
+    const secondHalf = sorted.slice(mid);
+    const paceOf = (arr) => {
+      const km = arr.reduce((s,a)=>s+a.km,0);
+      const min = arr.reduce((s,a)=>s+a.minutes,0);
+      return km>0 ? min/km : null;
+    };
+    const paceFirst = paceOf(firstHalf);
+    const paceSecond = paceOf(secondHalf);
+    if(paceFirst!=null && paceSecond!=null){
+      const deltaPct = (paceFirst - paceSecond) / paceFirst * 100; // positief = sneller geworden
+      if(deltaPct > 3){
+        tips.push(`Je hardlooptempo is verbeterd (van ${formatPace(1,paceFirst)} naar ${formatPace(1,paceSecond)}) — mooie vooruitgang. Bouw dit nu vast met een rustige duurloop, zodat je aerobe basis meegroeit met je snelheid.`);
+      } else if(deltaPct < -5){
+        tips.push(`Je tempo is de laatste tijd juist wat trager (van ${formatPace(1,paceFirst)} naar ${formatPace(1,paceSecond)}). Dat kan wijzen op vermoeidheid — bouw een rustweek in, of check of je herstel (slaap/HRV) achterblijft.`);
+      } else {
+        tips.push(`Je tempo houdt zich stabiel rond ${formatPace(1,paceSecond)}. Om echt vooruit te komen: voeg één keer per week een interval- of tempotraining toe in plaats van steeds hetzelfde rustige tempo te lopen.`);
+      }
+    }
+  } else if(runs.length >= 1){
+    tips.push(`Je hebt nog maar ${runs.length} hardloopsessie${runs.length===1?'':'s'} gelogd deze periode — log er een paar meer om een echte tempo-trend te kunnen zien.`);
+  }
+
+  // 2) Consistentie: te weinig actieve dagen, of juist geen rustdagen.
+  if(consistencyPct < 25){
+    tips.push(`Je hebt in ${activeDates.size} van de laatste ${days} dagen getraind (${consistencyPct}%). Regelmaat bouwt sneller conditie op dan losse pieken — probeer een vast dagritme, bijv. 3x per week.`);
+  } else if(consistencyPct > 85 && !recoveryConcern){
+    tips.push(`Je traint bijna elke dag (${consistencyPct}% van de laatste ${days} dagen). Zorg voor bewuste rustdagen om overbelasting te voorkomen — vooruitgang ontstaat juist tijdens herstel.`);
+  }
+
+  // 3) Variatie tussen disciplines, als signaal voor eenzijdige belasting.
+  if(typesUsed.length===1 && activities.length>=6){
+    const only = typesUsed[0];
+    const suggestion = only==='hardlopen' ? 'fietsen of zwemmen'
+      : only==='fietsen' ? 'hardlopen of zwemmen'
+      : only==='zwemmen' ? 'hardlopen of fietsen'
+      : 'wat cardio (hardlopen/fietsen/zwemmen)';
+    tips.push(`Je traint deze periode alleen ${only}. Wat variatie met ${suggestion} verlaagt de kans op overbelastingsklachten en traint andere spiergroepen mee.`);
+  }
+
+  if(recoveryConcern) {
+    tips.push('Je herstelwaarden van vandaag zien er wat minder uit — overweeg vandaag een rustige of korte training i.p.v. een zware sessie.');
+  }
+
+  if(tips.length===0){
+    return escapeHtml('Je trainingspatroon ziet er gebalanceerd uit — blijf dit volhouden en bouw geleidelijk in volume of intensiteit op.');
+  }
+  return tips.map(t=>escapeHtml(t)).join('<br><br>');
+}
+
 function generateNutritionTip(totals, targets, burned, vitals, trainingHadActivity, recoveryConcern, openMealMoments, weightKg, runningStats, customItems){
   if(targets.protein==null){
     return escapeHtml("Vul je gewicht in (via de Tredict-sync) zodat ik een tip op maat kan geven.");
@@ -1999,6 +2107,11 @@ async function renderDashboard(){
   const tipEl = document.getElementById('nutritionTip');
   if(tipEl) tipEl.innerHTML = tipText;
   showMotivationQuote();
+
+  const trainingTipDays = 28;
+  const recentTrainingForTip = await loadRecentTrainingForTip(trainingTipDays);
+  const trainingTipEl = document.getElementById('trainingTip');
+  if(trainingTipEl) trainingTipEl.innerHTML = generateTrainingTip(recentTrainingForTip, trainingTipDays, recoveryConcern);
 
   syncTeamEntry(dateStr, {
     dagscore: dagscoreVal,
