@@ -397,6 +397,7 @@ Deno.serve(async (req) => {
         km: a.km,
         duration_minutes: a.durationMinutes,
         activity_type: a.type,
+        avg_heartrate: a.avgHeartrate,
         rest_kcal: restKcal,
         total_kcal: totalKcal,
       }));
