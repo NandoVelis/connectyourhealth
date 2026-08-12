@@ -29,7 +29,7 @@ export default async function handler(req, res) {
                     },
                   },
                   {
-                    text: 'Schat de voedingswaarden van deze maaltijd in. Antwoord ALLEEN met geldige JSON, geen markdown, geen uitleg: {"desc": "korte omschrijving in het Nederlands", "kcal": <getal>, "protein": <gram>, "carbs": <gram>, "fat": <gram>}',
+                    text: 'Schat de voedingswaarden van deze maaltijd in. Schat ook de totale hoeveelheid die op de foto staat (bijv. het hele bord/de hele pan/het hele glas) in gram (of ml voor een drankje). Antwoord ALLEEN met geldige JSON, geen markdown, geen uitleg: {"desc": "korte omschrijving in het Nederlands", "kcal": <getal>, "protein": <gram>, "carbs": <gram>, "fat": <gram>, "amount": <geschatte totale hoeveelheid als getal>, "unit": "g of ml"}',
                   },
                 ],
               },
