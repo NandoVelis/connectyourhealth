@@ -765,6 +765,15 @@
       </div>
       <img id="photoPreview" class="photo-preview">
       <div id="photoStatus"></div>
+      <div class="form-row" id="photoAmountRow" style="display:none;margin-top:10px;">
+        <label>Totale hoeveelheid op de foto</label>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <input type="number" id="photoAmount" min="1" style="width:100px;">
+          <span id="photoAmountUnit" class="meal-meta" style="margin:0;">g</span>
+          <button class="btn-secondary" id="photoAmountApply">Herbereken</button>
+        </div>
+        <div class="meal-meta" style="margin-top:2px;">Klopt de door AI geschatte hoeveelheid niet? Pas 'm aan en de kcal/macro's hierboven én de al opgeslagen maaltijd worden verhoudingsgewijs herberekend.</div>
+      </div>
     </div>
 
     <div class="card form-card" style="margin-top:16px;">
@@ -1997,9 +2006,11 @@ async function renderDashboard(){
   let burned = training ? training.totalKcal : null;
   let burnedIsEstimate = false;
   let estimatedRestKcal = null;
+  let stepsWeightKg = null;
   if(burned==null){
     const fallbackWeight = (weightEntry && weightEntry.kg) ? weightEntry : await loadMostRecentWeight(dateStr);
     if(fallbackWeight && fallbackWeight.kg){
+      stepsWeightKg = fallbackWeight.kg;
       const profile = await loadProfile(owner);
       if(profile && profile.birthdate && profile.heightCm){
         estimatedRestKcal = estimateRestKcalFromProfile(fallbackWeight.kg, profile.birthdate, profile.heightCm);
@@ -2010,6 +2021,13 @@ async function renderDashboard(){
       }
     }
   }
+  // Stappen zijn alleen relevant op dagen zonder Tredict-training (anders
+  // telt de wandeling al mee via een gesynchroniseerde activiteit) -- zie
+  // extraKcalFromSteps() voor hoe dubbeltelling met het geschatte
+  // rustverbruik wordt voorkomen.
+  const loggedSteps = !training ? await loadSteps(dateStr) : null;
+  const extraStepsKcal = (!training && loggedSteps && stepsWeightKg) ? extraKcalFromSteps(loggedSteps, stepsWeightKg) : 0;
+  if(extraStepsKcal>0 && burned!=null) burned += extraStepsKcal;
 
   document.getElementById('consumedVal').textContent = totals.kcal + ' kcal';
 
@@ -2025,7 +2043,25 @@ async function renderDashboard(){
         <span class="stat-label" style="font-weight:700;">Geschat rustverbruik</span>
         <span class="stat-val">~${estimatedRestKcal} kcal</span>
       </div>
-      <div class="meal-meta" style="margin-top:4px;">Nog niet gesynchroniseerd met Tredict &mdash; dit is een schatting op basis van je profiel, geen trainingen meegeteld.</div>`;
+      <div class="meal-meta" style="margin-top:4px;">Nog niet gesynchroniseerd met Tredict &mdash; dit is een schatting op basis van je profiel, geen trainingen meegeteld.</div>
+      <div class="stat-row" style="border-top:1px solid var(--line);margin-top:10px;padding-top:10px;flex-direction:column;align-items:stretch;gap:6px;border-bottom:none;">
+        <span class="stat-label">Aantal stappen vandaag (bijv. van je Garmin-app)</span>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          <input type="number" id="stepsInput" value="${loggedSteps||''}" min="0" step="500" placeholder="bijv. 12000" style="width:110px;padding:6px 8px;">
+          <button class="btn-secondary" id="stepsSaveBtn">Opslaan</button>
+          ${extraStepsKcal>0 ? `<span class="meal-meta" style="margin:0;">+${extraStepsKcal} kcal extra verbrand</span>` : ''}
+        </div>
+        <div class="meal-meta" style="margin:0;">De eerste ${STEPS_BASELINE.toLocaleString('nl-NL')} stappen zitten al in het geschatte rustverbruik hierboven &mdash; alleen stappen daarboven tellen als extra verbruik mee, om dubbeltelling te voorkomen.</div>
+      </div>`;
+    const stepsBtn = document.getElementById('stepsSaveBtn');
+    if(stepsBtn){
+      stepsBtn.addEventListener('click', async ()=>{
+        const val = Math.max(0, Number(document.getElementById('stepsInput').value)||0);
+        stepsBtn.disabled = true;
+        await saveSteps(dateStr, val);
+        renderDashboard();
+      });
+    }
   } else if(!training){
     detailEl.innerHTML = '<div class="empty">Nog niet opgehaald voor deze dag.</div>';
   } else {
@@ -2428,6 +2464,45 @@ async function saveWeight(dateStr, kg){
     if(insErr){ console.error('saveWeight insert error', insErr); return false; }
     return true;
   }catch(e){ console.error('saveWeight exception', e); return false; }
+}
+
+// ---- Handmatige stappen (alleen gebruikt op dagen zonder Tredict-training) ----
+async function loadSteps(dateStr){
+  const owner = currentOwner();
+  if(!owner) return null;
+  const { data, error } = await supabaseClient
+    .from('manual_steps')
+    .select('steps')
+    .eq('entry_date', dateStr)
+    .eq('owner', owner)
+    .maybeSingle();
+  if(error || !data) return null;
+  return data.steps;
+}
+async function saveSteps(dateStr, steps){
+  const owner = currentOwner();
+  if(!owner) return false;
+  try{
+    const { error } = await supabaseClient
+      .from('manual_steps')
+      .upsert([{ owner, entry_date: dateStr, steps, updated_at: new Date().toISOString() }], { onConflict: 'owner,entry_date' });
+    if(error){ console.error('saveSteps error', error); return false; }
+    return true;
+  }catch(e){ console.error('saveSteps exception', e); return false; }
+}
+// Rekent stappen om naar EXTRA verbrande kcal, bovenop wat het geschatte
+// rustverbruik (BMR x 1.31) al impliciet meerekent. De 1.31-factor zit
+// tussen "sedentair" (1.2) en "licht actief" (1.375) in en veronderstelt
+// dus al wat dagelijkse basisbeweging -- vandaar dat alleen stappen BOVEN
+// een baseline van 5000 (de gangbare grens voor een sedentaire dag) als
+// extra kcal meetellen, i.p.v. alle stappen los te berekenen en dat
+// bovenop het rustverbruik te tellen (dubbeltelling).
+const STEPS_BASELINE = 5000;
+const KCAL_PER_STEP_PER_KG = 0.0005;
+function extraKcalFromSteps(steps, weightKg){
+  if(!steps || !weightKg) return 0;
+  const extraSteps = Math.max(0, steps - STEPS_BASELINE);
+  return Math.round(extraSteps * KCAL_PER_STEP_PER_KG * weightKg);
 }
 
 function trainingDistanceKm(training){
@@ -4139,10 +4214,34 @@ photoInput.addEventListener('change', async (e)=>{
       };
       const dateStr = fmtDate(state.currentDate);
       const meals = await loadMeals(dateStr);
+      const savedIdx = meals.length;
       meals.push(meal);
       const ok = await saveMeals(dateStr, meals);
       if(ok){
         statusEl.innerHTML = '<span class="status-msg">Toegevoegd bij ' + fmtDateLabel(state.currentDate) + ': ' + escapeHtml(meal.desc) + ' (' + meal.kcal + ' kcal). Klopt de schatting niet? Pas de velden hieronder aan en klik op Opslaan om te overschrijven, of verwijder de maaltijd bij Maaltijden op het Dashboard.</span>';
+
+        // Totale hoeveelheid (g/ml) die de AI schatte -- laat dit aanpasbaar
+        // zodat de macro's van deze specifieke opgeslagen maaltijd
+        // verhoudingsgewijs herberekend kunnen worden, zonder alles opnieuw
+        // te hoeven invoeren.
+        const amountRow = document.getElementById('photoAmountRow');
+        const amountInput = document.getElementById('photoAmount');
+        const amountUnitEl = document.getElementById('photoAmountUnit');
+        const parsedAmount = Number(parsed.amount);
+        if(parsedAmount>0){
+          lastPhotoAnalysis = {
+            baseAmount: parsedAmount,
+            unit: (parsed.unit==='ml') ? 'ml' : 'g',
+            kcal: meal.kcal, protein: meal.protein, carbs: meal.carbs, fat: meal.fat,
+            desc: meal.desc, dateStr, mealIdx: savedIdx
+          };
+          amountInput.value = parsedAmount;
+          amountUnitEl.textContent = lastPhotoAnalysis.unit;
+          amountRow.style.display = '';
+        } else {
+          lastPhotoAnalysis = null;
+          amountRow.style.display = 'none';
+        }
         renderDashboard();
       } else {
         statusEl.innerHTML = '<span class="status-msg status-err">Schatting gelukt, maar opslaan is mislukt. Check de velden hieronder en klik zelf op Opslaan.</span>';
@@ -4152,6 +4251,35 @@ photoInput.addEventListener('change', async (e)=>{
       const msg = (err && err.message) ? err.message : 'Analyse mislukt.';
       statusEl.innerHTML = '<span class="status-msg status-err">' + escapeHtml(msg) + ' Vul de velden handmatig in.</span>';
     }
+});
+
+// Onthoudt de laatste foto-analyse (basishoeveelheid + macro's + waar de
+// maaltijd is opgeslagen), zodat "Herbereken" altijd vanaf de originele
+// AI-schatting schaalt i.p.v. cumulatief door te rekenen op een al
+// aangepast tussenresultaat.
+let lastPhotoAnalysis = null;
+document.getElementById('photoAmountApply').addEventListener('click', async ()=>{
+  if(!lastPhotoAnalysis) return;
+  const newAmount = Math.max(1, Number(document.getElementById('photoAmount').value)||lastPhotoAnalysis.baseAmount);
+  const scale = newAmount / lastPhotoAnalysis.baseAmount;
+  const scaledKcal = Math.round(lastPhotoAnalysis.kcal*scale);
+  const scaledProtein = Math.round(lastPhotoAnalysis.protein*scale*10)/10;
+  const scaledCarbs = Math.round(lastPhotoAnalysis.carbs*scale*10)/10;
+  const scaledFat = Math.round(lastPhotoAnalysis.fat*scale*10)/10;
+
+  document.getElementById('fKcal').value = scaledKcal;
+  document.getElementById('fProtein').value = scaledProtein;
+  document.getElementById('fCarbs').value = scaledCarbs;
+  document.getElementById('fFat').value = scaledFat;
+
+  const { dateStr, mealIdx } = lastPhotoAnalysis;
+  const meals = await loadMeals(dateStr);
+  if(meals[mealIdx]){
+    meals[mealIdx] = { ...meals[mealIdx], kcal: scaledKcal, protein: scaledProtein, carbs: scaledCarbs, fat: scaledFat };
+    await saveMeals(dateStr, meals);
+    if(dateStr === fmtDate(state.currentDate)) renderDashboard();
+    document.getElementById('photoStatus').innerHTML = `<span class="status-msg">Herberekend naar ${newAmount}${lastPhotoAnalysis.unit}: ${scaledKcal} kcal.</span>`;
+  }
 });
 
 // ---- History ----
