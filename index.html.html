@@ -808,6 +808,17 @@
           <input type="text" id="fTime" placeholder="12:30">
         </div>
       </div>
+      <div class="form-row" style="margin-top:4px;">
+        <label>Aantal porties (bijv. hele pan verdelen)</label>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          <input type="number" id="fPortions" value="1" min="1" max="10" style="width:64px;">
+          <span class="meal-meta" style="margin:0;">De ingevulde kcal/macro's hierboven worden gezien als het TOTAAL (bijv. de hele pan) en gedeeld door dit aantal.</span>
+        </div>
+      </div>
+      <div class="form-row" id="fSpreadRow" style="display:none;align-items:center;gap:8px;">
+        <input type="checkbox" id="fSpreadDays" style="width:auto;">
+        <label for="fSpreadDays" style="margin:0;text-transform:none;letter-spacing:normal;font-weight:400;color:var(--ink);">Overige porties ook meteen inplannen voor de komende dagen (1 portie per dag, zelfde moment)</label>
+      </div>
       <div class="form-row" style="display:flex;align-items:center;gap:8px;margin-top:4px;">
         <input type="checkbox" id="fSaveAsQuickAdd" style="width:auto;">
         <label for="fSaveAsQuickAdd" style="margin:0;text-transform:none;letter-spacing:normal;font-weight:400;color:var(--ink);">Ook bewaren bij "Snel toevoegen" voor volgende keer</label>
@@ -1507,7 +1518,7 @@ async function loadRecentTrainingForTip(days){
   try{
     const { data, error } = await supabaseClient
       .from('training')
-      .select('training_date, activity_type, km, duration_minutes, kcal')
+      .select('training_date, activity_type, km, duration_minutes, kcal, avg_heartrate')
       .eq('owner', owner)
       .gte('training_date', cutoffStr)
       .order('training_date', { ascending: true });
@@ -1517,9 +1528,34 @@ async function loadRecentTrainingForTip(days){
       type: r.activity_type,
       km: Number(r.km)||0,
       minutes: Number(r.duration_minutes)||0,
-      kcal: Number(r.kcal)||0
+      kcal: Number(r.kcal)||0,
+      avgHeartrate: r.avg_heartrate!=null ? Number(r.avg_heartrate) : null
     })).filter(r => r.type); // rustdag-placeholder rijen (activity_type null) overslaan
   }catch(e){ console.error('Laden recente trainingen voor tip', e); return []; }
+}
+
+// Groepeert runs op vergelijkbare afstand (greedy clustering: elke run
+// sluit aan bij het dichtstbijzijnde bestaande cluster als het binnen
+// `tolerance` van het cluster-gemiddelde valt, anders start een nieuw
+// cluster). Zo worden bijv. een 5km tempo-run en een 20km duurloop nooit
+// blind samengevoegd tot één betekenisloos gemiddeld tempo.
+function clusterRunsByDistance(runs, tolerance=0.25){
+  const sorted = [...runs].sort((a,b)=>a.km-b.km);
+  const clusters = [];
+  for(const r of sorted){
+    let best = null, bestDiff = Infinity;
+    for(const c of clusters){
+      const diff = Math.abs(r.km - c.avgKm) / c.avgKm;
+      if(diff <= tolerance && diff < bestDiff){ best = c; bestDiff = diff; }
+    }
+    if(!best){
+      best = { runs: [], avgKm: r.km };
+      clusters.push(best);
+    }
+    best.runs.push(r);
+    best.avgKm = best.runs.reduce((s,x)=>s+x.km,0) / best.runs.length;
+  }
+  return clusters;
 }
 
 // Genereert een concrete, onderbouwde trainingstip op basis van de trend in
@@ -1542,33 +1578,54 @@ function generateTrainingTip(activities, days, recoveryConcern){
 
   const tips = [];
 
-  // 1) Tempo-trend bij hardlopen: eerste helft van de periode vergelijken
-  // met de tweede helft, zodat de tip een écht signaal geeft i.p.v. ruis
-  // van één losse (trage/snelle) sessie.
-  if(runs.length >= 4){
-    const sorted = [...runs].sort((a,b)=>a.date.localeCompare(b.date));
-    const mid = Math.floor(sorted.length/2);
-    const firstHalf = sorted.slice(0, mid);
-    const secondHalf = sorted.slice(mid);
+  // 1) Tempo-trend bij hardlopen: NIET één blend over alle runs (een 5km
+  // tempo-run en een 20km duurloop in dezelfde week geven dan een
+  // gemiddelde dat niets betekent), maar eerst clusteren op vergelijkbare
+  // afstand, en de trend alleen bepalen binnen zo'n cluster van
+  // soortgelijke runs. Hartslag (indien bekend) wordt er als context bij
+  // vermeld, zodat "vergelijkbaar" ook qua inspanning klopt, niet alleen
+  // qua afstand.
+  if(runs.length >= 2){
+    const clusters = clusterRunsByDistance(runs);
+    const sortedClusters = [...clusters].sort((a,b)=>b.runs.length-a.runs.length);
+    const main = sortedClusters[0];
     const paceOf = (arr) => {
       const km = arr.reduce((s,a)=>s+a.km,0);
       const min = arr.reduce((s,a)=>s+a.minutes,0);
       return km>0 ? min/km : null;
     };
-    const paceFirst = paceOf(firstHalf);
-    const paceSecond = paceOf(secondHalf);
-    if(paceFirst!=null && paceSecond!=null){
-      const deltaPct = (paceFirst - paceSecond) / paceFirst * 100; // positief = sneller geworden
-      if(deltaPct > 3){
-        tips.push(`Je hardlooptempo is verbeterd (van ${formatPace(1,paceFirst)} naar ${formatPace(1,paceSecond)}) — mooie vooruitgang. Bouw dit nu vast met een rustige duurloop, zodat je aerobe basis meegroeit met je snelheid.`);
-      } else if(deltaPct < -5){
-        tips.push(`Je tempo is de laatste tijd juist wat trager (van ${formatPace(1,paceFirst)} naar ${formatPace(1,paceSecond)}). Dat kan wijzen op vermoeidheid — bouw een rustweek in, of check of je herstel (slaap/HRV) achterblijft.`);
-      } else {
-        tips.push(`Je tempo houdt zich stabiel rond ${formatPace(1,paceSecond)}. Om echt vooruit te komen: voeg één keer per week een interval- of tempotraining toe in plaats van steeds hetzelfde rustige tempo te lopen.`);
+    const kmLabel = main.avgKm.toFixed(1);
+    const hrs = main.runs.filter(r=>r.avgHeartrate!=null);
+    const hrLabel = hrs.length===main.runs.length
+      ? `, gem. ${Math.round(hrs.reduce((s,r)=>s+r.avgHeartrate,0)/hrs.length)} bpm`
+      : '';
+
+    if(main.runs.length >= 4){
+      const sortedRuns = [...main.runs].sort((a,b)=>a.date.localeCompare(b.date));
+      const mid = Math.floor(sortedRuns.length/2);
+      const paceFirst = paceOf(sortedRuns.slice(0, mid));
+      const paceSecond = paceOf(sortedRuns.slice(mid));
+      if(paceFirst!=null && paceSecond!=null){
+        const deltaPct = (paceFirst - paceSecond) / paceFirst * 100; // positief = sneller geworden
+        if(deltaPct > 3){
+          tips.push(`Bij je ${sortedRuns.length} vergelijkbare runs van ~${kmLabel}km${hrLabel}: tempo verbeterd van ${formatPace(1,paceFirst)} naar ${formatPace(1,paceSecond)} — mooie vooruitgang op dit type run. Bouw dit nu vast met een rustige duurloop, zodat je aerobe basis meegroeit.`);
+        } else if(deltaPct < -5){
+          tips.push(`Bij je ${sortedRuns.length} vergelijkbare runs van ~${kmLabel}km${hrLabel}: tempo juist trager geworden (${formatPace(1,paceFirst)} → ${formatPace(1,paceSecond)}). Kan wijzen op vermoeidheid — check je herstel (slaap/HRV) of bouw een rustweek in.`);
+        } else {
+          tips.push(`Bij je ${sortedRuns.length} vergelijkbare runs van ~${kmLabel}km${hrLabel} blijft je tempo stabiel rond ${formatPace(1,paceSecond)}. Voeg een keer per week een interval- of tempotraining toe om hier doorheen te breken.`);
+        }
       }
+    } else if(main.runs.length >= 2){
+      const pace = paceOf(main.runs);
+      tips.push(`Je meest voorkomende run is ~${kmLabel}km${hrLabel}, gemiddeld tempo ${pace!=null?formatPace(1,pace):'onbekend'} (${main.runs.length}x gelogd). Log er nog een paar bij van vergelijkbare afstand om een echte trend te zien.`);
+    } else {
+      tips.push(`Je runs verschillen deze periode allemaal te veel in afstand om eerlijk te vergelijken (bijv. ${clusters.map(c=>c.avgKm.toFixed(1)+'km').join(', ')}). Log een paar keer een vergelijkbare afstand om een tempo-trend zichtbaar te maken.`);
+    }
+    if(sortedClusters.length > 1 && main.runs.length >= 2){
+      tips.push(`Let op: je hardloopsessies verschillen sterk in afstand (${sortedClusters.map(c=>c.avgKm.toFixed(1)+'km ('+c.runs.length+'x)').join(', ')}) — vergelijk tempo dus per afstandstype, niet als één groot gemiddelde.`);
     }
   } else if(runs.length >= 1){
-    tips.push(`Je hebt nog maar ${runs.length} hardloopsessie${runs.length===1?'':'s'} gelogd deze periode — log er een paar meer om een echte tempo-trend te kunnen zien.`);
+    tips.push(`Je hebt nog maar ${runs.length} hardloopsessie gelogd deze periode — log er een paar meer om een echte tempo-trend te kunnen zien.`);
   }
 
   // 2) Consistentie: te weinig actieve dagen, of juist geen rustdagen.
@@ -3293,33 +3350,68 @@ document.getElementById('nextDay').addEventListener('click', ()=>{
   renderDashboard();
 });
 
+// ---- Invoeren: aantal porties ----
+// Bij >1 portie kun je de overige porties meteen laten inplannen voor de
+// komende dagen (bijv. een pan die 3 dagen meegaat), i.p.v. steeds
+// opnieuw dezelfde macro's te moeten uitrekenen en invoeren.
+const fPortionsEl = document.getElementById('fPortions');
+const fSpreadRowEl = document.getElementById('fSpreadRow');
+fPortionsEl.addEventListener('input', ()=>{
+  const n = Math.max(1, Number(fPortionsEl.value)||1);
+  fSpreadRowEl.style.display = n>1 ? 'flex' : 'none';
+  if(n<=1) document.getElementById('fSpreadDays').checked = false;
+});
+
 // ---- Invoeren: manual save ----
 document.getElementById('saveMeal').addEventListener('click', async ()=>{
   const desc = document.getElementById('fDesc').value.trim();
-  const kcal = Number(document.getElementById('fKcal').value)||0;
+  const totalKcal = Number(document.getElementById('fKcal').value)||0;
   if(!desc){
     document.getElementById('saveStatus').innerHTML = '<span class="status-err">Vul een omschrijving in.</span>';
     return;
   }
-  const meal = {
-    desc,
-    mealType: document.getElementById('fMeal').value,
-    kcal,
-    protein: Number(document.getElementById('fProtein').value)||0,
-    carbs: Number(document.getElementById('fCarbs').value)||0,
-    fat: Number(document.getElementById('fFat').value)||0,
-    time: document.getElementById('fTime').value.trim()
-  };
-  const dateStr = fmtDate(state.currentDate);
   if(!currentOwner()){
     document.getElementById('saveStatus').innerHTML = '<span class="status-err">Vul eerst je naam in bij het tabblad Team.</span>';
     return;
   }
-  const meals = await loadMeals(dateStr);
-  meals.push(meal);
-  const ok = await saveMeals(dateStr, meals);
-  if(ok){
-    document.getElementById('saveStatus').textContent = 'Opgeslagen bij ' + fmtDateLabel(state.currentDate) + '.';
+  const portions = Math.max(1, Number(fPortionsEl.value)||1);
+  const spreadDays = portions>1 && document.getElementById('fSpreadDays').checked;
+  const mealType = document.getElementById('fMeal').value;
+  const time = document.getElementById('fTime').value.trim();
+  const totalProtein = Number(document.getElementById('fProtein').value)||0;
+  const totalCarbs = Number(document.getElementById('fCarbs').value)||0;
+  const totalFat = Number(document.getElementById('fFat').value)||0;
+  // Bij 1 portie blijft de omschrijving en de macro's ongewijzigd (geen
+  // deling nodig); bij meerdere portities wordt duidelijk gemaakt dat dit
+  // 1 van de N porties is, met de gedeelde macro's.
+  const portionDesc = portions>1 ? `${desc} (1/${portions} portie)` : desc;
+  const meal = {
+    desc: portionDesc,
+    mealType,
+    kcal: Math.round(totalKcal/portions),
+    protein: Math.round(totalProtein/portions*10)/10,
+    carbs: Math.round(totalCarbs/portions*10)/10,
+    fat: Math.round(totalFat/portions*10)/10,
+    time
+  };
+
+  const baseDate = new Date(state.currentDate);
+  const targetDaysCount = spreadDays ? portions : 1;
+  let savedCount = 0;
+  for(let i=0; i<targetDaysCount; i++){
+    const d = new Date(baseDate);
+    d.setDate(d.getDate()+i);
+    const dStr = fmtDate(d);
+    const dMeals = await loadMeals(dStr);
+    dMeals.push(meal);
+    const ok = await saveMeals(dStr, dMeals);
+    if(ok) savedCount++;
+  }
+
+  if(savedCount === targetDaysCount){
+    document.getElementById('saveStatus').textContent = spreadDays
+      ? `Opgeslagen: ${portions}x "${meal.desc}" vanaf ${fmtDateLabel(baseDate)}, telkens 1 portie per dag.`
+      : 'Opgeslagen bij ' + fmtDateLabel(state.currentDate) + '.';
     document.getElementById('saveStatus').classList.remove('status-err');
     if(document.getElementById('fSaveAsQuickAdd').checked){
       await addCustomQuickAdd(meal);
@@ -3327,8 +3419,11 @@ document.getElementById('saveMeal').addEventListener('click', async ()=>{
     }
     ['fDesc','fKcal','fProtein','fCarbs','fFat','fTime'].forEach(id=>document.getElementById(id).value='');
     document.getElementById('fSaveAsQuickAdd').checked = false;
+    fPortionsEl.value = '1';
+    document.getElementById('fSpreadDays').checked = false;
+    fSpreadRowEl.style.display = 'none';
   } else {
-    document.getElementById('saveStatus').innerHTML = '<span class="status-err">Opslaan mislukt (mogelijk tijdelijke serverdruk) — probeer het nog eens.</span>';
+    document.getElementById('saveStatus').innerHTML = '<span class="status-err">Opslaan (deels) mislukt (mogelijk tijdelijke serverdruk) — probeer het nog eens.</span>';
   }
   renderDashboard();
 });

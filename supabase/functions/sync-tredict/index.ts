@@ -357,6 +357,10 @@ Deno.serve(async (req) => {
           ? Math.round((detail.summary.duration / 60) * 10) / 10
           : 0,
         type: sportTypeMap[detail.sportType] || detail.sportType,
+        // Gemiddelde hartslag van de activiteit (bpm) -- gebruikt door de
+        // trainingstip om vergelijkbare runs (zelfde afstand/inspanning)
+        // te groeperen i.p.v. alles op één hoop te gooien.
+        avgHeartrate: detail.summary?.heartrate || null,
       });
     }
 
