@@ -164,6 +164,7 @@
   .balans-sub{font-size:13px;color:var(--ink-soft);margin-top:8px;}
   .balans-pos{color:var(--pine);}
   .balans-neg{color:var(--clay);}
+  .balans-empty{color:var(--ink-soft);}
 
   .stat-row{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--line);}
   .stat-row:last-child{border-bottom:none;}
@@ -2005,15 +2006,25 @@ async function renderDashboard(){
       </div>`;
   }
 
-  const balans = totals.kcal - (burned||0);
   const balansEl = document.getElementById('balansNum');
-  balansEl.textContent = (balans>=0?'+':'') + balans;
-  balansEl.className = 'balans-number ' + (balans>0 ? 'balans-neg' : 'balans-pos');
-  document.getElementById('balansSub').textContent = burnedIsEstimate
-    ? 'kcal ingenomen \u2212 geschat rustverbruik (nog niet gesynchroniseerd)'
-    : burned!==null
-      ? 'kcal ingenomen \u2212 verbrand (training)'
-      : 'kcal ingenomen (training nog niet opgehaald)';
+  const balansSubEl = document.getElementById('balansSub');
+  if(meals.length===0){
+    // Nog niets gelogd deze dag -> geen balans tonen. Anders oogt het als
+    // een enorm kcal-tekort (0 ingenomen min het volledige rustverbruik),
+    // terwijl er gewoon nog niks is ingevoerd.
+    balansEl.textContent = '\u2014';
+    balansEl.className = 'balans-number balans-empty';
+    balansSubEl.textContent = 'nog geen maaltijden gelogd deze dag';
+  } else {
+    const balans = totals.kcal - (burned||0);
+    balansEl.textContent = (balans>=0?'+':'') + balans;
+    balansEl.className = 'balans-number ' + (balans>0 ? 'balans-neg' : 'balans-pos');
+    balansSubEl.textContent = burnedIsEstimate
+      ? 'kcal ingenomen \u2212 geschat rustverbruik (nog niet gesynchroniseerd)'
+      : burned!==null
+        ? 'kcal ingenomen \u2212 verbrand (training)'
+        : 'kcal ingenomen (training nog niet opgehaald)';
+  }
 
   const vitals = await loadVitals(dateStr);
   document.getElementById('vitalHrRest').textContent = (vitals && vitals.hrRest!=null) ? vitals.hrRest+' bpm' : '\u2014';
