@@ -1525,46 +1525,120 @@ async function loadRecentTrainingForTip(days){
   cutoff.setDate(cutoff.getDate() - days);
   const cutoffStr = fmtDate(cutoff);
   try{
-    const { data, error } = await supabaseClient
-      .from('training')
-      .select('training_date, activity_type, km, duration_minutes, kcal, avg_heartrate')
-      .eq('owner', owner)
-      .gte('training_date', cutoffStr)
-      .order('training_date', { ascending: true });
+    const [{ data, error }, { data: vitalsData }] = await Promise.all([
+      supabaseClient
+        .from('training')
+        .select('training_date, activity_type, km, duration_minutes, kcal, avg_heartrate')
+        .eq('owner', owner)
+        .gte('training_date', cutoffStr)
+        .order('training_date', { ascending: true }),
+      supabaseClient
+        .from('vitals')
+        .select('vital_date, hrv, sleep_minutes')
+        .eq('owner', owner)
+        .gte('vital_date', cutoffStr)
+    ]);
     if(error || !data) return [];
-    return data.map(r => ({
-      date: r.training_date,
-      type: r.activity_type,
-      km: Number(r.km)||0,
-      minutes: Number(r.duration_minutes)||0,
-      kcal: Number(r.kcal)||0,
-      avgHeartrate: r.avg_heartrate!=null ? Number(r.avg_heartrate) : null
-    })).filter(r => r.type); // rustdag-placeholder rijen (activity_type null) overslaan
+    // HRV/slaap zijn dagwaarden (ochtendmeting resp. voorgaande nacht), niet
+    // per activiteit -- gekoppeld op datum, zodat de tip kan checken of een
+    // hogere HRV/meer slaap die dag samenhangt met een beter tempo.
+    const vitalsByDate = new Map();
+    for(const v of vitalsData||[]) vitalsByDate.set(v.vital_date, v);
+    return data.map(r => {
+      const v = vitalsByDate.get(r.training_date);
+      return {
+        date: r.training_date,
+        type: r.activity_type,
+        km: Number(r.km)||0,
+        minutes: Number(r.duration_minutes)||0,
+        kcal: Number(r.kcal)||0,
+        avgHeartrate: r.avg_heartrate!=null ? Number(r.avg_heartrate) : null,
+        dayHrv: v && v.hrv!=null ? Number(v.hrv) : null,
+        daySleepMinutes: v && v.sleep_minutes!=null ? Number(v.sleep_minutes) : null,
+      };
+    }).filter(r => r.type); // rustdag-placeholder rijen (activity_type null) overslaan
   }catch(e){ console.error('Laden recente trainingen voor tip', e); return []; }
 }
 
-// Groepeert runs op vergelijkbare afstand (greedy clustering: elke run
-// sluit aan bij het dichtstbijzijnde bestaande cluster als het binnen
-// `tolerance` van het cluster-gemiddelde valt, anders start een nieuw
-// cluster). Zo worden bijv. een 5km tempo-run en een 20km duurloop nooit
-// blind samengevoegd tot één betekenisloos gemiddeld tempo.
-function clusterRunsByDistance(runs, tolerance=0.25){
-  const sorted = [...runs].sort((a,b)=>a.km-b.km);
-  const clusters = [];
-  for(const r of sorted){
-    let best = null, bestDiff = Infinity;
-    for(const c of clusters){
-      const diff = Math.abs(r.km - c.avgKm) / c.avgKm;
-      if(diff <= tolerance && diff < bestDiff){ best = c; bestDiff = diff; }
-    }
-    if(!best){
-      best = { runs: [], avgKm: r.km };
-      clusters.push(best);
-    }
-    best.runs.push(r);
-    best.avgKm = best.runs.reduce((s,x)=>s+x.km,0) / best.runs.length;
+// Groepeert runs bij de dichtstbijzijnde HERKENBARE standaardafstand
+// (5k/10k/15k/halve marathon/25k/30k/marathon), i.p.v. data-gedreven
+// clustering. Eerdere aanpak (elke run bij het dichtstbijzijnde cluster-
+// gemiddelde voegen) liet het gemiddelde geleidelijk wegdrijven zodra er
+// veel verschillende afstanden tussen zaten -- bij bijv. 10km-runs +
+// 12-13km-duurlopen + een halve marathon in dezelfde periode werden de
+// 10km-runs zo ten onrechte samengevoegd met de 12-13km-runs tot een
+// betekenisloos "11km"-gemiddelde, en de halve marathon verdween in een
+// cluster met een losse 25km-duurloop. Vaste ankerafstanden voorkomen die
+// drift en matchen bovendien wat een loper zelf als "mijn 10k" of "mijn
+// halve marathon" herkent.
+const RUN_DISTANCE_ANCHORS = [
+  { km: 5, label: '5km' },
+  { km: 10, label: '10km' },
+  { km: 15, label: '15km' },
+  { km: 21.1, label: 'halve marathon (21,1km)' },
+  { km: 25, label: '25km' },
+  { km: 30, label: '30km' },
+  { km: 42.2, label: 'marathon (42,2km)' },
+];
+function nearestRunAnchor(km){
+  let best = RUN_DISTANCE_ANCHORS[0], bestDiff = Infinity;
+  for(const a of RUN_DISTANCE_ANCHORS){
+    const diff = Math.abs(km - a.km);
+    if(diff < bestDiff){ best = a; bestDiff = diff; }
   }
-  return clusters;
+  return best;
+}
+function clusterRunsByDistance(runs){
+  const byAnchor = new Map();
+  for(const r of runs){
+    const anchor = nearestRunAnchor(r.km);
+    if(!byAnchor.has(anchor.km)) byAnchor.set(anchor.km, { anchor, runs: [] });
+    byAnchor.get(anchor.km).runs.push(r);
+  }
+  return [...byAnchor.values()].map(({ anchor, runs }) => ({
+    runs,
+    label: anchor.label,
+    avgKm: runs.reduce((s,x)=>s+x.km,0) / runs.length,
+  }));
+}
+
+// Checkt of een hogere/lagere HRV of meer/minder slaap die dag samenhangt
+// met een merkbaar ander tempo, binnen een set vergelijkbare runs (bijv.
+// allemaal ~10km). Splitst op de mediaan in een "hogere helft" en "lagere
+// helft" en vergelijkt het gemiddelde tempo van beide groepen -- puur een
+// patroon in de eigen cijfers, geen causaal bewijs, dus voorzichtig
+// verwoord. Te weinig data (minder dan 2 runs per groep) -> geen tip.
+function correlateWithRecovery(clusterRuns){
+  const tips = [];
+  const paceOf = (arr) => {
+    const km = arr.reduce((s,a)=>s+a.km,0);
+    const min = arr.reduce((s,a)=>s+a.minutes,0);
+    return km>0 ? min/km : null;
+  };
+  function checkMetric(key, label, fmt){
+    const withMetric = clusterRuns.filter(r=>r[key]!=null);
+    if(withMetric.length < 4) return;
+    const sorted = [...withMetric].sort((a,b)=>a[key]-b[key]);
+    const half = Math.floor(sorted.length/2);
+    const lowerHalf = sorted.slice(0, half);
+    const upperHalf = sorted.slice(sorted.length-half);
+    if(lowerHalf.length < 2 || upperHalf.length < 2) return;
+    const paceLower = paceOf(lowerHalf);
+    const paceUpper = paceOf(upperHalf);
+    if(paceLower==null || paceUpper==null) return;
+    const deltaPct = (paceLower - paceUpper) / paceLower * 100; // positief = sneller bij hogere metric
+    if(Math.abs(deltaPct) < 3) return; // geen noemenswaardig verschil
+    const lowerAvg = lowerHalf.reduce((s,r)=>s+r[key],0)/lowerHalf.length;
+    const upperAvg = upperHalf.reduce((s,r)=>s+r[key],0)/upperHalf.length;
+    if(deltaPct > 0){
+      tips.push(`Bij een hogere ${label} (gem. ${fmt(upperAvg)}) liep je gemiddeld ${formatPace(1,paceUpper)}, tegenover ${formatPace(1,paceLower)} bij een lagere ${label} (gem. ${fmt(lowerAvg)}) — ${label} lijkt hier samen te hangen met je tempo op dit type run.`);
+    } else {
+      tips.push(`Opvallend: bij een lagere ${label} (gem. ${fmt(lowerAvg)}) liep je juist sneller (${formatPace(1,paceLower)}) dan bij een hogere ${label} (gem. ${fmt(upperAvg)}, ${formatPace(1,paceUpper)}) — mogelijk toeval bij dit aantal runs, maar de moeite waard om in de gaten te houden.`);
+    }
+  }
+  checkMetric('dayHrv', 'HRV', v=>Math.round(v)+' ms');
+  checkMetric('daySleepMinutes', 'nachtrust', v=>Math.floor(v/60)+'u'+String(Math.round(v%60)).padStart(2,'0')+'m');
+  return tips;
 }
 
 // Genereert een concrete, onderbouwde trainingstip op basis van de trend in
@@ -1603,7 +1677,7 @@ function generateTrainingTip(activities, days, recoveryConcern){
       const min = arr.reduce((s,a)=>s+a.minutes,0);
       return km>0 ? min/km : null;
     };
-    const kmLabel = main.avgKm.toFixed(1);
+    const kmLabel = main.label;
     const hrs = main.runs.filter(r=>r.avgHeartrate!=null);
     const hrLabel = hrs.length===main.runs.length
       ? `, gem. ${Math.round(hrs.reduce((s,r)=>s+r.avgHeartrate,0)/hrs.length)} bpm`
@@ -1617,21 +1691,28 @@ function generateTrainingTip(activities, days, recoveryConcern){
       if(paceFirst!=null && paceSecond!=null){
         const deltaPct = (paceFirst - paceSecond) / paceFirst * 100; // positief = sneller geworden
         if(deltaPct > 3){
-          tips.push(`Bij je ${sortedRuns.length} vergelijkbare runs van ~${kmLabel}km${hrLabel}: tempo verbeterd van ${formatPace(1,paceFirst)} naar ${formatPace(1,paceSecond)} — mooie vooruitgang op dit type run. Bouw dit nu vast met een rustige duurloop, zodat je aerobe basis meegroeit.`);
+          tips.push(`Bij je ${sortedRuns.length} vergelijkbare runs van ~${kmLabel}${hrLabel}: tempo verbeterd van ${formatPace(1,paceFirst)} naar ${formatPace(1,paceSecond)} — mooie vooruitgang op dit type run. Bouw dit nu vast met een rustige duurloop, zodat je aerobe basis meegroeit.`);
         } else if(deltaPct < -5){
-          tips.push(`Bij je ${sortedRuns.length} vergelijkbare runs van ~${kmLabel}km${hrLabel}: tempo juist trager geworden (${formatPace(1,paceFirst)} → ${formatPace(1,paceSecond)}). Kan wijzen op vermoeidheid — check je herstel (slaap/HRV) of bouw een rustweek in.`);
+          tips.push(`Bij je ${sortedRuns.length} vergelijkbare runs van ~${kmLabel}${hrLabel}: tempo juist trager geworden (${formatPace(1,paceFirst)} → ${formatPace(1,paceSecond)}). Kan wijzen op vermoeidheid — check je herstel (slaap/HRV) of bouw een rustweek in.`);
         } else {
-          tips.push(`Bij je ${sortedRuns.length} vergelijkbare runs van ~${kmLabel}km${hrLabel} blijft je tempo stabiel rond ${formatPace(1,paceSecond)}. Voeg een keer per week een interval- of tempotraining toe om hier doorheen te breken.`);
+          tips.push(`Bij je ${sortedRuns.length} vergelijkbare runs van ~${kmLabel}${hrLabel} blijft je tempo stabiel rond ${formatPace(1,paceSecond)}. Voeg een keer per week een interval- of tempotraining toe om hier doorheen te breken.`);
         }
       }
     } else if(main.runs.length >= 2){
       const pace = paceOf(main.runs);
-      tips.push(`Je meest voorkomende run is ~${kmLabel}km${hrLabel}, gemiddeld tempo ${pace!=null?formatPace(1,pace):'onbekend'} (${main.runs.length}x gelogd). Log er nog een paar bij van vergelijkbare afstand om een echte trend te zien.`);
+      tips.push(`Je meest voorkomende run is ~${kmLabel}${hrLabel}, gemiddeld tempo ${pace!=null?formatPace(1,pace):'onbekend'} (${main.runs.length}x gelogd). Log er nog een paar bij van vergelijkbare afstand om een echte trend te zien.`);
     } else {
-      tips.push(`Je runs verschillen deze periode allemaal te veel in afstand om eerlijk te vergelijken (bijv. ${clusters.map(c=>c.avgKm.toFixed(1)+'km').join(', ')}). Log een paar keer een vergelijkbare afstand om een tempo-trend zichtbaar te maken.`);
+      tips.push(`Je runs verschillen deze periode allemaal te veel in afstand om eerlijk te vergelijken (bijv. ${clusters.map(c=>c.label).join(', ')}). Log een paar keer een vergelijkbare afstand om een tempo-trend zichtbaar te maken.`);
     }
-    if(sortedClusters.length > 1 && main.runs.length >= 2){
-      tips.push(`Let op: je hardloopsessies verschillen sterk in afstand (${sortedClusters.map(c=>c.avgKm.toFixed(1)+'km ('+c.runs.length+'x)').join(', ')}) — vergelijk tempo dus per afstandstype, niet als één groot gemiddelde.`);
+    if(sortedClusters.length >= 3 && main.runs.length >= 2){
+      tips.push(`Je hardloopt deze periode op meerdere duidelijk verschillende afstanden (${sortedClusters.map(c=>c.label+' ('+c.runs.length+'x)').join(', ')}) — vergelijk tempo dus per afstandstype, niet als één groot gemiddelde.`);
+    }
+    // Herstel-check: hangt een hogere/lagere HRV of meer/minder slaap die dag
+    // samen met een merkbaar ander tempo, binnen datzelfde cluster van
+    // vergelijkbare runs (zodat het geen afstandsverschil is dat het beeld
+    // vertroebelt)?
+    if(main.runs.length >= 4){
+      correlateWithRecovery(main.runs).forEach(t=>tips.push(t));
     }
   } else if(runs.length >= 1){
     tips.push(`Je hebt nog maar ${runs.length} hardloopsessie gelogd deze periode — log er een paar meer om een echte tempo-trend te kunnen zien.`);
