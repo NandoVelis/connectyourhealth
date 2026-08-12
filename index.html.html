@@ -3176,7 +3176,7 @@ async function renderPersonalPeriod(days, labelElId, bodyElId, label){
       <td>${proteinCell}</td>
       <td>${fatCell}</td>
       <td>${training ? burned+' kcal' : '\u2014'}</td>
-      <td style="color:${balans>0 ? 'var(--clay)' : 'var(--pine)'};font-weight:700;">${training ? (balans>=0?'+':'')+balans : '\u2014'}</td>
+      <td style="color:${balans>0 ? 'var(--clay)' : 'var(--pine)'};font-weight:700;">${(training && meals.length>0) ? (balans>=0?'+':'')+balans : '\u2014'}</td>
       <td style="font-weight:700;">${score!==null ? score.toFixed(1) : '\u2014'}</td>
     </tr>`;
   }
@@ -4092,7 +4092,7 @@ async function renderHistory(){
         <td>${meals.length}</td>
         <td>${totals.kcal}</td>
         <td>${burned}</td>
-        <td>${(balans>=0?'+':'')+balans}</td>
+        <td>${meals.length>0 ? (balans>=0?'+':'')+balans : '—'}</td>
       </tr>`;
     }
     body.innerHTML = rows;
