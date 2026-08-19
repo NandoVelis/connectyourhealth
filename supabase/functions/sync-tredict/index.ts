@@ -88,10 +88,17 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
+  // Buiten de try-scope gedeclareerd zodat de catch-tak (bij een mislukte
+  // sync, bijv. door een verlopen Tredict-token) ook weet welke owner en
+  // Supabase-client te gebruiken om dat in sync_status vast te leggen --
+  // zonder dat check ziet de gebruiker een stille sync-storing pas veel
+  // later, als het toevallig opvalt dat er geen nieuwe data meer binnenkomt.
+  let owner: string | undefined;
+  let supabase: ReturnType<typeof createClient> | undefined;
   try {
     const url = new URL(req.url);
     const full = url.searchParams.get("full") === "1";
-    const owner = (url.searchParams.get("owner") || "Nando").trim();
+    owner = (url.searchParams.get("owner") || "Nando").trim();
 
     // Elke persoon heeft een eigen Tredict Personal API-token, als losse
     // environment variable TREDICT_TOKEN_<NAAM> (bv. TREDICT_TOKEN_NICK).
@@ -118,7 +125,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    const supabase = createClient(
+    supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
@@ -505,6 +512,12 @@ Deno.serve(async (req) => {
       if (!teamErr) teamEntriesUpdated = teamEntryRows.length;
     }
 
+    const nowIso = new Date().toISOString();
+    await supabase.from("sync_status").upsert(
+      { owner, last_attempt_at: nowIso, last_success_at: nowIso, last_error: null },
+      { onConflict: "owner" }
+    );
+
     return new Response(
       JSON.stringify(
         {
@@ -525,6 +538,20 @@ Deno.serve(async (req) => {
       }
     );
   } catch (error) {
+    // Legt elke mislukte sync-poging vast (bijv. een verlopen Tredict-token)
+    // zodat de app in de UI kan waarschuwen als het al een tijd niet meer
+    // gelukt is, i.p.v. dat dit stilzwijgend in de achtergrond blijft falen.
+    if (supabase && owner) {
+      try {
+        await supabase.from("sync_status").upsert(
+          { owner, last_attempt_at: new Date().toISOString(), last_error: String(error) },
+          { onConflict: "owner" }
+        );
+      } catch (_) {
+        // Als zelfs het wegschrijven van de foutstatus mislukt, geen verdere actie --
+        // de oorspronkelijke fout wordt hieronder sowieso al teruggegeven.
+      }
+    }
     return new Response(
       JSON.stringify(
         {

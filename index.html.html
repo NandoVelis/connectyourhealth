@@ -4470,21 +4470,43 @@ document.getElementById('trendRefreshBtn').addEventListener('click', ()=>renderT
 // de browserconsole), zonder dat de gebruiker zelf ergens in de app zag dat
 // er nog een stap (token naar de beheerder sturen) open stond.
 let _lastTredictSyncResult = null;
+// Hoeveel uur zonder geslaagde achtergrond-sync (elke 5 min via GitHub Actions)
+// voordat we ervan uitgaan dat de Tredict-koppeling écht is gestopt (bijv. door
+// een verlopen token) en de gebruiker moet vragen opnieuw in te loggen.
+const TREDICT_STALE_HOURS = 12;
+let _tredictSyncStatus = null; // { last_success_at, last_attempt_at, last_error }
 function renderTredictStatusBanner(){
   const banner = document.getElementById('tredictStatusBanner');
   const textEl = document.getElementById('tredictStatusText');
   if(!banner || !textEl) return;
   const owner = currentOwner();
-  if(!owner || !_lastTredictSyncResult || _lastTredictSyncResult.success !== false){
+  if(!owner){
     banner.style.display = 'none';
     return;
   }
-  textEl.textContent = _lastTredictSyncResult.error || 'Tredict-synchronisatie is niet gelukt.';
-  banner.style.display = 'block';
+
+  if(_lastTredictSyncResult && _lastTredictSyncResult.success === false){
+    textEl.textContent = _lastTredictSyncResult.error || 'Tredict-synchronisatie is niet gelukt.';
+    banner.style.display = 'block';
+    return;
+  }
+
+  if(_tredictSyncStatus && _tredictSyncStatus.last_success_at){
+    const hoursSince = (Date.now() - new Date(_tredictSyncStatus.last_success_at).getTime()) / 36e5;
+    if(hoursSince >= TREDICT_STALE_HOURS){
+      const days = Math.floor(hoursSince / 24);
+      const duurtekst = days >= 1 ? `${days} dag${days === 1 ? '' : 'en'}` : `${Math.round(hoursSince)} uur`;
+      textEl.textContent = `Tredict is al ${duurtekst} niet meer succesvol gesynchroniseerd. Log opnieuw in bij Tredict om de koppeling te herstellen.`;
+      banner.style.display = 'block';
+      return;
+    }
+  }
+
+  banner.style.display = 'none';
 }
 async function checkTredictSyncStatus(){
   const owner = currentOwner();
-  if(!owner){ _lastTredictSyncResult = null; renderTredictStatusBanner(); return; }
+  if(!owner){ _lastTredictSyncResult = null; _tredictSyncStatus = null; renderTredictStatusBanner(); return; }
   try {
     const response = await fetch(
       "https://mhvduufxeqyxgkkvwimx.supabase.co/functions/v1/sync-tredict?owner=" + encodeURIComponent(owner),
@@ -4494,6 +4516,16 @@ async function checkTredictSyncStatus(){
   } catch (e) {
     console.log("Tredict sync mislukt", e);
     _lastTredictSyncResult = { success: false, error: "Kon geen verbinding maken met de Tredict-synchronisatie (netwerkfout)." };
+  }
+  try {
+    const { data } = await supabaseClient
+      .from('sync_status')
+      .select('last_success_at, last_attempt_at, last_error')
+      .eq('owner', owner)
+      .maybeSingle();
+    _tredictSyncStatus = data || null;
+  } catch (e) {
+    console.log("Kon sync_status niet ophalen", e);
   }
   renderTredictStatusBanner();
 }
