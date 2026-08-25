@@ -1826,13 +1826,33 @@ function renderTrainingProgressTable(activities){
     const min = arr.reduce((s,a)=>s+a.minutes,0);
     return km>0 ? min/km : null;
   };
-  const rows = clusters.map(c=>{
+  const hrOf = (arr) => {
+    const withHr = arr.filter(r=>r.avgHeartrate!=null);
+    return withHr.length ? withHr.reduce((s,r)=>s+r.avgHeartrate,0)/withHr.length : null;
+  };
+  const rowsData = clusters.map(c=>{
     const sorted = [...c.runs].sort((a,b)=>a.date.localeCompare(b.date));
     const mid = Math.floor(sorted.length/2);
     const first = sorted.length>=4 ? sorted.slice(0, mid) : [sorted[0]];
     const last = sorted.length>=4 ? sorted.slice(mid) : [sorted[sorted.length-1]];
-    const paceFirst = paceOf(first);
-    const paceLast = paceOf(last);
+    return {
+      cluster: c,
+      paceFirst: paceOf(first), paceLast: paceOf(last),
+      hrFirst: hrOf(first), hrLast: hrOf(last),
+    };
+  });
+  // Tempo als kolom-balkje (snelheid in km/u, breedte t.o.v. de snelste
+  // gelogde snelheid over alle types heen) i.p.v. alleen tekst -- geeft in
+  // één oogopslag een "mooie grafiek"-gevoel zonder een aparte canvas-chart
+  // per rij te hoeven tekenen.
+  const allSpeeds = rowsData.flatMap(r=>[r.paceFirst,r.paceLast]).filter(p=>p!=null).map(p=>60/p);
+  const maxSpeed = allSpeeds.length ? Math.max(...allSpeeds) : 0;
+  const barPct = (pace) => {
+    if(pace==null || maxSpeed<=0) return 0;
+    return Math.max(4, Math.round((60/pace)/maxSpeed*100));
+  };
+  const fmtHr = (hr) => hr!=null ? Math.round(hr)+' bpm' : '&mdash;';
+  const rows = rowsData.map(({cluster:c, paceFirst, paceLast, hrFirst, hrLast})=>{
     let trendHtml = '<span style="color:var(--ink-soft);">&mdash;</span>';
     if(paceFirst!=null && paceLast!=null){
       const deltaPct = (paceFirst - paceLast) / paceFirst * 100; // positief = sneller geworden
@@ -1840,16 +1860,32 @@ function renderTrainingProgressTable(activities){
       else if(deltaPct < -2) trendHtml = `<span style="color:var(--clay);">&#9660; ${Math.abs(deltaPct).toFixed(1)}% trager</span>`;
       else trendHtml = '<span style="color:var(--ink-soft);">stabiel</span>';
     }
+    const hrText = (hrFirst!=null || hrLast!=null) ? `${fmtHr(hrFirst)} &rarr; ${fmtHr(hrLast)}` : '&mdash;';
+    const tempoBars = `
+      <div style="display:flex;flex-direction:column;gap:4px;min-width:110px;">
+        <div style="display:flex;align-items:center;gap:6px;">
+          <div style="flex:1;background:var(--line);border-radius:4px;height:7px;overflow:hidden;"><div style="width:${barPct(paceFirst)}%;height:100%;background:var(--ink-soft);border-radius:4px;"></div></div>
+          <span style="font-size:11px;color:var(--ink-soft);white-space:nowrap;">${paceFirst!=null?formatPaceMinPerKm(paceFirst):'&mdash;'}</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <div style="flex:1;background:var(--line);border-radius:4px;height:7px;overflow:hidden;"><div style="width:${barPct(paceLast)}%;height:100%;background:var(--amber);border-radius:4px;"></div></div>
+          <span style="font-size:11px;color:var(--ink);white-space:nowrap;">${paceLast!=null?formatPaceMinPerKm(paceLast):'&mdash;'}</span>
+        </div>
+      </div>`;
     return `<tr>
       <td class="desc-cell">${escapeHtml(c.label)}</td>
       <td>${c.runs.length}x</td>
-      <td>${paceFirst!=null?formatPaceMinPerKm(paceFirst):'&mdash;'}</td>
-      <td>${paceLast!=null?formatPaceMinPerKm(paceLast):'&mdash;'}</td>
+      <td>${tempoBars}</td>
       <td>${trendHtml}</td>
+      <td>${hrText}</td>
     </tr>`;
   }).join('');
-  el.innerHTML = `<div class="table-scroll"><table>
-    <thead><tr><th>Type</th><th>Aantal</th><th>Eerste</th><th>Laatste</th><th>Trend</th></tr></thead>
+  el.innerHTML = `<div style="display:flex;gap:14px;font-size:11px;color:var(--ink-soft);margin-bottom:8px;">
+      <span><span style="display:inline-block;width:10px;height:7px;background:var(--ink-soft);border-radius:3px;margin-right:4px;"></span>eerste periode</span>
+      <span><span style="display:inline-block;width:10px;height:7px;background:var(--amber);border-radius:3px;margin-right:4px;"></span>laatste periode</span>
+    </div>
+    <div class="table-scroll"><table>
+    <thead><tr><th>Type</th><th>Aantal</th><th>Tempo</th><th>Trend</th><th>Hartslag</th></tr></thead>
     <tbody>${rows}</tbody>
   </table></div>`;
 }
