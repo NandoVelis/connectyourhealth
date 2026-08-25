@@ -231,6 +231,12 @@
   .status-msg{font-size:13px;color:var(--pine);margin-top:10px;}
   .status-err{color:var(--clay);}
 
+  .diner-filter-pill{
+    padding:5px 12px;border-radius:999px;border:1px solid var(--line);background:var(--card);
+    color:var(--ink-soft);font-family:'Archivo',sans-serif;font-size:12px;font-weight:600;cursor:pointer;
+  }
+  .diner-filter-pill.active{background:var(--amber);border-color:var(--amber);color:#fff;}
+
   /* Geschiedenis */
   table{width:100%;border-collapse:collapse;}
   th{
@@ -704,6 +710,7 @@
             <button class="btn-secondary defaultQuickAddRemove" data-key="kipfilet" title="Verwijderen uit Snel toevoegen" style="padding:6px 10px;flex-shrink:0;">&times;</button>
           </div>
         </div>
+        <div id="dinerCategoryFilter" style="display:flex;gap:6px;flex-wrap:wrap;margin:10px 0 4px;"></div>
         <div id="customQuickAddList"></div>
         </div>
       </div>
@@ -1338,9 +1345,9 @@ function buildQuantityVariants(item){
 // zodat de Diner-suggestie altijd een compleet bord kan voorstellen i.p.v.
 // toevallig 2x vlees of geen groente te kiezen puur op macro-getallen.
 const DINER_CATEGORY_KEYWORDS = {
-  koolhydraat: ['rijst','pasta','aardappel','krieltje','macaroni','spaghetti','patat'],
+  koolhydraat: ['rijst','pasta','aardappel','krieltje','macaroni','spaghetti','patat','bulgur','wrap'],
   vlees: ['kip','vlees','biefstuk','gehakt','vis','zalm','tonijn','makreel','kalkoen'],
-  groente: ['broccoli','spinazie','sla','salade','groente','wortel','paprika']
+  groente: ['broccoli','spinazie','sla','salade','groente','wortel','paprika','courgette','tomaat','tomaten','biet','komkommer','ui','knoflook','aubergine','champignon']
 };
 function categorizeDinerItem(name){
   const lower = (name||'').toLowerCase();
@@ -3718,13 +3725,17 @@ const FOOD_EMOJI_KEYWORDS = [
   ['broccoli', '\u{1F966}'],
   ['spinazie', '\u{1F96C}'],
   ['krieltje', '\u{1F954}'],
+  ['biet', '\u{1FADC}'],
+  ['bulgur', '\u{1F33E}'],
+  ['wrap', '\u{1F32F}'],
   ['kaas', '\u{1F9C0}'],
   ['noot', '\u{1F95C}'], ['noten', '\u{1F95C}'], ['pinda', '\u{1F95C}'], ['amandel', '\u{1F95C}'],
   ['gehakt', '\u{1F969}'], ['biefstuk', '\u{1F969}'], ['vlees', '\u{1F969}'],
-  ['bier', '\u{1F37A}'], ['leffe', '\u{1F37A}'], ['corona', '\u{1F37A}'], ['gerardus', '\u{1F37A}'], ['wijn', '\u{1F377}'],
+  ['heineken', '\u{1F37A}'], ['bier', '\u{1F37A}'], ['leffe', '\u{1F37A}'], ['corona', '\u{1F37A}'], ['gerardus', '\u{1F37A}'], ['wijn', '\u{1F377}'],
   ['ijsje', '\u{1F366}'],
   ['koffie', '\u2615'],
-  ['thee', '\u{1F375}'],
+  ['thee', '\u{1F375}'], ['tea', '\u{1F375}'],
+  ['kefir', '\u{1F95B}'],
   ['melk', '\u{1F95B}'],
   ['water', '\u{1F4A7}'],
   ['soep', '\u{1F372}'],
@@ -3757,6 +3768,32 @@ function getFoodEmoji(name){
   return emojis.length ? emojis.join('') : '\u{1F37D}\uFE0F'; // neutraal bord-icoontje als fallback
 }
 
+// Diner heeft van alle groepen verreweg de meeste zelf toegevoegde items
+// (groenten, koolhydraatbronnen, vlees/vis door elkaar), waardoor die lijst
+// als enige lang genoeg werd om onoverzichtelijk te zijn. Daarom krijgt
+// alleen Diner een categoriefilter (Groente/Koolhydraten/Vlees & vis/Overig)
+// bovenop de lijst, herbruikmakend van categorizeDinerItem.
+const DINER_FILTER_CATEGORIES = [
+  { key: 'alle', label: 'Alle' },
+  { key: 'groente', label: '🥦 Groente' },
+  { key: 'koolhydraat', label: '🍚 Koolhydraten' },
+  { key: 'vlees', label: '🍗 Vlees & vis' },
+  { key: 'overig', label: 'Overig' }
+];
+let _dinerCategoryFilter = 'alle';
+function renderDinerCategoryFilter(){
+  const el = document.getElementById('dinerCategoryFilter');
+  if(!el) return;
+  el.innerHTML = DINER_FILTER_CATEGORIES.map(c=>
+    `<button type="button" class="diner-filter-pill${c.key===_dinerCategoryFilter?' active':''}" data-cat="${c.key}">${c.label}</button>`
+  ).join('');
+  el.querySelectorAll('.diner-filter-pill').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      _dinerCategoryFilter = btn.dataset.cat;
+      renderCustomQuickAdds();
+    });
+  });
+}
 async function renderCustomQuickAdds(){
   const list = await loadCustomQuickAdds();
   // Elke groep krijgt zijn eigen container; items komen nu onder hun eigen
@@ -3780,10 +3817,20 @@ async function renderCustomQuickAdds(){
     if(!byGroup[group]) byGroup[group] = [];
     byGroup[group].push({ ...m, origIdx: i });
   });
+  const dinerFilterEl = document.getElementById('dinerCategoryFilter');
+  if(dinerFilterEl) dinerFilterEl.style.display = (byGroup['Diner'] && byGroup['Diner'].length>0) ? 'flex' : 'none';
+  renderDinerCategoryFilter();
   Object.keys(byGroup).forEach(group => {
     const containerEl = document.getElementById(containerIdByGroup[group]);
     if(!containerEl) return;
-    const items = byGroup[group];
+    let items = byGroup[group];
+    if(group === 'Diner' && _dinerCategoryFilter !== 'alle'){
+      items = items.filter(m => (categorizeDinerItem(m.desc) || 'overig') === _dinerCategoryFilter);
+    }
+    if(group === 'Diner' && items.length === 0){
+      containerEl.innerHTML = '<div class="status-msg" style="margin-top:6px;">Geen items in deze categorie.</div>';
+      return;
+    }
     containerEl.innerHTML = items.map((m, i) => {
       const metaParts = [`${m.kcal} kcal`];
       if(m.protein) metaParts.push(`${m.protein}g eiwit`);
