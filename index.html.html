@@ -231,6 +231,12 @@
   .status-msg{font-size:13px;color:var(--pine);margin-top:10px;}
   .status-err{color:var(--clay);}
 
+  .diner-filter-pill{
+    padding:5px 12px;border-radius:999px;border:1px solid var(--line);background:var(--card);
+    color:var(--ink-soft);font-family:'Archivo',sans-serif;font-size:12px;font-weight:600;cursor:pointer;
+  }
+  .diner-filter-pill.active{background:var(--amber);border-color:var(--amber);color:#fff;}
+
   /* Geschiedenis */
   table{width:100%;border-collapse:collapse;}
   th{
@@ -373,7 +379,17 @@
 
     <div class="card" style="margin-bottom:16px;">
       <h3>&#127939; Trainingstip</h3>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:10px;">
+        <input type="text" id="trainingGoalInput" placeholder="Trainingsdoel, bijv. 24:00 op de 4 mijl" style="flex:1;min-width:180px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--ink);">
+        <button class="btn-secondary" id="trainingGoalSaveBtn" style="flex-shrink:0;padding:8px 12px;">Doel opslaan</button>
+      </div>
+      <div id="trainingGoalStatus" class="status-msg" style="margin-top:0;"></div>
       <div id="trainingTip" class="meal-meta" style="font-size:14px;color:var(--ink);"></div>
+    </div>
+
+    <div class="card" style="margin-bottom:16px;">
+      <h3>&#128200; Trainingsvoortgang per type</h3>
+      <div id="trainingProgressTable"></div>
     </div>
 
     <div class="card" style="margin-bottom:16px;background:linear-gradient(115deg,#7A0A66 0%,#4B1F6B 40%,#1A1240 100%);border:none;">
@@ -704,6 +720,7 @@
             <button class="btn-secondary defaultQuickAddRemove" data-key="kipfilet" title="Verwijderen uit Snel toevoegen" style="padding:6px 10px;flex-shrink:0;">&times;</button>
           </div>
         </div>
+        <div id="dinerCategoryFilter" style="display:flex;gap:6px;flex-wrap:wrap;margin:10px 0 4px;"></div>
         <div id="customQuickAddList"></div>
         </div>
       </div>
@@ -1338,9 +1355,9 @@ function buildQuantityVariants(item){
 // zodat de Diner-suggestie altijd een compleet bord kan voorstellen i.p.v.
 // toevallig 2x vlees of geen groente te kiezen puur op macro-getallen.
 const DINER_CATEGORY_KEYWORDS = {
-  koolhydraat: ['rijst','pasta','aardappel','krieltje','macaroni','spaghetti','patat'],
+  koolhydraat: ['rijst','pasta','aardappel','krieltje','macaroni','spaghetti','patat','bulgur','wrap'],
   vlees: ['kip','vlees','biefstuk','gehakt','vis','zalm','tonijn','makreel','kalkoen'],
-  groente: ['broccoli','spinazie','sla','salade','groente','wortel','paprika']
+  groente: ['broccoli','spinazie','sla','salade','groente','wortel','paprika','courgette','tomaat','tomaten','biet','komkommer','ui','knoflook','aubergine','champignon']
 };
 function categorizeDinerItem(name){
   const lower = (name||'').toLowerCase();
@@ -1602,147 +1619,275 @@ function clusterRunsByDistance(runs){
   }));
 }
 
-// Checkt of een hogere/lagere HRV of meer/minder slaap die dag samenhangt
-// met een merkbaar ander tempo, binnen een set vergelijkbare runs (bijv.
-// allemaal ~10km). Splitst op de mediaan in een "hogere helft" en "lagere
-// helft" en vergelijkt het gemiddelde tempo van beide groepen -- puur een
-// patroon in de eigen cijfers, geen causaal bewijs, dus voorzichtig
-// verwoord. Te weinig data (minder dan 2 runs per groep) -> geen tip.
-function correlateWithRecovery(clusterRuns){
-  const tips = [];
+// Trainingsdoel (bijv. "24:00 op de 4 mijl") wordt vrije tekst ingevoerd en
+// hieruit geparsed naar een streefafstand + -tijd, zodat we er een doeltempo
+// uit kunnen afleiden. "Halve marathon"/"marathon" worden apart herkend
+// (staan niet als getal in de tekst); anders wordt gezocht naar "<getal>
+// km/kilometer" of "<getal> mijl/mile(s)". Voor de tijd: bij twee
+// dubbelepunten is het uur:min:sec, bij één dubbelepunt en een langere
+// afstand (>=15km) met een klein eerste getal (<=5) gaan we uit van uur:min
+// (bijv. een halve marathon in "1:45"), anders van min:sec.
+function parseTrainingGoal(text){
+  if(!text) return null;
+  const lower = text.toLowerCase();
+  let distanceKm = null;
+  if(/halve marathon/.test(lower)) distanceKm = 21.0975;
+  else if(/\bmarathon\b/.test(lower)) distanceKm = 42.195;
+  else {
+    const kmMatch = lower.match(/(\d+(?:[.,]\d+)?)\s*(km|kilometer)/);
+    const mileMatch = lower.match(/(\d+(?:[.,]\d+)?)\s*(mijl|mile|miles)/);
+    if(kmMatch) distanceKm = parseFloat(kmMatch[1].replace(',','.'));
+    else if(mileMatch) distanceKm = parseFloat(mileMatch[1].replace(',','.')) * 1.60934;
+  }
+  const timeMatch = text.match(/(\d{1,2}):(\d{2})(?::(\d{2}))?/);
+  let timeSeconds = null;
+  if(timeMatch){
+    const a = parseInt(timeMatch[1],10), b = parseInt(timeMatch[2],10);
+    const c = timeMatch[3]!=null ? parseInt(timeMatch[3],10) : null;
+    if(c!=null) timeSeconds = a*3600 + b*60 + c;
+    else if(distanceKm!=null && distanceKm>=15 && a<=5) timeSeconds = a*3600 + b*60;
+    else timeSeconds = a*60 + b;
+  }
+  if(distanceKm==null || timeSeconds==null) return null;
+  return { distanceKm, timeSeconds };
+}
+async function loadTrainingGoal(){
+  const owner = currentOwner();
+  if(!owner) return null;
+  try{
+    const { data } = await supabaseClient.from('training_goals').select('*').eq('owner', owner).maybeSingle();
+    return data || null;
+  }catch(e){ console.error('Laden trainingsdoel', e); return null; }
+}
+async function saveTrainingGoal(text){
+  const owner = currentOwner();
+  if(!owner) return { ok:false, error:'Vul eerst je naam in bij het tabblad Team.' };
+  const parsed = parseTrainingGoal(text);
+  if(!parsed) return { ok:false, error:'Kon geen tijd + afstand herkennen. Gebruik bijv. "24:00 op de 4 mijl" of "45:00 op de 10km".' };
+  try{
+    const { error } = await supabaseClient.from('training_goals').upsert({
+      owner, goal_text: text, target_distance_km: parsed.distanceKm, target_time_seconds: parsed.timeSeconds, updated_at: new Date().toISOString()
+    }, { onConflict: 'owner' });
+    if(error) return { ok:false, error:'Opslaan mislukt.' };
+    return { ok:true };
+  }catch(e){ console.error('Opslaan trainingsdoel', e); return { ok:false, error:'Opslaan mislukt.' }; }
+}
+function formatPaceMinPerKm(paceMinPerKm){
+  let min = Math.floor(paceMinPerKm);
+  let sec = Math.round((paceMinPerKm-min)*60);
+  if(sec>=60){ sec -= 60; min += 1; }
+  return `${min}:${String(sec).padStart(2,'0')}/km`;
+}
+// Vast wekelijks trainingsschema (typische opbouw richting een tijdsdoel):
+// 1x interval, 1x tempo, 1x lange duurloop, rest rust/herstel. De tempo's
+// per type zijn een indicatieve vuistregel t.o.v. het doeltempo, geen exacte
+// trainingswetenschap.
+const WEEKLY_TRAINING_SCHEMA = [
+  { day: 'maandag', label: 'Maandag', type: 'rust' },
+  { day: 'dinsdag', label: 'Dinsdag', type: 'interval' },
+  { day: 'woensdag', label: 'Woensdag', type: 'herstel' },
+  { day: 'donderdag', label: 'Donderdag', type: 'tempo' },
+  { day: 'vrijdag', label: 'Vrijdag', type: 'rust' },
+  { day: 'zaterdag', label: 'Zaterdag', type: 'duurloop' },
+  { day: 'zondag', label: 'Zondag', type: 'rust' },
+];
+const SESSION_TYPE_META = {
+  interval: { label: 'Intervaltraining', paceOffsetMin: -0.25 },
+  tempo: { label: 'Tempotraining', paceOffsetMin: 0.25 },
+  duurloop: { label: 'Lange duurloop', paceOffsetMin: 1.17 },
+  herstel: { label: 'Hersteltraining', paceOffsetMin: 1.5 },
+  rust: { label: 'Rustdag', paceOffsetMin: null },
+};
+function sessionDescription(type, goalPaceMinPerKm){
+  const meta = SESSION_TYPE_META[type];
+  const pace = (goalPaceMinPerKm!=null && meta.paceOffsetMin!=null) ? formatPaceMinPerKm(goalPaceMinPerKm + meta.paceOffsetMin) : null;
+  switch(type){
+    case 'interval':
+      return pace ? `bijv. 6-8x 400-800m op ${pace}, met 2-3 min rustige jog ertussen — traint je snelheid net boven doeltempo.`
+                  : 'bijv. 6-8x 400-800m stevig, met rustige jog ertussen.';
+    case 'tempo':
+      return pace ? `20-30 min aaneengesloten lopen op ${pace} — bouwt je drempel op richting je doeltempo.`
+                  : '20-30 min aaneengesloten stevig doorlopen, net onder maximaal duurtempo.';
+    case 'duurloop':
+      return pace ? `rustig tempo rond ${pace}, bouw de afstand geleidelijk op — dit is de basis onder je doeltijd.`
+                  : 'rustig tempo, bouw de afstand geleidelijk op.';
+    case 'herstel':
+      return 'kort en rustig loopje (20-30 min), ruim onder tempo — focus op herstel, niet op snelheid.';
+    default:
+      return 'geen training, of eventueel lichte cross-training (fietsen/zwemmen/wandelen). Herstel is net zo belangrijk als trainen.';
+  }
+}
+function currentAmsterdamWeekdayName(){
+  return new Intl.DateTimeFormat('nl-NL', { timeZone:'Europe/Amsterdam', weekday:'long' }).format(new Date());
+}
+// Genereert de trainingstip: bij een ingesteld doel een wekelijks schema
+// (interval/tempo/duurloop/rust) met bijpassend tempo t.o.v. het doeltempo,
+// aangepast op basis van de hersteldata van vandaag (HRV/slaap) -- bij
+// tekenen van onvoldoende herstel wordt een geplande interval/tempo-dag
+// afgezwakt naar herstel/rust. Zonder ingesteld doel: een korte tip puur op
+// basis van herstel en trainingsfrequentie, met de vraag om een doel in te
+// vullen voor een schema op maat.
+function generateTrainingTip(activities, days, recoveryConcern, goal, vitals){
+  const activeDates = new Set((activities||[]).map(a=>a.date));
+  const consistencyPct = days>0 ? Math.round(activeDates.size / days * 100) : 0;
+  const runs = (activities||[]).filter(a => a.type==='hardlopen' && a.km>0 && a.minutes>0);
+
+  if(!goal || !goal.target_distance_km || !goal.target_time_seconds){
+    const parts = [];
+    parts.push('Nog geen trainingsdoel ingesteld. Vul hierboven bijv. "24:00 op de 4 mijl" in voor een trainingsschema op maat.');
+    if(recoveryConcern){
+      parts.push('Je herstelwaarden van vandaag (HRV/slaap) zien er wat minder uit — overweeg vandaag een rustige of korte training.');
+    } else if(consistencyPct < 25 && activities && activities.length>0){
+      parts.push(`Je hebt in ${activeDates.size} van de laatste ${days} dagen getraind. Regelmaat bouwt sneller conditie op dan losse pieken.`);
+    }
+    return parts.map(t=>escapeHtml(t)).join('<br><br>');
+  }
+
+  const goalPaceMinPerKm = (goal.target_time_seconds/60) / goal.target_distance_km;
+  const weekdayName = currentAmsterdamWeekdayName();
+  const todayEntry = WEEKLY_TRAINING_SCHEMA.find(d=>d.day===weekdayName) || WEEKLY_TRAINING_SCHEMA[0];
+  let todayType = todayEntry.type;
+
+  // Bij matig herstel vandaag: een geplande interval/tempo-dag afzwakken.
+  let recoveryNote = '';
+  if(recoveryConcern && (todayType==='interval' || todayType==='tempo')){
+    const origLabel = SESSION_TYPE_META[todayType].label;
+    todayType = 'herstel';
+    const vitalsBits = [];
+    if(vitals && vitals.hrv!=null) vitalsBits.push(`HRV ${Math.round(vitals.hrv)}ms`);
+    if(vitals && vitals.sleepMinutes!=null) vitalsBits.push(`slaap ${Math.floor(vitals.sleepMinutes/60)}u${String(Math.round(vitals.sleepMinutes%60)).padStart(2,'0')}m`);
+    const vitalsTxt = vitalsBits.length ? ` (${vitalsBits.join(', ')})` : '';
+    recoveryNote = `Je herstelwaarden${vitalsTxt} zien er vandaag wat minder uit, dus in plaats van de geplande ${origLabel} vandaag liever een hersteldag.`;
+  }
+
+  const goalPaceLabel = formatPaceMinPerKm(goalPaceMinPerKm);
+  const goalDistLabel = goal.goal_text || `${goal.target_distance_km.toFixed(1)}km`;
+
+  // Context: huidig tempo op de afstand die het dichtst bij het doel ligt (indien bekend).
+  let contextLine = '';
+  if(runs.length>0){
+    const clusters = clusterRunsByDistance(runs);
+    let nearest = clusters[0], bestDiff = Infinity;
+    for(const c of clusters){
+      const diff = Math.abs(c.avgKm - goal.target_distance_km);
+      if(diff < bestDiff){ bestDiff = diff; nearest = c; }
+    }
+    const km = nearest.runs.reduce((s,r)=>s+r.km,0);
+    const min = nearest.runs.reduce((s,r)=>s+r.minutes,0);
+    const pace = km>0 ? min/km : null;
+    if(pace!=null){
+      contextLine = `Je huidige tempo op ~${nearest.label} is ${formatPaceMinPerKm(pace)}, je doeltempo voor ${goalDistLabel} (in ${Math.round(goal.target_time_seconds/60)} min) is ${goalPaceLabel}.`;
+    }
+  }
+  if(!contextLine){
+    contextLine = `Doel: ${goalDistLabel} in ${Math.round(goal.target_time_seconds/60)} min → doeltempo ${goalPaceLabel}.`;
+  }
+
+  const todayLabel = SESSION_TYPE_META[todayType].label;
+  const todayDesc = sessionDescription(todayType, goalPaceMinPerKm);
+  const todayLine = `<strong>Vandaag (${escapeHtml(todayEntry.label)}): ${escapeHtml(todayLabel)}</strong><br>${escapeHtml(todayDesc)}`;
+
+  const scheduleLines = WEEKLY_TRAINING_SCHEMA.map(d=>{
+    const isToday = d.day===weekdayName;
+    const label = SESSION_TYPE_META[d.type].label;
+    return `${isToday ? '👉 ' : ''}${escapeHtml(d.label)}: ${escapeHtml(label)}`;
+  }).join(' &middot; ');
+
+  const blocks = [escapeHtml(contextLine)];
+  if(recoveryNote) blocks.push(escapeHtml(recoveryNote));
+  blocks.push(todayLine);
+  blocks.push(`<span style="font-size:12px;color:var(--ink-soft);">Weekschema: ${scheduleLines}</span>`);
+
+  return blocks.join('<br><br>');
+}
+
+// Tabel met tempo-voortgang per afstandstype (dezelfde vaste ankerafstanden
+// als de trainingstip), zodat verbetering/achteruitgang per type run zichtbaar
+// wordt gemaakt i.p.v. in de tip-tekst zelf -- die vergeleek voorheen \"eerste
+// helft\" vs \"tweede helft\" van alle runs in één cluster door elkaar, wat
+// bij afronding soms rare uitkomsten gaf (bijv. \"4:60/km\"). Bij 4+ runs wordt
+// de eerste helft vs. tweede helft vergeleken (stabieler); bij 2-3 runs de
+// eerste vs. laatste losse run.
+function renderTrainingProgressTable(activities){
+  const el = document.getElementById('trainingProgressTable');
+  if(!el) return;
+  const runs = (activities||[]).filter(a => a.type==='hardlopen' && a.km>0 && a.minutes>0);
+  if(runs.length===0){
+    el.innerHTML = '<div class="empty">Nog geen hardloopdata om voortgang te tonen.</div>';
+    return;
+  }
+  const clusters = clusterRunsByDistance(runs).filter(c=>c.runs.length>=2).sort((a,b)=>b.runs.length-a.runs.length);
+  if(clusters.length===0){
+    el.innerHTML = '<div class="empty">Nog te weinig vergelijkbare runs per afstand om een trend te tonen (minimaal 2 per type).</div>';
+    return;
+  }
   const paceOf = (arr) => {
     const km = arr.reduce((s,a)=>s+a.km,0);
     const min = arr.reduce((s,a)=>s+a.minutes,0);
     return km>0 ? min/km : null;
   };
-  function checkMetric(key, label, fmt){
-    const withMetric = clusterRuns.filter(r=>r[key]!=null);
-    if(withMetric.length < 4) return;
-    const sorted = [...withMetric].sort((a,b)=>a[key]-b[key]);
-    const half = Math.floor(sorted.length/2);
-    const lowerHalf = sorted.slice(0, half);
-    const upperHalf = sorted.slice(sorted.length-half);
-    if(lowerHalf.length < 2 || upperHalf.length < 2) return;
-    const paceLower = paceOf(lowerHalf);
-    const paceUpper = paceOf(upperHalf);
-    if(paceLower==null || paceUpper==null) return;
-    const deltaPct = (paceLower - paceUpper) / paceLower * 100; // positief = sneller bij hogere metric
-    if(Math.abs(deltaPct) < 3) return; // geen noemenswaardig verschil
-    const lowerAvg = lowerHalf.reduce((s,r)=>s+r[key],0)/lowerHalf.length;
-    const upperAvg = upperHalf.reduce((s,r)=>s+r[key],0)/upperHalf.length;
-    if(deltaPct > 0){
-      tips.push(`Bij een hogere ${label} (gem. ${fmt(upperAvg)}) liep je gemiddeld ${formatPace(1,paceUpper)}, tegenover ${formatPace(1,paceLower)} bij een lagere ${label} (gem. ${fmt(lowerAvg)}) — ${label} lijkt hier samen te hangen met je tempo op dit type run.`);
-    } else {
-      tips.push(`Opvallend: bij een lagere ${label} (gem. ${fmt(lowerAvg)}) liep je juist sneller (${formatPace(1,paceLower)}) dan bij een hogere ${label} (gem. ${fmt(upperAvg)}, ${formatPace(1,paceUpper)}) — mogelijk toeval bij dit aantal runs, maar de moeite waard om in de gaten te houden.`);
-    }
-  }
-  checkMetric('dayHrv', 'HRV', v=>Math.round(v)+' ms');
-  checkMetric('daySleepMinutes', 'nachtrust', v=>Math.floor(v/60)+'u'+String(Math.round(v%60)).padStart(2,'0')+'m');
-  return tips;
-}
-
-// Genereert een concrete, onderbouwde trainingstip op basis van de trend in
-// de laatste `days` dagen: tempo-ontwikkeling bij hardlopen, trainings-
-// consistentie (aantal actieve dagen) en variatie tussen disciplines.
-// Puur gebaseerd op de eigen gelogde data -- geen medisch/sportief advies,
-// alleen patronen die uit de cijfers zelf blijken.
-function generateTrainingTip(activities, days, recoveryConcern){
-  if(!activities || activities.length===0){
-    return escapeHtml('Nog geen trainingen gelogd in de afgelopen ' + days + ' dagen. Zodra er wat data binnenkomt (via Tredict-sync of handmatig) geef ik hier een tip op maat.');
-  }
-
-  const activeDates = new Set(activities.map(a=>a.date));
-  const consistencyPct = Math.round(activeDates.size / days * 100);
-
-  const runs = activities.filter(a => a.type==='hardlopen' && a.km>0 && a.minutes>0);
-  const byType = {};
-  for(const a of activities){ byType[a.type] = (byType[a.type]||0) + 1; }
-  const typesUsed = Object.keys(byType);
-
-  const tips = [];
-
-  // 1) Tempo-trend bij hardlopen: NIET één blend over alle runs (een 5km
-  // tempo-run en een 20km duurloop in dezelfde week geven dan een
-  // gemiddelde dat niets betekent), maar eerst clusteren op vergelijkbare
-  // afstand, en de trend alleen bepalen binnen zo'n cluster van
-  // soortgelijke runs. Hartslag (indien bekend) wordt er als context bij
-  // vermeld, zodat "vergelijkbaar" ook qua inspanning klopt, niet alleen
-  // qua afstand.
-  if(runs.length >= 2){
-    const clusters = clusterRunsByDistance(runs);
-    const sortedClusters = [...clusters].sort((a,b)=>b.runs.length-a.runs.length);
-    const main = sortedClusters[0];
-    const paceOf = (arr) => {
-      const km = arr.reduce((s,a)=>s+a.km,0);
-      const min = arr.reduce((s,a)=>s+a.minutes,0);
-      return km>0 ? min/km : null;
+  const hrOf = (arr) => {
+    const withHr = arr.filter(r=>r.avgHeartrate!=null);
+    return withHr.length ? withHr.reduce((s,r)=>s+r.avgHeartrate,0)/withHr.length : null;
+  };
+  const rowsData = clusters.map(c=>{
+    const sorted = [...c.runs].sort((a,b)=>a.date.localeCompare(b.date));
+    const mid = Math.floor(sorted.length/2);
+    const first = sorted.length>=4 ? sorted.slice(0, mid) : [sorted[0]];
+    const last = sorted.length>=4 ? sorted.slice(mid) : [sorted[sorted.length-1]];
+    return {
+      cluster: c,
+      paceFirst: paceOf(first), paceLast: paceOf(last),
+      hrFirst: hrOf(first), hrLast: hrOf(last),
     };
-    const kmLabel = main.label;
-    const hrs = main.runs.filter(r=>r.avgHeartrate!=null);
-    const hrLabel = hrs.length===main.runs.length
-      ? `, gem. ${Math.round(hrs.reduce((s,r)=>s+r.avgHeartrate,0)/hrs.length)} bpm`
-      : '';
-
-    if(main.runs.length >= 4){
-      const sortedRuns = [...main.runs].sort((a,b)=>a.date.localeCompare(b.date));
-      const mid = Math.floor(sortedRuns.length/2);
-      const paceFirst = paceOf(sortedRuns.slice(0, mid));
-      const paceSecond = paceOf(sortedRuns.slice(mid));
-      if(paceFirst!=null && paceSecond!=null){
-        const deltaPct = (paceFirst - paceSecond) / paceFirst * 100; // positief = sneller geworden
-        if(deltaPct > 3){
-          tips.push(`Bij je ${sortedRuns.length} vergelijkbare runs van ~${kmLabel}${hrLabel}: tempo verbeterd van ${formatPace(1,paceFirst)} naar ${formatPace(1,paceSecond)} — mooie vooruitgang op dit type run. Bouw dit nu vast met een rustige duurloop, zodat je aerobe basis meegroeit.`);
-        } else if(deltaPct < -5){
-          tips.push(`Bij je ${sortedRuns.length} vergelijkbare runs van ~${kmLabel}${hrLabel}: tempo juist trager geworden (${formatPace(1,paceFirst)} → ${formatPace(1,paceSecond)}). Kan wijzen op vermoeidheid — check je herstel (slaap/HRV) of bouw een rustweek in.`);
-        } else {
-          tips.push(`Bij je ${sortedRuns.length} vergelijkbare runs van ~${kmLabel}${hrLabel} blijft je tempo stabiel rond ${formatPace(1,paceSecond)}. Voeg een keer per week een interval- of tempotraining toe om hier doorheen te breken.`);
-        }
-      }
-    } else if(main.runs.length >= 2){
-      const pace = paceOf(main.runs);
-      tips.push(`Je meest voorkomende run is ~${kmLabel}${hrLabel}, gemiddeld tempo ${pace!=null?formatPace(1,pace):'onbekend'} (${main.runs.length}x gelogd). Log er nog een paar bij van vergelijkbare afstand om een echte trend te zien.`);
-    } else {
-      tips.push(`Je runs verschillen deze periode allemaal te veel in afstand om eerlijk te vergelijken (bijv. ${clusters.map(c=>c.label).join(', ')}). Log een paar keer een vergelijkbare afstand om een tempo-trend zichtbaar te maken.`);
+  });
+  // Tempo als kolom-balkje (snelheid in km/u, breedte t.o.v. de snelste
+  // gelogde snelheid over alle types heen) i.p.v. alleen tekst -- geeft in
+  // één oogopslag een "mooie grafiek"-gevoel zonder een aparte canvas-chart
+  // per rij te hoeven tekenen.
+  const allSpeeds = rowsData.flatMap(r=>[r.paceFirst,r.paceLast]).filter(p=>p!=null).map(p=>60/p);
+  const maxSpeed = allSpeeds.length ? Math.max(...allSpeeds) : 0;
+  const barPct = (pace) => {
+    if(pace==null || maxSpeed<=0) return 0;
+    return Math.max(4, Math.round((60/pace)/maxSpeed*100));
+  };
+  const fmtHr = (hr) => hr!=null ? Math.round(hr)+' bpm' : '&mdash;';
+  const rows = rowsData.map(({cluster:c, paceFirst, paceLast, hrFirst, hrLast})=>{
+    let trendHtml = '<span style="color:var(--ink-soft);">&mdash;</span>';
+    if(paceFirst!=null && paceLast!=null){
+      const deltaPct = (paceFirst - paceLast) / paceFirst * 100; // positief = sneller geworden
+      if(deltaPct > 2) trendHtml = `<span style="color:var(--pine);">&#9650; ${deltaPct.toFixed(1)}% sneller</span>`;
+      else if(deltaPct < -2) trendHtml = `<span style="color:var(--clay);">&#9660; ${Math.abs(deltaPct).toFixed(1)}% trager</span>`;
+      else trendHtml = '<span style="color:var(--ink-soft);">stabiel</span>';
     }
-    if(sortedClusters.length >= 3 && main.runs.length >= 2){
-      tips.push(`Je hardloopt deze periode op meerdere duidelijk verschillende afstanden (${sortedClusters.map(c=>c.label+' ('+c.runs.length+'x)').join(', ')}) — vergelijk tempo dus per afstandstype, niet als één groot gemiddelde.`);
-    }
-    // Herstel-check: hangt een hogere/lagere HRV of meer/minder slaap die dag
-    // samen met een merkbaar ander tempo, binnen datzelfde cluster van
-    // vergelijkbare runs (zodat het geen afstandsverschil is dat het beeld
-    // vertroebelt)?
-    if(main.runs.length >= 4){
-      correlateWithRecovery(main.runs).forEach(t=>tips.push(t));
-    }
-  } else if(runs.length >= 1){
-    tips.push(`Je hebt nog maar ${runs.length} hardloopsessie gelogd deze periode — log er een paar meer om een echte tempo-trend te kunnen zien.`);
-  }
-
-  // 2) Consistentie: te weinig actieve dagen, of juist geen rustdagen.
-  if(consistencyPct < 25){
-    tips.push(`Je hebt in ${activeDates.size} van de laatste ${days} dagen getraind (${consistencyPct}%). Regelmaat bouwt sneller conditie op dan losse pieken — probeer een vast dagritme, bijv. 3x per week.`);
-  } else if(consistencyPct > 85 && !recoveryConcern){
-    tips.push(`Je traint bijna elke dag (${consistencyPct}% van de laatste ${days} dagen). Zorg voor bewuste rustdagen om overbelasting te voorkomen — vooruitgang ontstaat juist tijdens herstel.`);
-  }
-
-  // 3) Variatie tussen disciplines, als signaal voor eenzijdige belasting.
-  if(typesUsed.length===1 && activities.length>=6){
-    const only = typesUsed[0];
-    const suggestion = only==='hardlopen' ? 'fietsen of zwemmen'
-      : only==='fietsen' ? 'hardlopen of zwemmen'
-      : only==='zwemmen' ? 'hardlopen of fietsen'
-      : 'wat cardio (hardlopen/fietsen/zwemmen)';
-    tips.push(`Je traint deze periode alleen ${only}. Wat variatie met ${suggestion} verlaagt de kans op overbelastingsklachten en traint andere spiergroepen mee.`);
-  }
-
-  if(recoveryConcern) {
-    tips.push('Je herstelwaarden van vandaag zien er wat minder uit — overweeg vandaag een rustige of korte training i.p.v. een zware sessie.');
-  }
-
-  if(tips.length===0){
-    return escapeHtml('Je trainingspatroon ziet er gebalanceerd uit — blijf dit volhouden en bouw geleidelijk in volume of intensiteit op.');
-  }
-  return tips.map(t=>escapeHtml(t)).join('<br><br>');
+    const hrText = (hrFirst!=null || hrLast!=null) ? `${fmtHr(hrFirst)} &rarr; ${fmtHr(hrLast)}` : '&mdash;';
+    const tempoBars = `
+      <div style="display:flex;flex-direction:column;gap:4px;min-width:110px;">
+        <div style="display:flex;align-items:center;gap:6px;">
+          <div style="flex:1;background:var(--line);border-radius:4px;height:7px;overflow:hidden;"><div style="width:${barPct(paceFirst)}%;height:100%;background:var(--ink-soft);border-radius:4px;"></div></div>
+          <span style="font-size:11px;color:var(--ink-soft);white-space:nowrap;">${paceFirst!=null?formatPaceMinPerKm(paceFirst):'&mdash;'}</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <div style="flex:1;background:var(--line);border-radius:4px;height:7px;overflow:hidden;"><div style="width:${barPct(paceLast)}%;height:100%;background:var(--amber);border-radius:4px;"></div></div>
+          <span style="font-size:11px;color:var(--ink);white-space:nowrap;">${paceLast!=null?formatPaceMinPerKm(paceLast):'&mdash;'}</span>
+        </div>
+      </div>`;
+    return `<tr>
+      <td class="desc-cell">${escapeHtml(c.label)}</td>
+      <td>${c.runs.length}x</td>
+      <td>${tempoBars}</td>
+      <td>${trendHtml}</td>
+      <td>${hrText}</td>
+    </tr>`;
+  }).join('');
+  el.innerHTML = `<div style="display:flex;gap:14px;font-size:11px;color:var(--ink-soft);margin-bottom:8px;">
+      <span><span style="display:inline-block;width:10px;height:7px;background:var(--ink-soft);border-radius:3px;margin-right:4px;"></span>eerste periode</span>
+      <span><span style="display:inline-block;width:10px;height:7px;background:var(--amber);border-radius:3px;margin-right:4px;"></span>laatste periode</span>
+    </div>
+    <div class="table-scroll"><table>
+    <thead><tr><th>Type</th><th>Aantal</th><th>Tempo</th><th>Trend</th><th>Hartslag</th></tr></thead>
+    <tbody>${rows}</tbody>
+  </table></div>`;
 }
 
 function generateNutritionTip(totals, targets, burned, vitals, trainingHadActivity, recoveryConcern, openMealMoments, weightKg, runningStats, customItems){
@@ -2311,8 +2456,20 @@ async function renderDashboard(){
 
   const trainingTipDays = 28;
   const recentTrainingForTip = await loadRecentTrainingForTip(trainingTipDays);
+  const trainingGoal = await loadTrainingGoal();
+  const trainingGoalInputEl = document.getElementById('trainingGoalInput');
+  if(trainingGoalInputEl && document.activeElement !== trainingGoalInputEl){
+    trainingGoalInputEl.value = trainingGoal ? trainingGoal.goal_text : '';
+  }
   const trainingTipEl = document.getElementById('trainingTip');
-  if(trainingTipEl) trainingTipEl.innerHTML = generateTrainingTip(recentTrainingForTip, trainingTipDays, recoveryConcern);
+  if(trainingTipEl) trainingTipEl.innerHTML = generateTrainingTip(recentTrainingForTip, trainingTipDays, recoveryConcern, trainingGoal, vitals);
+
+  // Voortgangstabel kijkt verder terug (90 dagen) dan de dagelijkse tip
+  // (28 dagen), zodat een langzaam zichtbare trend niet steeds uit beeld
+  // valt zodra een run buiten de laatste 4 weken valt.
+  const progressDays = 90;
+  const recentTrainingForProgress = progressDays===trainingTipDays ? recentTrainingForTip : await loadRecentTrainingForTip(progressDays);
+  renderTrainingProgressTable(recentTrainingForProgress);
 
   syncTeamEntry(dateStr, {
     dagscore: dagscoreVal,
@@ -2612,10 +2769,7 @@ function trainingDurationByType(training){
 }
 function formatPace(km, minutes){
   if(!km || !minutes) return null;
-  const paceMinPerKm = minutes/km;
-  const min = Math.floor(paceMinPerKm);
-  const sec = Math.round((paceMinPerKm-min)*60);
-  return `${min}:${String(sec).padStart(2,'0')}/km`;
+  return formatPaceMinPerKm(minutes/km);
 }
 function formatSpeed(km, minutes){
   if(!km || !minutes) return null;
@@ -3718,13 +3872,17 @@ const FOOD_EMOJI_KEYWORDS = [
   ['broccoli', '\u{1F966}'],
   ['spinazie', '\u{1F96C}'],
   ['krieltje', '\u{1F954}'],
+  ['biet', '\u{1FADC}'],
+  ['bulgur', '\u{1F33E}'],
+  ['wrap', '\u{1F32F}'],
   ['kaas', '\u{1F9C0}'],
   ['noot', '\u{1F95C}'], ['noten', '\u{1F95C}'], ['pinda', '\u{1F95C}'], ['amandel', '\u{1F95C}'],
   ['gehakt', '\u{1F969}'], ['biefstuk', '\u{1F969}'], ['vlees', '\u{1F969}'],
-  ['bier', '\u{1F37A}'], ['leffe', '\u{1F37A}'], ['corona', '\u{1F37A}'], ['gerardus', '\u{1F37A}'], ['wijn', '\u{1F377}'],
+  ['heineken', '\u{1F37A}'], ['bier', '\u{1F37A}'], ['leffe', '\u{1F37A}'], ['corona', '\u{1F37A}'], ['gerardus', '\u{1F37A}'], ['wijn', '\u{1F377}'],
   ['ijsje', '\u{1F366}'],
   ['koffie', '\u2615'],
-  ['thee', '\u{1F375}'],
+  ['thee', '\u{1F375}'], ['tea', '\u{1F375}'],
+  ['kefir', '\u{1F95B}'],
   ['melk', '\u{1F95B}'],
   ['water', '\u{1F4A7}'],
   ['soep', '\u{1F372}'],
@@ -3757,6 +3915,32 @@ function getFoodEmoji(name){
   return emojis.length ? emojis.join('') : '\u{1F37D}\uFE0F'; // neutraal bord-icoontje als fallback
 }
 
+// Diner heeft van alle groepen verreweg de meeste zelf toegevoegde items
+// (groenten, koolhydraatbronnen, vlees/vis door elkaar), waardoor die lijst
+// als enige lang genoeg werd om onoverzichtelijk te zijn. Daarom krijgt
+// alleen Diner een categoriefilter (Groente/Koolhydraten/Vlees & vis/Overig)
+// bovenop de lijst, herbruikmakend van categorizeDinerItem.
+const DINER_FILTER_CATEGORIES = [
+  { key: 'alle', label: 'Alle' },
+  { key: 'groente', label: '🥦 Groente' },
+  { key: 'koolhydraat', label: '🍚 Koolhydraten' },
+  { key: 'vlees', label: '🍗 Vlees & vis' },
+  { key: 'overig', label: 'Overig' }
+];
+let _dinerCategoryFilter = 'alle';
+function renderDinerCategoryFilter(){
+  const el = document.getElementById('dinerCategoryFilter');
+  if(!el) return;
+  el.innerHTML = DINER_FILTER_CATEGORIES.map(c=>
+    `<button type="button" class="diner-filter-pill${c.key===_dinerCategoryFilter?' active':''}" data-cat="${c.key}">${c.label}</button>`
+  ).join('');
+  el.querySelectorAll('.diner-filter-pill').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      _dinerCategoryFilter = btn.dataset.cat;
+      renderCustomQuickAdds();
+    });
+  });
+}
 async function renderCustomQuickAdds(){
   const list = await loadCustomQuickAdds();
   // Elke groep krijgt zijn eigen container; items komen nu onder hun eigen
@@ -3780,10 +3964,20 @@ async function renderCustomQuickAdds(){
     if(!byGroup[group]) byGroup[group] = [];
     byGroup[group].push({ ...m, origIdx: i });
   });
+  const dinerFilterEl = document.getElementById('dinerCategoryFilter');
+  if(dinerFilterEl) dinerFilterEl.style.display = (byGroup['Diner'] && byGroup['Diner'].length>0) ? 'flex' : 'none';
+  renderDinerCategoryFilter();
   Object.keys(byGroup).forEach(group => {
     const containerEl = document.getElementById(containerIdByGroup[group]);
     if(!containerEl) return;
-    const items = byGroup[group];
+    let items = byGroup[group];
+    if(group === 'Diner' && _dinerCategoryFilter !== 'alle'){
+      items = items.filter(m => (categorizeDinerItem(m.desc) || 'overig') === _dinerCategoryFilter);
+    }
+    if(group === 'Diner' && items.length === 0){
+      containerEl.innerHTML = '<div class="status-msg" style="margin-top:6px;">Geen items in deze categorie.</div>';
+      return;
+    }
     containerEl.innerHTML = items.map((m, i) => {
       const metaParts = [`${m.kcal} kcal`];
       if(m.protein) metaParts.push(`${m.protein}g eiwit`);
@@ -4463,6 +4657,26 @@ document.getElementById('trendMetricSelect').addEventListener('change', ()=>rend
 document.getElementById('trendPeriodSelect').addEventListener('change', ()=>renderTrendChart());
 document.getElementById('prestatiesPeriodSelect')?.addEventListener('change', (e)=>renderPrestatiesForPeriod(e.target.value));
 document.getElementById('trendRefreshBtn').addEventListener('click', ()=>renderTrendChart(true));
+
+document.getElementById('trainingGoalSaveBtn')?.addEventListener('click', async (e)=>{
+  const input = document.getElementById('trainingGoalInput');
+  const statusEl = document.getElementById('trainingGoalStatus');
+  const btn = e.target;
+  const text = (input?.value || '').trim();
+  if(!text){
+    if(statusEl) statusEl.innerHTML = '<span class="status-err">Vul eerst een doel in.</span>';
+    return;
+  }
+  btn.disabled = true;
+  const result = await saveTrainingGoal(text);
+  btn.disabled = false;
+  if(!result.ok){
+    if(statusEl) statusEl.innerHTML = `<span class="status-err">${escapeHtml(result.error)}</span>`;
+    return;
+  }
+  if(statusEl) statusEl.textContent = 'Doel opgeslagen.';
+  await renderDashboard();
+});
 
 // ---- Tredict-koppelingsstatus tonen ----
 // De automatische sync bij het laden gebeurde tot nu toe volledig op de
