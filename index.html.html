@@ -1590,7 +1590,7 @@ async function loadRecentTrainingForTip(days){
 // halve marathon" herkent.
 const RUN_DISTANCE_ANCHORS = [
   { km: 5, label: '5km' },
-  { km: 6.437, label: '4 mijl (6,44km)' },
+  { km: 6.437, label: '6,44km' },
   { km: 10, label: '10km' },
   { km: 15, label: '15km' },
   { km: 21.1, label: 'halve marathon (21,1km)' },
@@ -1817,9 +1817,12 @@ function renderTrainingProgressTable(activities){
     el.innerHTML = '<div class="empty">Nog geen hardloopdata om voortgang te tonen.</div>';
     return;
   }
-  const clusters = clusterRunsByDistance(runs).filter(c=>c.runs.length>=2).sort((a,b)=>b.runs.length-a.runs.length);
+  // Geen minimum van 2 runs meer per type -- een halve marathon of marathon
+  // loop je meestal maar 1x per periode, en die wil je dan ook gewoon zien
+  // staan (met huidig tempo, zonder trend) i.p.v. dat hij stil verdwijnt.
+  const clusters = clusterRunsByDistance(runs).sort((a,b)=>a.avgKm-b.avgKm);
   if(clusters.length===0){
-    el.innerHTML = '<div class="empty">Nog te weinig vergelijkbare runs per afstand om een trend te tonen (minimaal 2 per type).</div>';
+    el.innerHTML = '<div class="empty">Nog geen hardloopdata om voortgang te tonen.</div>';
     return;
   }
   const paceOf = (arr) => {
@@ -1860,7 +1863,7 @@ function renderTrainingProgressTable(activities){
   const shortLabel = (label) => label.replace(/\s*\(.*\)/, '');
   const rows = rowsData.map(({cluster:c, paceFirst, paceLast, hrFirst, hrLast})=>{
     let trendHtml = '<span style="color:var(--ink-soft);" title="Onvoldoende data">&mdash;</span>';
-    if(paceFirst!=null && paceLast!=null){
+    if(c.runs.length>=2 && paceFirst!=null && paceLast!=null){
       const deltaPct = (paceFirst - paceLast) / paceFirst * 100; // positief = sneller geworden
       if(deltaPct > 2) trendHtml = `<span style="color:#1E9E4A;font-size:16px;" title="${deltaPct.toFixed(1)}% sneller geworden">&#9650;</span>`;
       else if(deltaPct < -2) trendHtml = `<span style="color:var(--clay);font-size:16px;" title="${Math.abs(deltaPct).toFixed(1)}% trager geworden">&#9660;</span>`;
