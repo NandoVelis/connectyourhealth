@@ -1851,43 +1851,53 @@ function renderTrainingProgressTable(activities){
     if(pace==null || maxSpeed<=0) return 0;
     return Math.max(4, Math.round((60/pace)/maxSpeed*100));
   };
-  const fmtHr = (hr) => hr!=null ? Math.round(hr)+' bpm' : '&mdash;';
+  const fmtHr = (hr) => hr!=null ? String(Math.round(hr)) : '&mdash;';
+  // Compacte typenaam zonder de "(21,1km)"-toevoeging, en hartslag als kort
+  // "132 → 128 ♥" i.p.v. "132 bpm → 128 bpm" -- samen met de iconen i.p.v.
+  // tekst bij de trend scheelt dit genoeg breedte om de tabel op mobiel
+  // zonder horizontaal scrollen te laten passen.
+  const shortLabel = (label) => label.replace(/\s*\(.*\)/, '');
   const rows = rowsData.map(({cluster:c, paceFirst, paceLast, hrFirst, hrLast})=>{
-    let trendHtml = '<span style="color:var(--ink-soft);">&mdash;</span>';
+    let trendHtml = '<span style="color:var(--ink-soft);" title="Onvoldoende data">&mdash;</span>';
     if(paceFirst!=null && paceLast!=null){
       const deltaPct = (paceFirst - paceLast) / paceFirst * 100; // positief = sneller geworden
-      if(deltaPct > 2) trendHtml = `<span style="color:var(--pine);">&#9650; ${deltaPct.toFixed(1)}% sneller</span>`;
-      else if(deltaPct < -2) trendHtml = `<span style="color:var(--clay);">&#9660; ${Math.abs(deltaPct).toFixed(1)}% trager</span>`;
-      else trendHtml = '<span style="color:var(--ink-soft);">stabiel</span>';
+      if(deltaPct > 2) trendHtml = `<span style="color:#1E9E4A;font-size:16px;" title="${deltaPct.toFixed(1)}% sneller geworden">&#9650;</span>`;
+      else if(deltaPct < -2) trendHtml = `<span style="color:var(--clay);font-size:16px;" title="${Math.abs(deltaPct).toFixed(1)}% trager geworden">&#9660;</span>`;
+      else trendHtml = `<span style="color:#D68A00;font-size:18px;" title="Stabiel (${deltaPct.toFixed(1)}%)">&#9679;</span>`;
     }
-    const hrText = (hrFirst!=null || hrLast!=null) ? `${fmtHr(hrFirst)} &rarr; ${fmtHr(hrLast)}` : '&mdash;';
+    const hrText = (hrFirst!=null || hrLast!=null) ? `${fmtHr(hrFirst)}&rarr;${fmtHr(hrLast)} &#9829;` : '&mdash;';
     const tempoBars = `
-      <div style="display:flex;flex-direction:column;gap:4px;min-width:110px;">
-        <div style="display:flex;align-items:center;gap:6px;">
-          <div style="flex:1;background:var(--line);border-radius:4px;height:7px;overflow:hidden;"><div style="width:${barPct(paceFirst)}%;height:100%;background:var(--ink-soft);border-radius:4px;"></div></div>
-          <span style="font-size:11px;color:var(--ink-soft);white-space:nowrap;">${paceFirst!=null?formatPaceMinPerKm(paceFirst):'&mdash;'}</span>
+      <div style="display:flex;flex-direction:column;gap:3px;min-width:64px;">
+        <div style="display:flex;align-items:center;gap:4px;">
+          <div style="flex:1;background:var(--line);border-radius:4px;height:6px;overflow:hidden;"><div style="width:${barPct(paceFirst)}%;height:100%;background:var(--ink-soft);border-radius:4px;"></div></div>
+          <span style="font-size:10px;color:var(--ink-soft);white-space:nowrap;">${paceFirst!=null?formatPaceMinPerKm(paceFirst):'&mdash;'}</span>
         </div>
-        <div style="display:flex;align-items:center;gap:6px;">
-          <div style="flex:1;background:var(--line);border-radius:4px;height:7px;overflow:hidden;"><div style="width:${barPct(paceLast)}%;height:100%;background:var(--amber);border-radius:4px;"></div></div>
-          <span style="font-size:11px;color:var(--ink);white-space:nowrap;">${paceLast!=null?formatPaceMinPerKm(paceLast):'&mdash;'}</span>
+        <div style="display:flex;align-items:center;gap:4px;">
+          <div style="flex:1;background:var(--line);border-radius:4px;height:6px;overflow:hidden;"><div style="width:${barPct(paceLast)}%;height:100%;background:var(--amber);border-radius:4px;"></div></div>
+          <span style="font-size:10px;color:var(--ink);white-space:nowrap;">${paceLast!=null?formatPaceMinPerKm(paceLast):'&mdash;'}</span>
         </div>
       </div>`;
     return `<tr>
-      <td class="desc-cell">${escapeHtml(c.label)}</td>
-      <td>${c.runs.length}x</td>
-      <td>${tempoBars}</td>
-      <td>${trendHtml}</td>
-      <td>${hrText}</td>
+      <td class="desc-cell" style="padding:6px 4px;">${escapeHtml(shortLabel(c.label))}<br><span style="font-size:10px;color:var(--ink-soft);">${c.runs.length}x</span></td>
+      <td style="padding:6px 4px;">${tempoBars}</td>
+      <td style="padding:6px 4px;text-align:center;">${trendHtml}</td>
+      <td style="padding:6px 4px;font-size:11px;white-space:nowrap;">${hrText}</td>
     </tr>`;
   }).join('');
-  el.innerHTML = `<div style="display:flex;gap:14px;font-size:11px;color:var(--ink-soft);margin-bottom:8px;">
+  el.innerHTML = `<div style="display:flex;gap:14px;font-size:11px;color:var(--ink-soft);margin-bottom:8px;flex-wrap:wrap;">
       <span><span style="display:inline-block;width:10px;height:7px;background:var(--ink-soft);border-radius:3px;margin-right:4px;"></span>eerste periode</span>
       <span><span style="display:inline-block;width:10px;height:7px;background:var(--amber);border-radius:3px;margin-right:4px;"></span>laatste periode</span>
+      <span>&#9650; sneller &middot; &#9660; trager &middot; &#9679; stabiel</span>
     </div>
-    <div class="table-scroll"><table>
-    <thead><tr><th>Type</th><th>Aantal</th><th>Tempo</th><th>Trend</th><th>Hartslag</th></tr></thead>
+    <table style="table-layout:fixed;width:100%;">
+    <thead><tr>
+      <th style="width:30%;padding:6px 4px;">Type</th>
+      <th style="width:38%;padding:6px 4px;">Tempo</th>
+      <th style="width:12%;padding:6px 4px;">Trend</th>
+      <th style="width:20%;padding:6px 4px;">Hartslag</th>
+    </tr></thead>
     <tbody>${rows}</tbody>
-  </table></div>`;
+  </table>`;
 }
 
 function generateNutritionTip(totals, targets, burned, vitals, trainingHadActivity, recoveryConcern, openMealMoments, weightKg, runningStats, customItems){
