@@ -3843,6 +3843,14 @@ async function removeCustomQuickAdd(desc){
   }catch(e){ console.error('Verwijderen snel-toevoegen-item', e); }
   await renderCustomQuickAdds();
 }
+async function updateCustomQuickAddMealType(desc, newMealType){
+  const owner = currentOwner();
+  if(!owner) return;
+  try{
+    await supabaseClient.from('quick_adds').update({ meal_type: newMealType }).eq('owner', owner).eq('description', desc);
+  }catch(e){ console.error('Verplaatsen snel-toevoegen-item', e); }
+  await renderCustomQuickAdds();
+}
 // Kiest automatisch een passend icoontje bij een voedingsmiddel op basis van
 // trefwoorden in de naam — zodat ook zelf-opgeslagen items (en toekomstige
 // nieuwe vaste opties) meteen een logisch icoontje krijgen, zonder dat dat
@@ -4014,8 +4022,16 @@ async function renderCustomQuickAdds(){
       const unitInput = m.baseUnits
         ? `<input type="number" id="${unitInputId}" value="${m.baseUnits}" min="1" style="width:44px;padding:6px 4px;flex-shrink:0;"><span style="font-size:11px;color:var(--ink-soft);flex-shrink:0;">stuks</span>`
         : '';
+      // Zelf-opgeslagen items kregen tot nu toe hun onderdeel (Ontbijt/Lunch/
+      // Snack/Diner/Drinken) alleen mee via de keuze bij het opslaan, en
+      // konden daarna alleen via een handmatige database-wijziging naar een
+      // ander onderdeel verplaatst worden. Deze select maakt dat voortaan
+      // zelf aanpasbaar, net als bij de vaste standaardopties.
+      const groupOptions = ['Ontbijt','Lunch','Snack','Diner','Drinken'].map(g=>
+        `<option value="${g}"${g===group?' selected':''}>${g}</option>`
+      ).join('');
       return `
-        <div class="stat-row" style="border-bottom:${isLast?'none':'1px solid var(--line)'};">
+        <div class="stat-row" style="border-bottom:${isLast?'none':'1px solid var(--line)'};flex-direction:column;align-items:stretch;gap:8px;">
           <div>
             <div class="meal-desc">${getFoodEmoji(m.desc)} ${escapeHtml(m.desc)}</div>
             <div class="meal-meta">${escapeHtml(metaParts.join(', '))}</div>
@@ -4024,6 +4040,7 @@ async function renderCustomQuickAdds(){
             ${gramInput}
             ${mlInput}
             ${unitInput}
+            <select class="customQaGroupSelect" data-desc="${escapeHtml(m.desc)}" title="Onderdeel wijzigen" style="font-size:11px;padding:5px 2px;border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--ink-soft);width:76px;flex-shrink:0;">${groupOptions}</select>
             <button class="btn-secondary customQuickAddBtn" data-idx="${m.origIdx}" data-gram-input="${gramInputId}" data-ml-input="${mlInputId}" data-unit-input="${unitInputId}" style="flex-shrink:0;">+ Toevoegen</button>
             <button class="btn-secondary customQuickAddRemove" data-desc="${escapeHtml(m.desc)}" title="Verwijderen uit Snel toevoegen" style="padding:6px 10px;flex-shrink:0;">&times;</button>
           </div>
@@ -4082,6 +4099,11 @@ async function renderCustomQuickAdds(){
     containerEl.querySelectorAll('.customQuickAddRemove').forEach(btn=>{
       btn.addEventListener('click', (e)=>{
         removeCustomQuickAdd(e.target.dataset.desc);
+      });
+    });
+    containerEl.querySelectorAll('.customQaGroupSelect').forEach(sel=>{
+      sel.addEventListener('change', (e)=>{
+        updateCustomQuickAddMealType(e.target.dataset.desc, e.target.value);
       });
     });
   });
