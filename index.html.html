@@ -1771,6 +1771,14 @@ function generateTrainingTip(activities, days, recoveryConcern, goal, vitals){
   const todayEntry = todayIdx>=0 ? WEEKLY_TRAINING_SCHEMA[todayIdx] : WEEKLY_TRAINING_SCHEMA[0];
   let todayType = todayEntry.type;
   const scheduleOverrides = {};
+  // Staat er vandaag al een gelogde activiteit (via Tredict-sync of
+  // handmatig), dan heeft het geen zin meer om nog te "adviseren" wat je
+  // vandaag zou moeten doen -- dan tonen we wat je al gedaan hebt i.p.v. het
+  // schema (nogmaals) voor te schrijven, en slaan we de hieronder volgende
+  // rustdag-doorschuif- en hersteldag-afzwak-logica over (die zijn alleen
+  // relevant als de dag nog moet gebeuren).
+  const todayActivities = (activities||[]).filter(a=>a.date===todayStr);
+  const alreadyTrainedToday = todayActivities.length>0;
 
   // Het vaste schema plant losse rustdagen in, maar houdt geen rekening met
   // rustdagen die er al ván zichzelf tussen zaten (bijv. door een gemiste
@@ -1779,7 +1787,7 @@ function generateTrainingTip(activities, days, recoveryConcern, goal, vitals){
   // overbodig -- dan wordt de eerstvolgende geplande trainingsdag naar
   // voren gehaald i.p.v. het schema blind te volgen.
   let shiftNote = '';
-  if(todayType==='rust'){
+  if(!alreadyTrainedToday && todayType==='rust'){
     const restStreak = computeRestStreak(activities, todayStr);
     if(restStreak>=2){
       for(let step=1; step<=6; step++){
@@ -1796,7 +1804,7 @@ function generateTrainingTip(activities, days, recoveryConcern, goal, vitals){
 
   // Bij matig herstel vandaag: een geplande interval/tempo-dag afzwakken.
   let recoveryNote = '';
-  if(recoveryConcern && (todayType==='interval' || todayType==='tempo')){
+  if(!alreadyTrainedToday && recoveryConcern && (todayType==='interval' || todayType==='tempo')){
     const origLabel = SESSION_TYPE_META[todayType].label;
     todayType = 'herstel';
     scheduleOverrides[weekdayName] = todayType;
@@ -1831,13 +1839,28 @@ function generateTrainingTip(activities, days, recoveryConcern, goal, vitals){
   }
 
   const todayLabel = SESSION_TYPE_META[todayType].label;
-  const todayDesc = sessionDescription(todayType, goalPaceMinPerKm);
-  const todayLine = `<strong>Vandaag (${escapeHtml(todayEntry.label)}): ${escapeHtml(todayLabel)}</strong><br>${escapeHtml(todayDesc)}`;
+  let todayLine;
+  if(alreadyTrainedToday){
+    // Wat er vandaag al gelogd is samenvatten i.p.v. de sessie nogmaals te
+    // "adviseren" -- bij hardlopen incl. het gerealiseerde tempo, zodat
+    // meteen zichtbaar is hoe dat zich verhoudt tot het doeltempo hierboven.
+    const doneParts = todayActivities.map(a=>{
+      if(a.type==='hardlopen' && a.km>0 && a.minutes>0){
+        return `${Math.round(a.km*10)/10}km hardlopen in ${Math.round(a.minutes)} min (${formatPaceMinPerKm(a.minutes/a.km)})`;
+      }
+      return a.minutes>0 ? `${a.type} (${Math.round(a.minutes)} min)` : a.type;
+    });
+    todayLine = `<strong>Vandaag (${escapeHtml(todayEntry.label)}): al getraind &#9989;</strong><br>${escapeHtml(doneParts.join(', '))} gelogd — gepland stond ${escapeHtml(todayLabel.toLowerCase())}. Goed bezig!`;
+  } else {
+    const todayDesc = sessionDescription(todayType, goalPaceMinPerKm);
+    todayLine = `<strong>Vandaag (${escapeHtml(todayEntry.label)}): ${escapeHtml(todayLabel)}</strong><br>${escapeHtml(todayDesc)}`;
+  }
 
   const scheduleLines = WEEKLY_TRAINING_SCHEMA.map(d=>{
     const isToday = d.day===weekdayName;
     const label = SESSION_TYPE_META[scheduleOverrides[d.day] || d.type].label;
-    return `${isToday ? '👉 ' : ''}${escapeHtml(d.label)}: ${escapeHtml(label)}`;
+    const marker = isToday ? (alreadyTrainedToday ? '&#9989; ' : '👉 ') : '';
+    return `${marker}${escapeHtml(d.label)}: ${escapeHtml(label)}`;
   }).join(' &middot; ');
 
   const blocks = [escapeHtml(contextLine)];
