@@ -1721,6 +1721,26 @@ function sessionDescription(type, goalPaceMinPerKm){
 function currentAmsterdamWeekdayName(){
   return new Intl.DateTimeFormat('nl-NL', { timeZone:'Europe/Amsterdam', weekday:'long' }).format(new Date());
 }
+function currentAmsterdamDateStr(){
+  return new Intl.DateTimeFormat('en-CA', { timeZone:'Europe/Amsterdam' }).format(new Date());
+}
+function addDaysToDateStr(dateStr, delta){
+  const d = new Date(dateStr+'T00:00:00Z');
+  d.setUTCDate(d.getUTCDate()+delta);
+  return d.toISOString().slice(0,10);
+}
+// Telt opeenvolgende rustdagen vlak vóór vandaag (dagen zonder enige
+// gelogde activiteit), zodat het vaste weekschema geen 3e rustdag op rij
+// oplegt als de laatste dagen toch al rust waren.
+function computeRestStreak(activities, todayStr){
+  const activeDates = new Set((activities||[]).map(a=>a.date));
+  let streak = 0;
+  for(let i=1;i<=7;i++){
+    if(activeDates.has(addDaysToDateStr(todayStr, -i))) break;
+    streak++;
+  }
+  return streak;
+}
 // Genereert de trainingstip: bij een ingesteld doel een wekelijks schema
 // (interval/tempo/duurloop/rust) met bijpassend tempo t.o.v. het doeltempo,
 // aangepast op basis van de hersteldata van vandaag (HRV/slaap) -- bij
@@ -1746,14 +1766,40 @@ function generateTrainingTip(activities, days, recoveryConcern, goal, vitals){
 
   const goalPaceMinPerKm = (goal.target_time_seconds/60) / goal.target_distance_km;
   const weekdayName = currentAmsterdamWeekdayName();
-  const todayEntry = WEEKLY_TRAINING_SCHEMA.find(d=>d.day===weekdayName) || WEEKLY_TRAINING_SCHEMA[0];
+  const todayStr = currentAmsterdamDateStr();
+  const todayIdx = WEEKLY_TRAINING_SCHEMA.findIndex(d=>d.day===weekdayName);
+  const todayEntry = todayIdx>=0 ? WEEKLY_TRAINING_SCHEMA[todayIdx] : WEEKLY_TRAINING_SCHEMA[0];
   let todayType = todayEntry.type;
+  const scheduleOverrides = {};
+
+  // Het vaste schema plant losse rustdagen in, maar houdt geen rekening met
+  // rustdagen die er al ván zichzelf tussen zaten (bijv. door een gemiste
+  // training of een drukke week). Staat er vandaag een rustdag gepland
+  // terwijl de laatste 2+ dagen al niets gelogd is, dan is nóg een rustdag
+  // overbodig -- dan wordt de eerstvolgende geplande trainingsdag naar
+  // voren gehaald i.p.v. het schema blind te volgen.
+  let shiftNote = '';
+  if(todayType==='rust'){
+    const restStreak = computeRestStreak(activities, todayStr);
+    if(restStreak>=2){
+      for(let step=1; step<=6; step++){
+        const nextEntry = WEEKLY_TRAINING_SCHEMA[(todayIdx+step) % WEEKLY_TRAINING_SCHEMA.length];
+        if(nextEntry.type!=='rust'){
+          todayType = nextEntry.type;
+          scheduleOverrides[weekdayName] = todayType;
+          shiftNote = `Je had de laatste ${restStreak} dagen al rust, dus in plaats van nog een rustdag vandaag vast de geplande ${SESSION_TYPE_META[nextEntry.type].label.toLowerCase()} van ${nextEntry.label.toLowerCase()}.`;
+          break;
+        }
+      }
+    }
+  }
 
   // Bij matig herstel vandaag: een geplande interval/tempo-dag afzwakken.
   let recoveryNote = '';
   if(recoveryConcern && (todayType==='interval' || todayType==='tempo')){
     const origLabel = SESSION_TYPE_META[todayType].label;
     todayType = 'herstel';
+    scheduleOverrides[weekdayName] = todayType;
     const vitalsBits = [];
     if(vitals && vitals.hrv!=null) vitalsBits.push(`HRV ${Math.round(vitals.hrv)}ms`);
     if(vitals && vitals.sleepMinutes!=null) vitalsBits.push(`slaap ${Math.floor(vitals.sleepMinutes/60)}u${String(Math.round(vitals.sleepMinutes%60)).padStart(2,'0')}m`);
@@ -1790,11 +1836,12 @@ function generateTrainingTip(activities, days, recoveryConcern, goal, vitals){
 
   const scheduleLines = WEEKLY_TRAINING_SCHEMA.map(d=>{
     const isToday = d.day===weekdayName;
-    const label = SESSION_TYPE_META[d.type].label;
+    const label = SESSION_TYPE_META[scheduleOverrides[d.day] || d.type].label;
     return `${isToday ? '👉 ' : ''}${escapeHtml(d.label)}: ${escapeHtml(label)}`;
   }).join(' &middot; ');
 
   const blocks = [escapeHtml(contextLine)];
+  if(shiftNote) blocks.push(escapeHtml(shiftNote));
   if(recoveryNote) blocks.push(escapeHtml(recoveryNote));
   blocks.push(todayLine);
   blocks.push(`<span style="font-size:12px;color:var(--ink-soft);">Weekschema: ${scheduleLines}</span>`);
