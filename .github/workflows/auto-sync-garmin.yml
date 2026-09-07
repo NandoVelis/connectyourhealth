@@ -1,0 +1,46 @@
+name: Auto-sync Garmin (test)
+
+# TEST-koppeling naast Tredict, zie scripts/sync_garmin.py voor uitleg waarom
+# dit als Python GitHub Action draait i.p.v. als Supabase edge function.
+#
+# Vereiste repo-secrets (Settings -> Secrets and variables -> Actions):
+#   GARMIN_EMAIL_NANDO, GARMIN_PASSWORD_NANDO  (je gewone Garmin Connect-login)
+#
+# Bij de EERSTE run kan Garmin een MFA-code vragen. Start de workflow dan
+# handmatig via "Run workflow" hierboven met de mfa_code-input ingevuld
+# (code uit je Garmin-e-mail/authenticator-app). Daarna hergebruikt elke
+# geplande run de opgeslagen sessie, geen MFA meer nodig totdat die verloopt.
+
+on:
+  schedule:
+    # Elke 2 uur -- Garmin's metrics veranderen niet minuut-voor-minuut zoals
+    # Tredict-activiteiten, en een lagere frequentie verkleint het risico op
+    # anti-bot-rate-limiting bij de onofficiele login.
+    - cron: '0 */2 * * *'
+  workflow_dispatch:
+    inputs:
+      mfa_code:
+        description: 'MFA-code (alleen nodig bij eerste login of na sessieverval)'
+        required: false
+        type: string
+
+jobs:
+  sync-garmin:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Installeer garminconnect
+        run: pip install --upgrade garminconnect curl_cffi requests
+
+      - name: Sync Garmin voor Nando
+        env:
+          GARMIN_OWNER: Nando
+          GARMIN_EMAIL: ${{ secrets.GARMIN_EMAIL_NANDO }}
+          GARMIN_PASSWORD: ${{ secrets.GARMIN_PASSWORD_NANDO }}
+          GARMIN_MFA_CODE: ${{ inputs.mfa_code }}
+        run: python3 scripts/sync_garmin.py
