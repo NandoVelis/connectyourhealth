@@ -134,6 +134,9 @@ def main():
     sleep = safe(garmin.get_sleep_daily, week_start.isoformat(), today.isoformat())
     max_metrics = safe(garmin.get_max_metrics_range, week_start.isoformat(), today.isoformat())
     training_status = safe(garmin.get_training_status, today.isoformat())
+    for name, val in [("rhr", rhr), ("hrv", hrv), ("sleep", sleep), ("max_metrics", max_metrics)]:
+        if not isinstance(val, list):
+            print(f"  (let op: {name} kwam terug als {type(val).__name__} i.p.v. een lijst -- ruwe vorm: {str(val)[:300]})")
 
     # Elke bron heeft een net iets andere (en niet volledig gedocumenteerde)
     # vorm; we proberen defensief de bekende velden te vinden en bewaren
@@ -177,15 +180,25 @@ def main():
             row["hrv"] = entry.get("lastNightAvg") or entry.get("weeklyAvg") or entry.get("value")
             row["raw"]["hrv"] = entry
 
+    # De slaap-respons zet de eigenlijke metingen genest onder "values"
+    # (i.p.v. los op het top-niveau van elk dag-object) -- en bevat daar ook
+    # meteen een eigen HRV- en rust-hartslagmeting (avgOvernightHrv /
+    # restingHeartRate), die als vangnet dienen als de losse hrv/rhr-oproepen
+    # voor die dag niets opleveren.
     if isinstance(sleep, list):
         for entry in sleep:
             d = entry.get("calendarDate") or entry.get("date")
             if not d:
                 continue
+            values = entry.get("values") or entry
             row = bucket(d)
-            sleep_seconds = entry.get("sleepTimeSeconds") or entry.get("totalSleepSeconds")
+            sleep_seconds = values.get("totalSleepTimeInSeconds") or values.get("sleepTimeSeconds")
             row["sleep_minutes"] = round(sleep_seconds / 60) if sleep_seconds else None
-            row["sleep_score"] = entry.get("sleepScore") or entry.get("overallScore")
+            row["sleep_score"] = values.get("sleepScore")
+            if row["hrv"] is None:
+                row["hrv"] = values.get("avgOvernightHrv") or values.get("hrv7dAverage")
+            if row["resting_hr"] is None:
+                row["resting_hr"] = values.get("restingHeartRate")
             row["raw"]["sleep"] = entry
 
     if isinstance(max_metrics, list):
@@ -194,7 +207,8 @@ def main():
             if not d:
                 continue
             row = bucket(d)
-            vo2 = entry.get("vo2MaxPreciseValue") or entry.get("vo2MaxValue") or entry.get("generic", {}).get("vo2MaxPreciseValue")
+            generic = entry.get("generic") or {}
+            vo2 = entry.get("vo2MaxPreciseValue") or entry.get("vo2MaxValue") or generic.get("vo2MaxPreciseValue") or generic.get("vo2MaxValue")
             row["vo2max"] = vo2
             row["raw"]["max_metrics"] = entry
 
@@ -203,6 +217,12 @@ def main():
         row["training_status"] = str(
             training_status.get("trainingStatus") or training_status.get("status") or training_status
         )[:200]
+        # Vangnet voor VO2max op vandaag: staat ook in de training-status-
+        # respons (mostRecentVO2Max), ook als get_max_metrics_range niets
+        # bruikbaars teruggaf.
+        if row["vo2max"] is None:
+            most_recent_vo2 = (training_status.get("mostRecentVO2Max") or {}).get("generic") or {}
+            row["vo2max"] = most_recent_vo2.get("vo2MaxPreciseValue") or most_recent_vo2.get("vo2MaxValue")
         row["raw"]["training_status"] = training_status
 
     rows = list(per_date.values())
