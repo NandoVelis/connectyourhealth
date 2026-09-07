@@ -1989,11 +1989,11 @@ function humanizeGarminLabel(label){
   if(!label) return null;
   return label.split('_').map(w=>w.charAt(0)+w.slice(1).toLowerCase()).join(' ');
 }
-async function renderGarminMetricsCard(){
-  const el = document.getElementById('garminMetricsCard');
-  if(!el) return;
-  const owner = currentOwner();
-  if(!owner){ el.innerHTML = ''; return; }
+// Gedeeld door de Garmin-kaart en de post-workout-voedingstip: laatst
+// bekende dag uit garmin_metrics (meestal vandaag, kan een dag ouder zijn
+// als de cron nog niet gedraaid heeft).
+async function loadLatestGarminMetrics(owner){
+  if(!owner) return null;
   try{
     const { data, error } = await supabaseClient
       .from('garmin_metrics')
@@ -2003,6 +2003,16 @@ async function renderGarminMetricsCard(){
       .limit(1)
       .maybeSingle();
     if(error) throw error;
+    return data || null;
+  }catch(e){ console.error('Laden Garmin-metrics', e); return null; }
+}
+async function renderGarminMetricsCard(){
+  const el = document.getElementById('garminMetricsCard');
+  if(!el) return;
+  const owner = currentOwner();
+  if(!owner){ el.innerHTML = ''; return; }
+  try{
+    const data = await loadLatestGarminMetrics(owner);
     if(!data){
       el.innerHTML = '<div class="empty">Nog geen Garmin-data (testkoppeling nog niet gesynchroniseerd).</div>';
       return;
@@ -2121,6 +2131,52 @@ function generateNutritionTip(totals, targets, burned, vitals, trainingHadActivi
     html += `<div class="tip-row tip-extra">${escapeHtml(extraText)}</div>`;
   }
   return html;
+}
+
+// Post-workout voedingstip: alleen als er vandaag daadwerkelijk getraind is.
+// Eiwit- en koolhydraatrichtlijn op basis van lichaamsgewicht + verbrande
+// kcal (vuistregel, geen exacte sportwetenschap), aangevuld met Garmin's
+// hersteldata van vandaag (indien beschikbaar) -- bij een hoge acute
+// trainingsbelasting/ongebalanceerde HRV/laag Body Battery-herstel wordt de
+// nadruk extra op herstelvoeding gelegd i.p.v. alleen op de standaard
+// hoeveelheid.
+function generatePostWorkoutTip(training, weightKg, garmin, dateStr){
+  const activities = (training && training.activities) ? training.activities.filter(a=>Number(a.kcal)>0) : [];
+  if(activities.length===0 || !weightKg) return null;
+
+  const activityKcal = activities.reduce((s,a)=>s+(Number(a.kcal)||0), 0);
+  const proteinG = Math.round(weightKg * 0.3);
+  const carbFactor = activityKcal > 500 ? 1.0 : activityKcal > 250 ? 0.6 : 0.3;
+  const carbsG = Math.round(weightKg * carbFactor);
+
+  const lines = [];
+  lines.push(`Na het sporten vandaag (~${Math.round(activityKcal)} kcal verbrand): richt op ongeveer ${proteinG}g eiwit en ${carbsG}g koolhydraten binnen 1-2 uur voor herstel.`);
+
+  // Alleen meewegen als de Garmin-data ook echt van vandaag is -- anders
+  // zegt die niets over de sessie die net gedaan is.
+  if(garmin && garmin.metric_date === dateStr){
+    const acwr = (garmin.acwr_status||'').toUpperCase();
+    const hrvStatus = (garmin.hrv_status||'').toUpperCase();
+    const feedback = (garmin.training_feedback||'').toUpperCase();
+    const extra = [];
+    if(acwr.includes('HIGH') || acwr.includes('SPIKE') || (garmin.training_load_ratio!=null && garmin.training_load_ratio > 1.3)){
+      extra.push(`je trainingsbelasting-ratio staat hoog (${garmin.training_load_ratio!=null?Number(garmin.training_load_ratio).toFixed(2):acwr.toLowerCase()}) -- extra aandacht voor koolhydraten en op tijd bijtanken helpt overbelasting voorkomen`);
+    }
+    if(hrvStatus.includes('UNBALANCED') || hrvStatus.includes('LOW')){
+      extra.push(`je HRV-status staat op ${humanizeGarminLabel(garmin.hrv_status).toLowerCase()} -- naast voeding is dit ook een moment om iets eerder te gaan slapen`);
+    }
+    if(garmin.body_battery_change!=null && garmin.body_battery_change < 30){
+      extra.push(`je Body Battery-herstel was vannacht wat laag -- denk ook aan voldoende vocht/elektrolyten, niet alleen macro's`);
+    }
+    if(feedback.includes('OVERREACHING') || feedback.includes('UNPRODUCTIVE')){
+      extra.push(`Garmin geeft "${humanizeGarminLabel(garmin.training_feedback)}" aan als trainingsstatus -- serieus nemen wat herstelvoeding betreft`);
+    }
+    if(extra.length){
+      lines.push(extra.map((t,i)=> i===0 ? t.charAt(0).toUpperCase()+t.slice(1) : t).join('; ') + '.');
+    }
+  }
+
+  return lines.map(l=>`<div class="tip-row">${escapeHtml(l)}</div>`).join('');
 }
 
 function last30Days(){
@@ -2599,7 +2655,15 @@ async function renderDashboard(){
     customItemsForTip
   );
   const tipEl = document.getElementById('nutritionTip');
-  if(tipEl) tipEl.innerHTML = tipText;
+  if(tipEl){
+    let fullTipHtml = tipText;
+    if(trainingHadActivity){
+      const garminForTip = await loadLatestGarminMetrics(owner);
+      const postWorkoutHtml = generatePostWorkoutTip(training, weightForTip, garminForTip, dateStr);
+      if(postWorkoutHtml) fullTipHtml += `<div class="tip-row tip-total" style="margin-top:10px;"><strong>Na het sporten:</strong></div>` + postWorkoutHtml;
+    }
+    tipEl.innerHTML = fullTipHtml;
+  }
   showMotivationQuote();
 
   const trainingTipDays = 28;
