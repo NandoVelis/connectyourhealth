@@ -20,7 +20,7 @@ import os
 import sys
 from datetime import date, timedelta
 
-from garminconnect import Garmin
+from garminconnect import Garmin, GarminConnectAuthenticationError
 import requests
 
 # Dezelfde publieke "publishable" sleutel die al in index.html.html en de
@@ -77,32 +77,34 @@ def upsert_metrics(owner, rows):
 
 
 def login(owner, email, password, mfa_code):
-    garmin = Garmin(email=email, password=password)
-    stored_session = load_session(owner)
-    if stored_session:
-        try:
-            garmin.client.loads(stored_session if isinstance(stored_session, str) else str(stored_session))
-            # Sanity-check: een lichte call om te bevestigen dat de sessie nog geldig is.
-            garmin.get_full_name()
-            print("Ingelogd met opgeslagen sessietoken (geen nieuwe login nodig).")
-            return garmin
-        except Exception as e:
-            print(f"Opgeslagen sessie ongeldig/verlopen ({e}), opnieuw inloggen met wachtwoord...")
+    # return_on_mfa/prompt_mfa horen bij de Garmin(...)-constructor in deze
+    # library-versie, niet bij login() zelf. Met prompt_mfa ingesteld (als er
+    # een mfa_code is meegegeven) rondt garmin.login() een eventuele
+    # MFA-uitdaging in één keer af -- geen aparte resume_login()-stap nodig.
+    # Zonder mfa_code laten we prompt_mfa leeg: als MFA dan alsnog vereist is,
+    # gooit de library een GarminConnectAuthenticationError, die we hieronder
+    # opvangen met een duidelijke instructie.
+    prompt_mfa = (lambda: mfa_code) if mfa_code else None
+    garmin = Garmin(email=email, password=password, prompt_mfa=prompt_mfa)
 
-    result1, result2 = garmin.login(return_on_mfa=True)
-    if result1 == "needs_mfa":
-        if not mfa_code:
+    # garmin.login(tokenstore=...) accepteert zowel een bestandspad als de
+    # sessie-JSON direct als string, en valt automatisch terug op een verse
+    # wachtwoord-login als de opgeslagen sessie verlopen/ongeldig is -- dus
+    # één aanroep dekt "hergebruik sessie", "verse login" en "MFA-login" alle drie.
+    stored_session = load_session(owner)
+    try:
+        garmin.login(tokenstore=stored_session)
+    except GarminConnectAuthenticationError as e:
+        if "mfa" in str(e).lower():
             print(
-                "MFA vereist maar geen mfa_code opgegeven. Start deze workflow handmatig "
-                "via 'Run workflow' in GitHub Actions met de mfa_code-input ingevuld "
-                "(code uit je Garmin-e-mail/authenticator-app)."
+                "MFA vereist maar geen (geldige) mfa_code opgegeven. Start deze workflow "
+                "handmatig via 'Run workflow' in GitHub Actions met de mfa_code-input "
+                "ingevuld (code uit je Garmin-e-mail/authenticator-app)."
             )
             sys.exit(1)
-        garmin.resume_login(result2, mfa_code)
-        print("Ingelogd met wachtwoord + MFA-code.")
-    else:
-        print("Ingelogd met wachtwoord (geen MFA vereist).")
+        raise
 
+    print("Ingelogd bij Garmin Connect (sessie hergebruikt of vers ingelogd).")
     save_session(owner, garmin.client.dumps())
     return garmin
 
