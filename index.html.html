@@ -392,6 +392,11 @@
       <div id="trainingProgressTable"></div>
     </div>
 
+    <div class="card" style="margin-bottom:16px;">
+      <h3>&#8986; Garmin (test)</h3>
+      <div id="garminMetricsCard"></div>
+    </div>
+
     <div class="card" style="margin-bottom:16px;background:linear-gradient(115deg,#7A0A66 0%,#4B1F6B 40%,#1A1240 100%);border:none;">
       <div id="motivationQuote" style="font-family:'Archivo',sans-serif;font-size:16px;font-weight:600;color:#F5F1E8;text-align:center;line-height:1.5;"></div>
     </div>
@@ -1974,6 +1979,65 @@ function renderTrainingProgressTable(activities){
   </table>`;
 }
 
+// Testkoppeling naast Tredict (zie scripts/sync_garmin.py): toont de
+// meest recente dag uit garmin_metrics, incl. Garmin's eigen equivalent
+// van ATL/CTL/ACWR-trainingsbelasting en herstelsignalen (Body Battery,
+// HRV-status, ademhaling). Puur read-only weergave -- nog niet
+// meegewogen in de trainingstip/dagscore, dit is bewust een aparte
+// kaart totdat blijkt hoe betrouwbaar de (onofficiele) koppeling is.
+function humanizeGarminLabel(label){
+  if(!label) return null;
+  return label.split('_').map(w=>w.charAt(0)+w.slice(1).toLowerCase()).join(' ');
+}
+async function renderGarminMetricsCard(){
+  const el = document.getElementById('garminMetricsCard');
+  if(!el) return;
+  const owner = currentOwner();
+  if(!owner){ el.innerHTML = ''; return; }
+  try{
+    const { data, error } = await supabaseClient
+      .from('garmin_metrics')
+      .select('*')
+      .eq('owner', owner)
+      .order('metric_date', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if(error) throw error;
+    if(!data){
+      el.innerHTML = '<div class="empty">Nog geen Garmin-data (testkoppeling nog niet gesynchroniseerd).</div>';
+      return;
+    }
+    const cells = [];
+    const addCell = (label, val) => { if(val!=null) cells.push({label, val}); };
+    addCell('VO2max', data.vo2max!=null ? Math.round(data.vo2max*10)/10 : null);
+    addCell('Rusthartslag', data.resting_hr!=null ? Math.round(data.resting_hr)+' bpm' : null);
+    addCell('HRV', data.hrv!=null ? Math.round(data.hrv)+'ms'+(data.hrv_status?` (${humanizeGarminLabel(data.hrv_status)})`:'') : null);
+    if(data.sleep_minutes!=null){
+      const h = Math.floor(data.sleep_minutes/60), m = data.sleep_minutes%60;
+      addCell('Slaap', `${h}u${String(m).padStart(2,'0')}m`+(data.sleep_score!=null?` &middot; score ${Math.round(data.sleep_score)}`:'')+(data.sleep_quality?` (${humanizeGarminLabel(data.sleep_quality)})`:''));
+    }
+    addCell('Body Battery herstel', data.body_battery_change!=null ? '+'+Math.round(data.body_battery_change) : null);
+    addCell('Ademhaling', data.respiration!=null ? Math.round(data.respiration*10)/10+'/min' : null);
+    if(data.training_load_acute!=null || data.training_load_chronic!=null){
+      addCell('Trainingsbelasting (acuut/chronisch)', `${data.training_load_acute!=null?Math.round(data.training_load_acute):'—'} / ${data.training_load_chronic!=null?Math.round(data.training_load_chronic):'—'}`+(data.training_load_ratio!=null?` &middot; ratio ${Number(data.training_load_ratio).toFixed(2)}`:''));
+    }
+    addCell('Trainingsstatus', humanizeGarminLabel(data.training_feedback));
+    addCell('Belastingsbalans', humanizeGarminLabel(data.acwr_status)+(data.training_balance_feedback?` &middot; ${humanizeGarminLabel(data.training_balance_feedback)}`:''));
+
+    const cellsHtml = cells.map(c=>`
+      <div class="stat-row" style="border-bottom:none;flex-direction:column;align-items:flex-start;">
+        <span class="stat-label">${escapeHtml(c.label)}</span>
+        <span class="stat-val" style="font-size:16px;">${c.val}</span>
+      </div>`).join('');
+    el.innerHTML = `
+      <div class="meal-meta" style="margin-bottom:8px;">${escapeHtml(fmtDateLabel(new Date(data.metric_date+'T12:00:00')))}</div>
+      <div class="vitals-grid" style="grid-template-columns:repeat(3,1fr);">${cellsHtml}</div>`;
+  }catch(e){
+    console.error('Laden Garmin-metrics', e);
+    el.innerHTML = '<div class="empty">Kon Garmin-data niet laden.</div>';
+  }
+}
+
 function generateNutritionTip(totals, targets, burned, vitals, trainingHadActivity, recoveryConcern, openMealMoments, weightKg, runningStats, customItems){
   if(targets.protein==null){
     return escapeHtml("Vul je gewicht in (via de Tredict-sync) zodat ik een tip op maat kan geven.");
@@ -2554,6 +2618,7 @@ async function renderDashboard(){
   const progressDays = 90;
   const recentTrainingForProgress = progressDays===trainingTipDays ? recentTrainingForTip : await loadRecentTrainingForTip(progressDays);
   renderTrainingProgressTable(recentTrainingForProgress);
+  renderGarminMetricsCard();
 
   syncTeamEntry(dateStr, {
     dagscore: dagscoreVal,
