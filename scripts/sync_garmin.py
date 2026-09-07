@@ -18,7 +18,7 @@ Alle volgende (geplande) runs hergebruiken daarna de opgeslagen sessie.
 """
 import os
 import sys
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 from garminconnect import Garmin, GarminConnectAuthenticationError
 import requests
@@ -159,6 +159,17 @@ def main():
             "sleep_score": None,
             "training_status": None,
             "body_battery_max": None,
+            "hrv_status": None,
+            "sleep_quality": None,
+            "body_battery_change": None,
+            "respiration": None,
+            "training_load_acute": None,
+            "training_load_chronic": None,
+            "training_load_ratio": None,
+            "training_feedback": None,
+            "acwr_status": None,
+            "training_balance_feedback": None,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
             "raw": {},
         })
 
@@ -199,6 +210,10 @@ def main():
                 row["hrv"] = values.get("avgOvernightHrv") or values.get("hrv7dAverage")
             if row["resting_hr"] is None:
                 row["resting_hr"] = values.get("restingHeartRate")
+            row["hrv_status"] = values.get("hrvStatus")
+            row["sleep_quality"] = values.get("sleepScoreQuality")
+            row["body_battery_change"] = values.get("bodyBatteryChange")
+            row["respiration"] = values.get("respiration")
             row["raw"]["sleep"] = entry
 
     if isinstance(max_metrics, list):
@@ -223,6 +238,29 @@ def main():
         if row["vo2max"] is None:
             most_recent_vo2 = (training_status.get("mostRecentVO2Max") or {}).get("generic") or {}
             row["vo2max"] = most_recent_vo2.get("vo2MaxPreciseValue") or most_recent_vo2.get("vo2MaxValue")
+
+        # Garmin's eigen equivalent van ATL/CTL/ACWR (Runalyze-achtige
+        # trainingsbelasting-metrics) zit genest onder een per-apparaat key
+        # (deviceId) -- we pakken gewoon het eerste/primaire apparaat.
+        latest_status_by_device = (
+            (training_status.get("mostRecentTrainingStatus") or {}).get("latestTrainingStatusData") or {}
+        )
+        status_entry = next(iter(latest_status_by_device.values()), None)
+        if status_entry:
+            row["training_feedback"] = status_entry.get("trainingStatusFeedbackPhrase")
+            acute = status_entry.get("acuteTrainingLoadDTO") or {}
+            row["training_load_acute"] = acute.get("dailyTrainingLoadAcute")
+            row["training_load_chronic"] = acute.get("dailyTrainingLoadChronic")
+            row["training_load_ratio"] = acute.get("dailyAcuteChronicWorkloadRatio")
+            row["acwr_status"] = acute.get("acwrStatus")
+
+        balance_by_device = (
+            (training_status.get("mostRecentTrainingLoadBalance") or {}).get("metricsTrainingLoadBalanceDTOMap") or {}
+        )
+        balance_entry = next(iter(balance_by_device.values()), None)
+        if balance_entry:
+            row["training_balance_feedback"] = balance_entry.get("trainingBalanceFeedbackPhrase")
+
         row["raw"]["training_status"] = training_status
 
     rows = list(per_date.values())
