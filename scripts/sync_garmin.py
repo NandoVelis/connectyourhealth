@@ -141,8 +141,23 @@ def main():
     # verloren gaat ook als een van deze extracties net niet klopt.
     per_date = {}
 
+    # PostgREST's bulk-insert (POST met een JSON-array) eist dat elk object
+    # exact dezelfde keys heeft ("All object keys must match") -- dus elke
+    # rij begint met alle kolommen expliciet op None, in plaats van dat een
+    # rij alleen de kolommen krijgt waarvoor toevallig data gevonden is.
     def bucket(d):
-        return per_date.setdefault(d, {"owner": owner, "metric_date": d, "raw": {}})
+        return per_date.setdefault(d, {
+            "owner": owner,
+            "metric_date": d,
+            "vo2max": None,
+            "resting_hr": None,
+            "hrv": None,
+            "sleep_minutes": None,
+            "sleep_score": None,
+            "training_status": None,
+            "body_battery_max": None,
+            "raw": {},
+        })
 
     if isinstance(rhr, list):
         for entry in rhr:
