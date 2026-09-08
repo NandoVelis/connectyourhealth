@@ -752,9 +752,12 @@ function watchRow(r, dir){
   </div>`;
 }
 function renderWatch(){
-  const up = ROWS.filter(r => r.net_since_change > 0 && r.progress !== null)
+  // Spelers onder 1,5% bezit weggefilterd -- bij zo weinig eigenaren zegt
+  // de voortgangsbalk weinig (een paar transfers duwen 'm al ver omhoog),
+  // dus die vertroebelen de lijst met echt relevante kandidaten.
+  const up = ROWS.filter(r => r.net_since_change > 0 && r.progress !== null && Number(r.selected_by_percent) >= 1.5)
                  .sort((a,b) => b.progress - a.progress).slice(0,8);
-  const dn = ROWS.filter(r => r.net_since_change < 0 && r.progress !== null)
+  const dn = ROWS.filter(r => r.net_since_change < 0 && r.progress !== null && Number(r.selected_by_percent) >= 1.5)
                  .sort((a,b) => b.progress - a.progress).slice(0,8);
   $('#risers').innerHTML  = up.length ? up.map(r => watchRow(r,'up')).join('')  : '<div class="empty">Nog geen kandidaten.</div>';
   $('#fallers').innerHTML = dn.length ? dn.map(r => watchRow(r,'down')).join('') : '<div class="empty">Nog geen kandidaten.</div>';
