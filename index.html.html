@@ -1674,7 +1674,11 @@ async function loadRecentTrainingForTip(days){
 const RUN_DISTANCE_ANCHORS = [
   { km: 5, label: '5km', maxPaceMinPerKm: 4.0, minAvgHr: 150 },
   { km: 6.437, label: '6,44km', maxPaceMinPerKm: 4.0, minAvgHr: 150 },
-  { km: 10, label: '10km', split: { maxPaceMinPerKm: 4.5, minAvgHr: 150, tempoLabel: '10km tempo', restLabel: '10km duurloop' } },
+  // Tolerantie hier verruimd naar 2,2km (i.p.v. de standaard 8%/0,8km) zodat
+  // 8km-loopjes ook meetellen -- die zijn altijd rustige zone 1/2-duurlopen,
+  // en komen dus via de tempo/HR-splitsing hieronder toch altijd in de
+  // "10km duurloop"-sector terecht, nooit per ongeluk bij "10km tempo".
+  { km: 10, label: '10km', tolerance: 2.2, split: { maxPaceMinPerKm: 4.5, minAvgHr: 150, tempoLabel: '10km tempo', restLabel: '10km duurloop' } },
   { km: 15, label: '15km' },
   { km: 21.1, label: 'halve marathon (21,1km)' },
   { km: 25, label: '25km' },
@@ -1691,7 +1695,7 @@ function nearestRunAnchor(km){
   let best = null, bestDiff = Infinity;
   for(const a of RUN_DISTANCE_ANCHORS){
     const diff = Math.abs(km - a.km);
-    const tolerance = Math.max(0.6, a.km * 0.08);
+    const tolerance = a.tolerance!=null ? a.tolerance : Math.max(0.6, a.km * 0.08);
     if(diff <= tolerance && diff < bestDiff){ best = a; bestDiff = diff; }
   }
   return best;
