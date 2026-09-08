@@ -1673,11 +1673,18 @@ const RUN_DISTANCE_ANCHORS = [
   { km: 30, label: '30km' },
   { km: 42.2, label: 'marathon (42,2km)' },
 ];
+// Anker matcht alleen als een run er ook echt dicht bij zit (max 0,6km of
+// 8% van de ankerafstand, wat groter is) -- puur "dichtstbijzijnde anker"
+// zonder tolerantie liet elke run meedoen, ook eentje die qua afstand
+// eigenlijk tussen twee ankers in zit (bijv. een 8km-run die dan als
+// "6,44km" meetelde). Runs die bij geen enkele anker in de buurt komen,
+// horen niet thuis in een van deze "sectoren" en tellen nergens in mee.
 function nearestRunAnchor(km){
-  let best = RUN_DISTANCE_ANCHORS[0], bestDiff = Infinity;
+  let best = null, bestDiff = Infinity;
   for(const a of RUN_DISTANCE_ANCHORS){
     const diff = Math.abs(km - a.km);
-    if(diff < bestDiff){ best = a; bestDiff = diff; }
+    const tolerance = Math.max(0.6, a.km * 0.08);
+    if(diff <= tolerance && diff < bestDiff){ best = a; bestDiff = diff; }
   }
   return best;
 }
@@ -1685,6 +1692,7 @@ function clusterRunsByDistance(runs){
   const byAnchor = new Map();
   for(const r of runs){
     const anchor = nearestRunAnchor(r.km);
+    if(!anchor) continue;
     if(!byAnchor.has(anchor.km)) byAnchor.set(anchor.km, { anchor, runs: [] });
     byAnchor.get(anchor.km).runs.push(r);
   }
@@ -1923,14 +1931,14 @@ function generateTrainingTip(activities, days, recoveryConcern, goal, vitals, pl
   let contextLine = '';
   if(runs.length>0){
     const clusters = clusterRunsByDistance(runs);
-    let nearest = clusters[0], bestDiff = Infinity;
+    let nearest = null, bestDiff = Infinity;
     for(const c of clusters){
       const diff = Math.abs(c.avgKm - goal.target_distance_km);
       if(diff < bestDiff){ bestDiff = diff; nearest = c; }
     }
-    const km = nearest.runs.reduce((s,r)=>s+r.km,0);
-    const min = nearest.runs.reduce((s,r)=>s+r.minutes,0);
-    const pace = km>0 ? min/km : null;
+    const km = nearest ? nearest.runs.reduce((s,r)=>s+r.km,0) : 0;
+    const min = nearest ? nearest.runs.reduce((s,r)=>s+r.minutes,0) : 0;
+    const pace = nearest && km>0 ? min/km : null;
     if(pace!=null){
       contextLine = `Je huidige tempo op ~${nearest.label} is ${formatPaceMinPerKm(pace)}, je doeltempo voor ${goalDistLabel} (in ${Math.round(goal.target_time_seconds/60)} min) is ${goalPaceLabel}.`;
     }
@@ -1983,7 +1991,54 @@ function generateTrainingTip(activities, days, recoveryConcern, goal, vitals, pl
 // bij afronding soms rare uitkomsten gaf (bijv. \"4:60/km\"). Bij 4+ runs wordt
 // de eerste helft vs. tweede helft vergeleken (stabieler); bij 2-3 runs de
 // eerste vs. laatste losse run.
-function renderTrainingProgressTable(activities){
+// Lineaire regressie van tempo (min/km) tegen datum, over alle runs van dit
+// type in de periode -- geeft een robuustere trend dan een eerste-helft-
+// vs-laatste-helft-gemiddelde (dat bij een paar losse pieken/dips flink kan
+// schommelen). Resultaat: hoeveel % het voorspelde tempo aan het begin vs.
+// eind van de periode verschilt (positief = sneller geworden).
+function paceTrendPct(sortedRuns){
+  if(sortedRuns.length<2) return null;
+  const xs = sortedRuns.map(r=>new Date(r.date+'T00:00:00Z').getTime());
+  const ys = sortedRuns.map(r=>r.minutes/r.km);
+  const n = xs.length;
+  const meanX = xs.reduce((a,b)=>a+b,0)/n;
+  const meanY = ys.reduce((a,b)=>a+b,0)/n;
+  let num=0, den=0;
+  for(let i=0;i<n;i++){ num += (xs[i]-meanX)*(ys[i]-meanY); den += (xs[i]-meanX)*(xs[i]-meanX); }
+  if(den===0) return null;
+  const slope = num/den;
+  const predictedFirst = meanY + slope*(xs[0]-meanX);
+  const predictedLast = meanY + slope*(xs[n-1]-meanX);
+  if(predictedFirst<=0) return null;
+  return (predictedFirst - predictedLast) / predictedFirst * 100;
+}
+// Tekent een mini-lijngrafiek (sparkline) van het tempo per activiteit,
+// gepositioneerd op de werkelijke datum binnen de periode van `days` dagen
+// -- i.p.v. alleen een eerste- en laatste-periode-balkje, zodat je de
+// daadwerkelijke ontwikkeling over de hele periode ziet.
+function paceSparklineSvg(sortedRuns, days){
+  if(sortedRuns.length===0) return '';
+  const todayStr = currentAmsterdamDateStr();
+  const startTime = new Date(addDaysToDateStr(todayStr, -(days-1))+'T00:00:00Z').getTime();
+  const endTime = new Date(todayStr+'T00:00:00Z').getTime();
+  const span = Math.max(1, endTime-startTime);
+  const points = sortedRuns.map(r=>({
+    x: (new Date(r.date+'T00:00:00Z').getTime()-startTime)/span,
+    pace: r.minutes/r.km,
+  }));
+  const paces = points.map(p=>p.pace);
+  const minP = Math.min(...paces), maxP = Math.max(...paces);
+  const pad = (maxP-minP)*0.2 || 0.2;
+  const lo = minP-pad, hi = maxP+pad;
+  const W=90, H=28;
+  const xOf = x => (Math.round(Math.min(1,Math.max(0,x))*(W-4))+2);
+  const yOf = pace => hi<=lo ? H/2 : Math.round((H-2) - (pace-lo)/(hi-lo)*(H-4));
+  const linePts = points.map(p=>`${xOf(p.x)},${yOf(p.pace)}`).join(' ');
+  const dots = points.map(p=>`<circle cx="${xOf(p.x)}" cy="${yOf(p.pace)}" r="1.8" fill="var(--amber)"/>`).join('');
+  const line = points.length>1 ? `<polyline points="${linePts}" fill="none" stroke="var(--ink-soft)" stroke-width="1.5"/>` : '';
+  return `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" style="display:block;overflow:visible;">${line}${dots}</svg>`;
+}
+function renderTrainingProgressTable(activities, days){
   const el = document.getElementById('trainingProgressTable');
   if(!el) return;
   const runs = (activities||[]).filter(a => a.type==='hardlopen' && a.km>0 && a.minutes>0);
@@ -1999,11 +2054,6 @@ function renderTrainingProgressTable(activities){
     el.innerHTML = '<div class="empty">Nog geen hardloopdata om voortgang te tonen.</div>';
     return;
   }
-  const paceOf = (arr) => {
-    const km = arr.reduce((s,a)=>s+a.km,0);
-    const min = arr.reduce((s,a)=>s+a.minutes,0);
-    return km>0 ? min/km : null;
-  };
   const hrOf = (arr) => {
     const withHr = arr.filter(r=>r.avgHeartrate!=null);
     return withHr.length ? withHr.reduce((s,r)=>s+r.avgHeartrate,0)/withHr.length : null;
@@ -2015,56 +2065,40 @@ function renderTrainingProgressTable(activities){
     const last = sorted.length>=4 ? sorted.slice(mid) : [sorted[sorted.length-1]];
     return {
       cluster: c,
-      paceFirst: paceOf(first), paceLast: paceOf(last),
+      sorted,
+      lastPace: sorted[sorted.length-1].minutes/sorted[sorted.length-1].km,
+      trendPct: paceTrendPct(sorted),
       hrFirst: hrOf(first), hrLast: hrOf(last),
     };
   });
-  // Tempo als kolom-balkje (snelheid in km/u, breedte t.o.v. de snelste
-  // gelogde snelheid over alle types heen) i.p.v. alleen tekst -- geeft in
-  // één oogopslag een "mooie grafiek"-gevoel zonder een aparte canvas-chart
-  // per rij te hoeven tekenen.
-  const allSpeeds = rowsData.flatMap(r=>[r.paceFirst,r.paceLast]).filter(p=>p!=null).map(p=>60/p);
-  const maxSpeed = allSpeeds.length ? Math.max(...allSpeeds) : 0;
-  const barPct = (pace) => {
-    if(pace==null || maxSpeed<=0) return 0;
-    return Math.max(4, Math.round((60/pace)/maxSpeed*100));
-  };
   const fmtHr = (hr) => hr!=null ? String(Math.round(hr)) : '&mdash;';
   // Compacte typenaam zonder de "(21,1km)"-toevoeging, en hartslag als kort
   // "132 → 128 ♥" i.p.v. "132 bpm → 128 bpm" -- samen met de iconen i.p.v.
   // tekst bij de trend scheelt dit genoeg breedte om de tabel op mobiel
   // zonder horizontaal scrollen te laten passen.
   const shortLabel = (label) => label.replace(/\s*\(.*\)/, '');
-  const rows = rowsData.map(({cluster:c, paceFirst, paceLast, hrFirst, hrLast})=>{
+  const rows = rowsData.map(({cluster:c, sorted, lastPace, trendPct, hrFirst, hrLast})=>{
     let trendHtml = '<span style="color:var(--ink-soft);" title="Onvoldoende data">&mdash;</span>';
-    if(c.runs.length>=2 && paceFirst!=null && paceLast!=null){
-      const deltaPct = (paceFirst - paceLast) / paceFirst * 100; // positief = sneller geworden
-      if(deltaPct > 2) trendHtml = `<span style="color:#1E9E4A;font-size:16px;" title="${deltaPct.toFixed(1)}% sneller geworden">&#9650;</span>`;
-      else if(deltaPct < -2) trendHtml = `<span style="color:var(--clay);font-size:16px;" title="${Math.abs(deltaPct).toFixed(1)}% trager geworden">&#9660;</span>`;
-      else trendHtml = `<span style="color:#D68A00;font-size:18px;" title="Stabiel (${deltaPct.toFixed(1)}%)">&#9679;</span>`;
+    if(trendPct!=null){
+      if(trendPct > 2) trendHtml = `<span style="color:#1E9E4A;font-size:16px;" title="${trendPct.toFixed(1)}% sneller geworden">&#9650;</span>`;
+      else if(trendPct < -2) trendHtml = `<span style="color:var(--clay);font-size:16px;" title="${Math.abs(trendPct).toFixed(1)}% trager geworden">&#9660;</span>`;
+      else trendHtml = `<span style="color:#D68A00;font-size:18px;" title="Stabiel (${trendPct.toFixed(1)}%)">&#9679;</span>`;
     }
     const hrText = (hrFirst!=null || hrLast!=null) ? `${fmtHr(hrFirst)}&rarr;${fmtHr(hrLast)} &#9829;` : '&mdash;';
-    const tempoBars = `
-      <div style="display:flex;flex-direction:column;gap:3px;min-width:64px;">
-        <div style="display:flex;align-items:center;gap:4px;">
-          <div style="flex:1;background:var(--line);border-radius:4px;height:6px;overflow:hidden;"><div style="width:${barPct(paceFirst)}%;height:100%;background:var(--ink-soft);border-radius:4px;"></div></div>
-          <span style="font-size:10px;color:var(--ink-soft);white-space:nowrap;">${paceFirst!=null?formatPaceMinPerKm(paceFirst):'&mdash;'}</span>
-        </div>
-        <div style="display:flex;align-items:center;gap:4px;">
-          <div style="flex:1;background:var(--line);border-radius:4px;height:6px;overflow:hidden;"><div style="width:${barPct(paceLast)}%;height:100%;background:var(--amber);border-radius:4px;"></div></div>
-          <span style="font-size:10px;color:var(--ink);white-space:nowrap;">${paceLast!=null?formatPaceMinPerKm(paceLast):'&mdash;'}</span>
-        </div>
+    const tempoCell = `
+      <div style="display:flex;align-items:center;gap:6px;">
+        ${paceSparklineSvg(sorted, days)}
+        <span style="font-size:10px;color:var(--ink);white-space:nowrap;">${formatPaceMinPerKm(lastPace)}</span>
       </div>`;
     return `<tr>
       <td class="desc-cell" style="padding:6px 4px;">${escapeHtml(shortLabel(c.label))}<br><span style="font-size:10px;color:var(--ink-soft);">${c.runs.length}x</span></td>
-      <td style="padding:6px 4px;">${tempoBars}</td>
+      <td style="padding:6px 4px;">${tempoCell}</td>
       <td style="padding:6px 4px;text-align:center;">${trendHtml}</td>
       <td style="padding:6px 4px;font-size:11px;white-space:nowrap;">${hrText}</td>
     </tr>`;
   }).join('');
   el.innerHTML = `<div style="display:flex;gap:14px;font-size:11px;color:var(--ink-soft);margin-bottom:8px;flex-wrap:wrap;">
-      <span><span style="display:inline-block;width:10px;height:7px;background:var(--ink-soft);border-radius:3px;margin-right:4px;"></span>eerste periode</span>
-      <span><span style="display:inline-block;width:10px;height:7px;background:var(--amber);border-radius:3px;margin-right:4px;"></span>laatste periode</span>
+      <span>lijn = tempo per activiteit, afgelopen ${days} dagen</span>
       <span>&#9650; sneller &middot; &#9660; trager &middot; &#9679; stabiel</span>
     </div>
     <table style="table-layout:fixed;width:100%;">
@@ -2768,7 +2802,7 @@ async function renderDashboard(){
   // valt zodra een run buiten de laatste 4 weken valt.
   const progressDays = 90;
   const recentTrainingForProgress = progressDays===trainingTipDays ? recentTrainingForTip : await loadRecentTrainingForTip(progressDays);
-  renderTrainingProgressTable(recentTrainingForProgress);
+  renderTrainingProgressTable(recentTrainingForProgress, progressDays);
 
   syncTeamEntry(dateStr, {
     dagscore: dagscoreVal,
