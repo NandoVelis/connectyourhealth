@@ -547,13 +547,19 @@ function renderMyTeam(team){
   const starters = rows.filter(r => r.multiplier > 0).sort((a,b) => a.position - b.position);
   const bench = rows.filter(r => r.multiplier === 0).sort((a,b) => a.position - b.position);
 
-  const squadRow = r => `<div class="row">
+  const squadRow = r => {
+    const v = r.pl.verwachting;
+    const trending = v && v !== 'stabiel' && v !== 'onbekend' && r.pl.progress != null;
+    const dir = trending ? (v === 'stijgt' || v === 'stijgt bijna' ? 'up' : 'down') : null;
+    return `<div class="row">
     <div>
       <div class="name">${r.pl.web_name}${r.badge} <span class="meta">${r.pl.team_short} · ${POS_SHORT[r.pl.element_type]||''}</span></div>
       <div class="meta">${eur(r.pl.now_cost)} · ${nf.format(r.pl.total_points||0)} pt totaal · ${nf.format(r.pl.event_points||0)} pt deze ronde${priceTrendMini(r.pl)}</div>
     </div>
     <div class="pct">${r.multiplier>1?'x'+r.multiplier+' ':''}${nf.format((r.pl.event_points||0)*r.multiplier)}</div>
+    ${trending ? `<div class="bar"><i class="${dir}" style="width:${Math.min(r.pl.progress*100,100)}%"></i></div>` : ''}
   </div>`;
+  };
   squadEl.innerHTML = (starters.length ? starters.map(squadRow).join('') : '<div class="empty">Geen basisopstelling gevonden.</div>')
     + (bench.length ? `<div class="hint" style="margin:12px 0 4px">Bank</div>` + bench.map(squadRow).join('') : '');
 
