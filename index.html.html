@@ -2642,14 +2642,18 @@ async function renderDashboard(){
   if(!training && burnedIsEstimate){
     detailEl.innerHTML = `
       <div class="stat-row"><span class="stat-label">Geen training gesynchroniseerd</span><span class="stat-val">0 kcal</span></div>
-      <div class="stat-row" style="border-bottom:none;">
-        <span class="stat-label" style="font-weight:700;">Geschat rustverbruik</span>
+      <div class="stat-row">
+        <span class="stat-label">Geschat rustverbruik</span>
         <span class="stat-val">~${estimatedRestKcal} kcal</span>
       </div>
       <div class="meal-meta" style="margin-top:4px;">Nog niet gesynchroniseerd met Tredict &mdash; dit is een schatting op basis van je profiel, geen trainingen meegeteld.</div>
-      <div class="stat-row" style="border-top:1px solid var(--line);margin-top:10px;padding-top:10px;flex-direction:column;align-items:stretch;gap:6px;border-bottom:none;">
+      <div class="stat-row" style="border-top:1px solid var(--line);margin-top:10px;padding-top:10px;flex-direction:column;align-items:stretch;gap:6px;">
         <span class="stat-label">&#128099; Stappen vandaag (Garmin)</span>
         <span class="stat-val">${garminStepsToday && garminStepsToday.steps_total!=null ? garminStepsToday.steps_total.toLocaleString('nl-NL') : '—'}${extraStepsKcal>0 ? ` &middot; +${extraStepsKcal} kcal extra verbrand` : ''}</span>
+      </div>
+      <div class="stat-row" style="border-bottom:none;">
+        <span class="stat-label" style="font-weight:700;">Totaal verbrand</span>
+        <span class="stat-val">~${burned ?? estimatedRestKcal} kcal</span>
       </div>`;
   } else if(!training){
     detailEl.innerHTML = '<div class="empty">Nog niet opgehaald voor deze dag.</div>';
