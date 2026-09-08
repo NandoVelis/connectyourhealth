@@ -1120,15 +1120,24 @@ function currentOwner(){
     return localStorage.getItem('infood-team-name') || null;
   }catch(e){ return null; }
 }
-// De "Overig"-navlink (ESPN Fantasy-prijstracker, /overig.html) is puur een
-// UI-gemak dat alleen voor Nando zichtbaar is -- de echte afscherming zit in
-// de Microsoft-login op die pagina zelf (alleen nandovelis@connectyou.nl mag
-// erin), dit voorkomt alleen dat andere teamleden de link uberhaupt zien.
-function updateOverigLinkVisibility(){
+// De "Overig"-navlink (ESPN Fantasy-prijstracker, /overig.html) is nu echt
+// aan inloggen gekoppeld i.p.v. aan de vrij-invulbare teamnaam: /overig.html
+// logt in via Supabase's e-mail-magic-link (zelfde Supabase-project, dus
+// zelfde browser-sessie op hetzelfde domein) en staat alleen
+// nandovelis@connectyou.nl toe. Hier checken we diezelfde sessie -- geen
+// geldige, toegestane sessie betekent geen zichtbare link, ook al staat de
+// teamnaam op "Nando".
+const OVERIG_ALLOWED_EMAILS = ['nandovelis@connectyou.nl'];
+async function updateOverigLinkVisibility(){
   const link = document.getElementById('overigNavLink');
   if(!link) return;
-  link.style.display = (currentOwner()==='Nando') ? '' : 'none';
+  try{
+    const { data:{ session } } = await supabaseClient.auth.getSession();
+    const email = ((session && session.user && session.user.email) || '').toLowerCase();
+    link.style.display = OVERIG_ALLOWED_EMAILS.includes(email) ? '' : 'none';
+  }catch(e){ link.style.display = 'none'; }
 }
+supabaseClient.auth.onAuthStateChange(()=>{ updateOverigLinkVisibility(); });
 
 function dayKey(dateStr){ return 'day-'+dateStr; }
 
