@@ -70,6 +70,9 @@ Deno.serve(async (req: Request) => {
     for (const t of data.teams ?? []) teams[t.id] = t.short_name;
     seen = elements.length;
 
+    const teamRows = (data.teams ?? []).map((t: any) => ({ id: t.id, name: t.name, short_name: t.short_name }));
+    await sbPost("espn_teams", teamRows, "return=minimal,resolution=merge-duplicates");
+
     const cur = (data.events ?? []).find((e: any) => e.is_current);
     const nxt = (data.events ?? []).find((e: any) => e.is_next);
     const totalPlayers: number = data.total_players ?? 0;
@@ -198,6 +201,29 @@ Deno.serve(async (req: Request) => {
         updated_at: capturedAt,
       }),
     });
+
+    // ---- WEDSTRIJDSCHEMA (voor transfersuggesties: dubbele speelrondes) ----
+    // Best-effort, net als de andere aanvullende syncs hieronder.
+    try {
+      const fixturesRes = await fetch("https://fantasy.espngoal.nl/api/fixtures/");
+      if (fixturesRes.ok) {
+        const fixtures: any[] = await fixturesRes.json();
+        const fixtureRows = fixtures.map((f: any) => ({
+          id: f.id,
+          event: f.event ?? null,
+          team_h: f.team_h ?? null,
+          team_a: f.team_a ?? null,
+          kickoff_time: f.kickoff_time ?? null,
+          finished: !!f.finished,
+          updated_at: capturedAt,
+        }));
+        await sbPost("espn_fixtures", fixtureRows, "return=minimal,resolution=merge-duplicates");
+      } else {
+        console.warn(`espn fixtures gaf status ${fixturesRes.status}, overgeslagen.`);
+      }
+    } catch (e) {
+      console.warn(`Fixtures-sync mislukt: ${String(e)}`);
+    }
 
     // ---- MIJN TEAM (entry 28264, publiek leesbare endpoints) ----
     // Best-effort: gaat dit mis, dan mag de rest van de sync (prijzen,

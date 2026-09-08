@@ -249,6 +249,45 @@
         </table>
       </div>
     </div>
+
+    <div class="card" style="margin-top:16px">
+      <h3>Transfersuggesties</h3>
+      <p class="hint" id="tsHint">Op basis van je resterende budget en de komende speelronde(s) -- spelers met 2 wedstrijden in dat venster (dubbele speelronde) staan bovenaan.</p>
+      <div class="filters">
+        <label style="font-size:13px;color:var(--muted);">Aantal wissels
+          <select id="tsTransfers">
+            <option value="1">1</option>
+            <option value="2">2</option>
+            <option value="3">3</option>
+          </select>
+        </label>
+        <label style="font-size:13px;color:var(--muted);">Speelrondes vooruit
+          <select id="tsWindow">
+            <option value="1">1</option>
+            <option value="2" selected>2</option>
+            <option value="3">3</option>
+          </select>
+        </label>
+        <label style="font-size:13px;color:var(--muted);">Positie
+          <select id="tsPos">
+            <option value="">Alle</option>
+            <option value="1">Keeper</option>
+            <option value="2">Verdediger</option>
+            <option value="3">Middenvelder</option>
+            <option value="4">Spits</option>
+          </select>
+        </label>
+      </div>
+      <div id="tsBudget" class="note" style="margin-top:0;margin-bottom:10px;"></div>
+      <div class="tablewrap">
+        <table id="tsTbl">
+          <thead><tr>
+            <th>Speler</th><th>Club</th><th>Positie</th><th>Prijs</th><th>Wedstrijden</th><th>Vorm</th><th>Punten</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
   </section>
 
   <!-- ---------- TRANSFERS ---------- -->
@@ -487,22 +526,33 @@ async function start(who){
   await load();
 }
 
+// Belangrijk: gebruikt het access_token van de ingelogde sessie i.p.v. de
+// publishable key als Authorization-bearer -- de espn_*-tabellen staan nu
+// dicht met RLS-policies op auth.jwt()->>'email', dus zonder de echte
+// sessie-token ziet de database elke aanvraag als "anon" (niet ingelogd)
+// en komt er niks terug, ook al ben je zelf wel ingelogd.
 async function api(path){
+  const { data:{ session } } = await sb.auth.getSession();
+  const token = session?.access_token || SUPABASE_KEY;
   const r = await fetch(SUPABASE_URL + '/rest/v1/' + path, {
-    headers:{ apikey:SUPABASE_KEY, Authorization:'Bearer ' + SUPABASE_KEY }
+    headers:{ apikey:SUPABASE_KEY, Authorization:'Bearer ' + token }
   });
   if(!r.ok) throw new Error(path + ' → ' + r.status + ' ' + (await r.text()).slice(0,160));
   return r.json();
 }
 
+let FIXTURES = [], TEAMS = {}, MY_TEAM = null;
+
 async function load(){
   try{
-    const [game, board, events, logs, myTeam] = await Promise.all([
+    const [game, board, events, logs, myTeam, fixtures, teams] = await Promise.all([
       api('espn_game?id=eq.1&select=*'),
       api('espn_price_board?select=*&limit=1000'),
       api('espn_price_events?select=*&order=detected_at.desc&limit=60'),
       api('espn_sync_log?select=*&order=ran_at.desc&limit=25'),
-      api('espn_my_team?select=*&limit=1')
+      api('espn_my_team?select=*&limit=1'),
+      api('espn_fixtures?select=*&finished=eq.false&order=event.asc&limit=200'),
+      api('espn_teams?select=*')
     ]);
     GAME = game[0] || {};
     ROWS = board.map(r => {
@@ -516,9 +566,13 @@ async function load(){
         threshold: n === null ? null : (n >= 0 ? r.rise_threshold : r.fall_threshold)
       };
     });
+    FIXTURES = fixtures;
+    TEAMS = Object.fromEntries(teams.map(t => [t.id, t]));
+    MY_TEAM = myTeam[0] || null;
     renderTiles(); renderWatch(); renderTable();
     renderTransfers(); renderEvents(events); renderLogs(logs);
-    renderMyTeam(myTeam[0] || null);
+    renderMyTeam(MY_TEAM);
+    renderTransferSuggestions();
   }catch(e){
     $('#tiles').innerHTML = '<div class="tile"><div class="label">Fout</div><div class="sub">' + e.message + '</div></div>';
   }
@@ -575,6 +629,67 @@ function renderMyTeam(team){
   </tr>`).join('') : '<tr><td colspan="6" class="empty">Nog geen speelrondes gespeeld.</td></tr>';
 }
 $('#refresh').addEventListener('click', load);
+
+/* ---------- transfersuggesties ---------- */
+// Telt per club het aantal wedstrijden in de komende N speelronden (vanaf
+// de eerstvolgende, nog niet gespeelde ronde) -- een club met 2 wedstrijden
+// in dat venster (dubbele speelronde) levert dubbele punten-kans op, dus
+// die spelers krijgen voorrang. Budget = je huidige kas (bank), gedeeld
+// door het aantal wissels; dit houdt geen rekening met de verkoopwaarde
+// van een speler die je laat gaan (die data heeft de API niet openbaar),
+// dus is een ondergrens, geen exacte prijs.
+function fixturesCountByTeam(windowSize){
+  const startEvent = GAME.next_event || ((GAME.current_event||0)+1);
+  const endEvent = startEvent + windowSize - 1;
+  const counts = {};
+  const detail = {};
+  for(const f of FIXTURES){
+    if(f.event==null || f.event < startEvent || f.event > endEvent) continue;
+    for(const teamId of [f.team_h, f.team_a]){
+      if(teamId==null) continue;
+      counts[teamId] = (counts[teamId]||0) + 1;
+      (detail[teamId] = detail[teamId]||[]).push(f.event);
+    }
+  }
+  return { counts, detail, startEvent, endEvent };
+}
+function renderTransferSuggestions(){
+  const tbody = $('#tsTbl tbody');
+  if(!MY_TEAM || !MY_TEAM.picks || !MY_TEAM.picks.length || !FIXTURES.length){
+    tbody.innerHTML = '<tr><td colspan="7" class="empty">Nog geen teamgegevens of wedstrijdschema beschikbaar.</td></tr>';
+    $('#tsBudget').textContent = '';
+    return;
+  }
+  const transfers = parseInt($('#tsTransfers').value, 10) || 1;
+  const windowSize = parseInt($('#tsWindow').value, 10) || 2;
+  const posFilter = $('#tsPos').value;
+  const { counts, startEvent, endEvent } = fixturesCountByTeam(windowSize);
+
+  const bank = MY_TEAM.bank || 0;
+  const budgetPerSlot = Math.floor(bank / transfers);
+  $('#tsBudget').innerHTML = `Beschikbaar: ${eur(bank)} kas over ${transfers} wissel(s) &middot; richtprijs per wissel: <strong>${eur(budgetPerSlot)}</strong> &middot; speelronde ${startEvent}${endEvent>startEvent?'&ndash;'+endEvent:''} &middot; dit houdt geen rekening met de verkoopwaarde van een speler die je laat gaan.`;
+
+  const ownedIds = new Set(MY_TEAM.picks.map(p => p.element));
+  const candidates = ROWS
+    .filter(r => !ownedIds.has(r.id))
+    .filter(r => r.status === 'a')
+    .filter(r => !posFilter || String(r.element_type) === posFilter)
+    .filter(r => r.now_cost <= budgetPerSlot)
+    .map(r => ({ ...r, fixtureCount: counts[r.team_id] || 0 }))
+    .sort((a,b) => (b.fixtureCount - a.fixtureCount) || ((b.form||0) - (a.form||0)) || ((b.total_points||0) - (a.total_points||0)))
+    .slice(0, 20);
+
+  tbody.innerHTML = candidates.length ? candidates.map(r => `<tr>
+    <td>${r.web_name}</td>
+    <td>${r.team_short}</td>
+    <td>${POS_SHORT[r.element_type]||''}</td>
+    <td class="num">${eur(r.now_cost)}</td>
+    <td class="num">${r.fixtureCount>=2?`<span class="pill up">${r.fixtureCount}x</span>`:r.fixtureCount}</td>
+    <td class="num">${r.form!=null?Number(r.form).toFixed(1):'—'}</td>
+    <td class="num">${nf.format(r.total_points||0)}</td>
+  </tr>`).join('') : '<tr><td colspan="7" class="empty">Geen spelers gevonden binnen dit budget/filter.</td></tr>';
+}
+['#tsTransfers','#tsWindow','#tsPos'].forEach(s => $(s).addEventListener('change', renderTransferSuggestions));
 
 /* ---------- tiles ---------- */
 function renderTiles(){
