@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Overig — ConnectYourHealth</title>
+<style>
+  :root{
+    --navy:#000725;
+    --navy-2:#0b1440;
+    --magenta:#96007A;
+    --cream:#E0D8C3;
+    --lavender:#8D85FF;
+    --up:#2fbf71;
+    --down:#ff5c72;
+    --muted:rgba(224,216,195,.62);
+    --line:rgba(224,216,195,.14);
+    --card:rgba(255,255,255,.045);
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0;background:var(--navy);color:var(--cream);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  a{color:var(--lavender)}
+  .wrap{max-width:1180px;margin:0 auto;padding:20px 16px 64px}
+
+  /* ---------- header ---------- */
+  header.top{
+    display:flex;align-items:center;gap:14px;flex-wrap:wrap;
+    padding:16px 0 18px;border-bottom:1px solid var(--line);margin-bottom:20px;
+  }
+  .brand{font-weight:800;letter-spacing:.14em;text-transform:uppercase;font-size:13px}
+  .brand span{color:var(--magenta)}
+  h1{font-size:22px;margin:0;font-weight:700}
+  .spacer{flex:1}
+  .who{font-size:12px;color:var(--muted)}
+  button{font:inherit;cursor:pointer;border-radius:10px;border:1px solid var(--line);
+    background:var(--card);color:var(--cream);padding:8px 14px;transition:.15s}
+  button:hover{border-color:var(--lavender)}
+  button.primary{background:var(--magenta);border-color:var(--magenta);color:#fff;font-weight:600}
+  button.primary:hover{filter:brightness(1.15)}
+  button.ghost{background:transparent}
+
+  /* ---------- login ---------- */
+  .gate{max-width:420px;margin:12vh auto;text-align:center}
+  .gate h2{font-size:20px;margin:0 0 8px}
+  .gate p{color:var(--muted);font-size:14px;line-height:1.6;margin:0 0 22px}
+  .ms-btn{display:inline-flex;align-items:center;gap:10px;background:#fff;color:#1b1b1b;
+    border:none;font-weight:600;padding:11px 18px;border-radius:10px}
+  .ms-btn:hover{filter:brightness(.94)}
+  .ms-logo{width:18px;height:18px;display:block}
+  .err{color:var(--down);font-size:13px;margin-top:16px;line-height:1.5}
+
+  /* ---------- tabs ---------- */
+  nav.tabs{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:22px;
+    border-bottom:1px solid var(--line);padding-bottom:0}
+  nav.tabs button{border:none;background:none;border-radius:0;padding:10px 14px;
+    color:var(--muted);border-bottom:2px solid transparent;font-weight:600;font-size:14px}
+  nav.tabs button[aria-selected="true"]{color:var(--cream);border-bottom-color:var(--magenta)}
+  .panel[hidden]{display:none}
+
+  /* ---------- stat tiles ---------- */
+  .tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:24px}
+  .tile{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 16px}
+  .tile .label{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+  .tile .value{font-size:24px;font-weight:700;margin-top:6px;font-variant-numeric:tabular-nums}
+  .tile .sub{font-size:12px;color:var(--muted);margin-top:2px}
+  .tile.up .value{color:var(--up)} .tile.down .value{color:var(--down)}
+
+  /* ---------- watch columns ---------- */
+  .cols{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:28px}
+  @media(max-width:760px){.cols{grid-template-columns:1fr}}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px}
+  .card h3{margin:0 0 4px;font-size:15px}
+  .card .hint{font-size:12px;color:var(--muted);margin:0 0 14px}
+  .row{display:grid;grid-template-columns:1fr auto;gap:4px 10px;padding:9px 0;border-top:1px solid var(--line)}
+  .row:first-of-type{border-top:none}
+  .row .name{font-weight:600;font-size:14px}
+  .row .meta{font-size:12px;color:var(--muted)}
+  .row .pct{font-variant-numeric:tabular-nums;font-weight:700;font-size:14px;text-align:right}
+  .bar{grid-column:1/-1;height:5px;border-radius:3px;background:rgba(224,216,195,.12);overflow:hidden;margin-top:5px}
+  .bar i{display:block;height:100%;border-radius:3px}
+  .bar i.up{background:var(--up)} .bar i.down{background:var(--down)}
+  .empty{color:var(--muted);font-size:13px;padding:10px 0}
+
+  /* ---------- filters + table ---------- */
+  .filters{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
+  input[type=search],select{font:inherit;background:var(--card);color:var(--cream);
+    border:1px solid var(--line);border-radius:10px;padding:8px 11px}
+  input[type=search]{min-width:200px}
+  select option{background:var(--navy-2)}
+  .tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:14px}
+  table{border-collapse:collapse;width:100%;font-size:13px;min-width:760px}
+  th,td{padding:9px 12px;text-align:right;white-space:nowrap}
+  th:first-child,td:first-child,th:nth-child(2),td:nth-child(2){text-align:left}
+  thead th{position:sticky;top:0;background:var(--navy-2);color:var(--muted);
+    font-size:11px;text-transform:uppercase;letter-spacing:.06em;cursor:pointer;user-select:none}
+  thead th:hover{color:var(--cream)}
+  tbody tr{border-top:1px solid var(--line)}
+  tbody tr:hover{background:rgba(141,133,255,.06)}
+  td.num{font-variant-numeric:tabular-nums}
+  .pill{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:600}
+  .pill.up{background:rgba(47,191,113,.16);color:var(--up)}
+  .pill.down{background:rgba(255,92,114,.16);color:var(--down)}
+  .pill.flat{background:rgba(224,216,195,.1);color:var(--muted)}
+  .pill.est{background:rgba(141,133,255,.16);color:var(--lavender)}
+  .note{font-size:12px;color:var(--muted);line-height:1.6;margin-top:14px}
+  .loading{color:var(--muted);padding:30px 0;text-align:center}
+</style>
+</head>
+<body>
+
+<!-- ======================= LOGIN GATE ======================= -->
+<div id="gate" class="gate" hidden>
+  <div class="brand" style="margin-bottom:20px">CONNECT<span>YOU</span></div>
+  <h2>Overig</h2>
+  <p>Deze pagina is privé. Log in met je ConnectYou-account.</p>
+  <button class="ms-btn" id="loginBtn">
+    <svg class="ms-logo" viewBox="0 0 23 23" aria-hidden="true">
+      <rect x="0" y="0" width="10.5" height="10.5" fill="#f25022"/>
+      <rect x="12.5" y="0" width="10.5" height="10.5" fill="#7fba00"/>
+      <rect x="0" y="12.5" width="10.5" height="10.5" fill="#00a4ef"/>
+      <rect x="12.5" y="12.5" width="10.5" height="10.5" fill="#ffb900"/>
+    </svg>
+    Inloggen met Microsoft
+  </button>
+  <div class="err" id="gateErr" hidden></div>
+</div>
+
+<!-- ======================= APP ======================= -->
+<div id="app" class="wrap" hidden>
+  <header class="top">
+    <div class="brand">CONNECT<span>YOU</span></div>
+    <h1>Overig</h1>
+    <div class="spacer"></div>
+    <div class="who" id="who"></div>
+    <button class="ghost" id="logoutBtn">Uitloggen</button>
+  </header>
+
+  <nav class="tabs" role="tablist">
+    <button role="tab" aria-selected="true"  data-tab="prijzen">Prijzen</button>
+    <button role="tab" aria-selected="false" data-tab="transfers">Transfers</button>
+    <button role="tab" aria-selected="false" data-tab="log">Metingen</button>
+  </nav>
+
+  <!-- ---------- PRIJZEN ---------- -->
+  <section class="panel" id="panel-prijzen">
+    <div class="tiles" id="tiles"><div class="loading">Laden…</div></div>
+
+    <div class="cols">
+      <div class="card">
+        <h3>Stijgt binnenkort</h3>
+        <p class="hint">Netto ingekocht, dicht bij de stijgdrempel.</p>
+        <div id="risers"><div class="empty">Laden…</div></div>
+      </div>
+      <div class="card">
+        <h3>Daalt binnenkort</h3>
+        <p class="hint">Netto verkocht, dicht bij de daaldrempel. Verkoop nu als je hem hebt.</p>
+        <div id="fallers"><div class="empty">Laden…</div></div>
+      </div>
+    </div>
+
+    <div class="filters">
+      <input type="search" id="q" placeholder="Zoek speler of club…">
+      <select id="fPos">
+        <option value="">Alle posities</option>
+        <option value="1">Keeper</option>
+        <option value="2">Verdediger</option>
+        <option value="3">Middenvelder</option>
+        <option value="4">Spits</option>
+      </select>
+      <select id="fOwn">
+        <option value="0">Alle spelers</option>
+        <option value="0.5">Minstens 0,5% bezit</option>
+        <option value="2">Minstens 2% bezit</option>
+        <option value="5">Minstens 5% bezit</option>
+      </select>
+      <select id="fDir">
+        <option value="">Alle richtingen</option>
+        <option value="up">Alleen stijgers</option>
+        <option value="down">Alleen dalers</option>
+      </select>
+      <button class="ghost" id="refresh">Ververs</button>
+    </div>
+
+    <div class="tablewrap">
+      <table id="tbl">
+        <thead><tr>
+          <th data-sort="web_name">Speler</th>
+          <th data-sort="team_short">Club</th>
+          <th data-sort="now_cost">Prijs</th>
+          <th data-sort="cost_change_start">Seizoen</th>
+          <th data-sort="selected_by_percent">Bezit</th>
+          <th data-sort="net_since_change">Netto sinds wijziging</th>
+          <th data-sort="threshold">Drempel</th>
+          <th data-sort="progress_signed">Voortgang</th>
+          <th data-sort="verwachting">Verwachting</th>
+        </tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <p class="note" id="modelNote"></p>
+  </section>
+
+  <!-- ---------- TRANSFERS ---------- -->
+  <section class="panel" id="panel-transfers" hidden>
+    <div class="cols">
+      <div class="card">
+        <h3>Meest gekocht deze speelronde</h3>
+        <p class="hint">Netto instroom sinds de vorige deadline.</p>
+        <div id="tIn"><div class="empty">Laden…</div></div>
+      </div>
+      <div class="card">
+        <h3>Meest verkocht deze speelronde</h3>
+        <p class="hint">Netto uitstroom sinds de vorige deadline.</p>
+        <div id="tOut"><div class="empty">Laden…</div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ---------- LOG ---------- -->
+  <section class="panel" id="panel-log" hidden>
+    <div class="card" style="margin-bottom:16px">
+      <h3>Gemeten prijswijzigingen</h3>
+      <p class="hint">Elke waarneming maakt het model scherper: hier leren we hoeveel netto transfers een wijziging echt kost.</p>
+      <div class="tablewrap">
+        <table id="evtTbl">
+          <thead><tr>
+            <th>Speler</th><th>Moment</th><th>Van</th><th>Naar</th>
+            <th>Netto sinds vorige</th><th>Eigenaren</th><th>Ratio</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="card">
+      <h3>Sync-log</h3>
+      <p class="hint">De sync draait elke 15 minuten via pg_cron.</p>
+      <div class="tablewrap">
+        <table id="logTbl">
+          <thead><tr>
+            <th>Moment</th><th>Status</th><th>Spelers</th><th>Snapshots</th><th>Wijzigingen</th><th>Duur</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script>
+/* =========================================================================
+   CONFIG
+   ========================================================================= */
+const SUPABASE_URL  = 'https://mhvduufxeqyxgkkvwimx.supabase.co';
+const SUPABASE_KEY  = 'sb_publishable_Oy2NNm-yMP358eH3NPHl1A_d24-72WS';
+const ALLOWED       = ['nandovelis@connectyou.nl'];   // wie deze pagina mag zien
+const POS           = {1:'Keeper',2:'Verdediger',3:'Middenvelder',4:'Spits'};
+const POS_SHORT     = {1:'KEE',2:'VER',3:'MID',4:'SPI'};
+
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+const $  = (s,r=document)=>r.querySelector(s);
+const $$ = (s,r=document)=>[...r.querySelectorAll(s)];
+
+const nf  = new Intl.NumberFormat('nl-NL');
+const eur = c => '€' + (c/10).toLocaleString('nl-NL',{minimumFractionDigits:1,maximumFractionDigits:1});
+const pct = v => (v*100).toLocaleString('nl-NL',{maximumFractionDigits:0}) + '%';
+const signed = n => (n>0?'+':'') + nf.format(n);
+const dt = s => s ? new Date(s).toLocaleString('nl-NL',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}) : '—';
+
+/* =========================================================================
+   AUTH
+   ========================================================================= */
+async function boot(){
+  const { data:{ session } } = await sb.auth.getSession();
+  const devMode = new URLSearchParams(location.search).has('dev');
+
+  if (devMode) return start('devmodus (geen login)');
+
+  if (!session) return showGate();
+
+  const email = (session.user.email || '').toLowerCase();
+  if (!ALLOWED.includes(email)){
+    await sb.auth.signOut();
+    return showGate('Dit account (' + email + ') heeft geen toegang tot deze pagina.');
+  }
+  start(email);
+}
+
+function showGate(msg){
+  $('#app').hidden = true;
+  $('#gate').hidden = false;
+  if (msg){ $('#gateErr').hidden = false; $('#gateErr').textContent = msg; }
+}
+
+$('#loginBtn').addEventListener('click', async () => {
+  const { error } = await sb.auth.signInWithOAuth({
+    provider: 'azure',
+    options: {
+      scopes: 'openid profile email',
+      redirectTo: location.origin + location.pathname
+    }
+  });
+  if (error){
+    $('#gateErr').hidden = false;
+    $('#gateErr').textContent = 'Inloggen mislukt: ' + error.message +
+      ' — staat de Azure-provider aan in Supabase (Authentication → Providers)?';
+  }
+});
+
+$('#logoutBtn').addEventListener('click', async () => {
+  await sb.auth.signOut();
+  location.reload();
+});
+
+/* =========================================================================
+   TABS
+   ========================================================================= */
+$$('nav.tabs button').forEach(b => b.addEventListener('click', () => {
+  $$('nav.tabs button').forEach(x => x.setAttribute('aria-selected', String(x === b)));
+  $$('.panel').forEach(p => p.hidden = (p.id !== 'panel-' + b.dataset.tab));
+}));
+
+/* =========================================================================
+   DATA
+   ========================================================================= */
+let ROWS = [], GAME = {}, SORT = { key:'progress_signed', dir:-1 };
+
+async function start(who){
+  $('#gate').hidden = true;
+  $('#app').hidden = false;
+  $('#who').textContent = who;
+  await load();
+}
+
+async function api(path){
+  const r = await fetch(SUPABASE_URL + '/rest/v1/' + path, {
+    headers:{ apikey:SUPABASE_KEY, Authorization:'Bearer ' + SUPABASE_KEY }
+  });
+  if(!r.ok) throw new Error(path + ' → ' + r.status + ' ' + (await r.text()).slice(0,160));
+  return r.json();
+}
+
+async function load(){
+  try{
+    const [game, board, events, logs] = await Promise.all([
+      api('espn_game?id=eq.1&select=*'),
+      api('espn_price_board?select=*&limit=1000'),
+      api('espn_price_events?select=*&order=detected_at.desc&limit=60'),
+      api('espn_sync_log?select=*&order=ran_at.desc&limit=25')
+    ]);
+    GAME = game[0] || {};
+    ROWS = board.map(r => {
+      const n = r.net_since_change;
+      const p = r.progress === null ? null : Number(r.progress);
+      return {
+        ...r,
+        net_since_change: n === null ? null : Number(n),
+        progress: p,
+        progress_signed: p === null ? 0 : (n >= 0 ? p : -p),
+        threshold: n === null ? null : (n >= 0 ? r.rise_threshold : r.fall_threshold)
+      };
+    });
+    renderTiles(); renderWatch(); renderTable();
+    renderTransfers(); renderEvents(events); renderLogs(logs);
+  }catch(e){
+    $('#tiles').innerHTML = '<div class="tile"><div class="label">Fout</div><div class="sub">' + e.message + '</div></div>';
+  }
+}
+$('#refresh').addEventListener('click', load);
+
+/* ---------- tiles ---------- */
+function renderTiles(){
+  const soonUp   = ROWS.filter(r => r.verwachting === 'stijgt' || r.verwachting === 'stijgt bijna').length;
+  const soonDown = ROWS.filter(r => r.verwachting === 'daalt'  || r.verwachting === 'daalt bijna').length;
+  const seizoenUp   = ROWS.filter(r => r.cost_change_start > 0).length;
+  const seizoenDown = ROWS.filter(r => r.cost_change_start < 0).length;
+  const deadline = GAME.next_deadline ? new Date(GAME.next_deadline) : null;
+  const uur = deadline ? Math.max(0, Math.round((deadline - Date.now())/36e5)) : null;
+
+  $('#tiles').innerHTML = `
+    <div class="tile"><div class="label">Managers</div><div class="value">${nf.format(GAME.total_players||0)}</div>
+      <div class="sub">${GAME.current_event_name || ''}</div></div>
+    <div class="tile up"><div class="label">Stijgt (bijna)</div><div class="value">${soonUp}</div>
+      <div class="sub">${seizoenUp} dit seizoen gestegen</div></div>
+    <div class="tile down"><div class="label">Daalt (bijna)</div><div class="value">${soonDown}</div>
+      <div class="sub">${seizoenDown} dit seizoen gedaald</div></div>
+    <div class="tile"><div class="label">Deadline</div><div class="value">${uur !== null ? uur + 'u' : '—'}</div>
+      <div class="sub">${deadline ? deadline.toLocaleString('nl-NL',{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}) : ''}</div></div>
+    <div class="tile"><div class="label">Laatste sync</div><div class="value" style="font-size:17px">${dt(GAME.updated_at)}</div>
+      <div class="sub">elke 15 min</div></div>`;
+}
+
+/* ---------- watchlists ---------- */
+function watchRow(r, dir){
+  const p = Math.min(r.progress ?? 0, 1.35);
+  return `<div class="row">
+    <div>
+      <div class="name">${r.web_name} <span class="meta">${r.team_short} · ${POS_SHORT[r.element_type]||''}</span></div>
+      <div class="meta">${eur(r.now_cost)} · ${r.selected_by_percent}% bezit · ${signed(r.net_since_change)} netto${r.basis==='geschat'?' · geschat':''}</div>
+    </div>
+    <div class="pct" style="color:var(--${dir})">${pct(r.progress)}</div>
+    <div class="bar"><i class="${dir}" style="width:${Math.min(p*100,100)}%"></i></div>
+  </div>`;
+}
+function renderWatch(){
+  const up = ROWS.filter(r => r.net_since_change > 0 && r.progress !== null)
+                 .sort((a,b) => b.progress - a.progress).slice(0,8);
+  const dn = ROWS.filter(r => r.net_since_change < 0 && r.progress !== null)
+                 .sort((a,b) => b.progress - a.progress).slice(0,8);
+  $('#risers').innerHTML  = up.length ? up.map(r => watchRow(r,'up')).join('')  : '<div class="empty">Nog geen kandidaten.</div>';
+  $('#fallers').innerHTML = dn.length ? dn.map(r => watchRow(r,'down')).join('') : '<div class="empty">Nog geen kandidaten.</div>';
+}
+
+/* ---------- table ---------- */
+function filtered(){
+  const q = $('#q').value.trim().toLowerCase();
+  const pos = $('#fPos').value, own = parseFloat($('#fOwn').value), dir = $('#fDir').value;
+  return ROWS.filter(r => {
+    if (q && !((r.web_name+' '+r.second_name+' '+r.team_short).toLowerCase().includes(q))) return false;
+    if (pos && String(r.element_type) !== pos) return false;
+    if (own && Number(r.selected_by_percent) < own) return false;
+    if (dir === 'up'   && !(r.net_since_change > 0)) return false;
+    if (dir === 'down' && !(r.net_since_change < 0)) return false;
+    return true;
+  }).sort((a,b) => {
+    const k = SORT.key; let x = a[k], y = b[k];
+    if (typeof x === 'string' || typeof y === 'string')
+      return String(x??'').localeCompare(String(y??''),'nl') * SORT.dir;
+    return ((Number(x)||0) - (Number(y)||0)) * SORT.dir;
+  });
+}
+function verwachtingPill(v){
+  if (v === 'stijgt' || v === 'stijgt bijna') return `<span class="pill up">${v}</span>`;
+  if (v === 'daalt'  || v === 'daalt bijna')  return `<span class="pill down">${v}</span>`;
+  if (v === 'onbekend') return `<span class="pill est">wacht op meting</span>`;
+  return `<span class="pill flat">stabiel</span>`;
+}
+function renderTable(){
+  const rows = filtered().slice(0,300);
+  $('#tbl tbody').innerHTML = rows.map(r => `
+    <tr>
+      <td>${r.web_name}${r.status !== 'a' ? ' <span class="pill flat">!</span>' : ''}</td>
+      <td>${r.team_short}</td>
+      <td class="num">${eur(r.now_cost)}</td>
+      <td class="num" style="color:${r.cost_change_start>0?'var(--up)':r.cost_change_start<0?'var(--down)':'inherit'}">${r.cost_change_start===0?'—':signed(r.cost_change_start/10)}</td>
+      <td class="num">${r.selected_by_percent}%</td>
+      <td class="num">${r.net_since_change===null?'—':signed(r.net_since_change)}</td>
+      <td class="num">${r.threshold===null?'—':nf.format(r.threshold)}</td>
+      <td class="num">${r.progress===null?'—':pct(r.progress)}</td>
+      <td>${verwachtingPill(r.verwachting)}</td>
+    </tr>`).join('');
+  $('#modelNote').innerHTML =
+    'Model: een <b>stijging</b> vraagt ongeveer 3,5% van alle managers aan netto instroom (' +
+    nf.format(Math.round((GAME.total_players||0)*0.035)) + ' transfers), een <b>daling</b> ongeveer de helft van de eigenaren netto eruit. ' +
+    'Rijen met “wacht op meting” hadden deze speelronde al een prijswijziging vóór de tracker meekeek — die krijgen een echte meting zodra hun volgende wijziging langskomt. ' +
+    '“Geschat” betekent dat de teller is gevuld met de netto transfers van deze speelronde; “gemeten” betekent dat de tracker de vorige wijziging zelf heeft gezien.';
+}
+$$('#tbl thead th').forEach(th => th.addEventListener('click', () => {
+  const k = th.dataset.sort;
+  SORT = { key:k, dir: SORT.key === k ? -SORT.dir : -1 };
+  renderTable();
+}));
+['#q','#fPos','#fOwn','#fDir'].forEach(s => $(s).addEventListener('input', renderTable));
+
+/* ---------- transfers ---------- */
+function tRow(r, dir){
+  const n = Math.abs(r.net_event);
+  return `<div class="row">
+    <div>
+      <div class="name">${r.web_name} <span class="meta">${r.team_short} · ${POS_SHORT[r.element_type]||''}</span></div>
+      <div class="meta">${eur(r.now_cost)} · ${r.selected_by_percent}% bezit</div>
+    </div>
+    <div class="pct" style="color:var(--${dir})">${signed(r.net_event)}</div>
+    <div class="bar"><i class="${dir}" style="width:${Math.min(n/MAXNET*100,100)}%"></i></div>
+  </div>`;
+}
+let MAXNET = 1;
+function renderTransfers(){
+  const sorted = [...ROWS].sort((a,b) => b.net_event - a.net_event);
+  const ins = sorted.slice(0,10), outs = sorted.slice(-10).reverse();
+  MAXNET = Math.max(1, Math.abs(ins[0]?.net_event||1), Math.abs(outs[0]?.net_event||1));
+  $('#tIn').innerHTML  = ins.map(r => tRow(r,'up')).join('');
+  $('#tOut').innerHTML = outs.map(r => tRow(r,'down')).join('');
+}
+
+/* ---------- metingen ---------- */
+function renderEvents(events){
+  const byId = Object.fromEntries(ROWS.map(r => [r.id, r]));
+  $('#evtTbl tbody').innerHTML = events.length ? events.map(e => {
+    const p = byId[e.player_id];
+    const ratio = e.owners_estimate ? (e.net_since_prev / e.owners_estimate) : null;
+    return `<tr>
+      <td>${p ? p.web_name + ' <span class="meta">' + p.team_short + '</span>' : '#' + e.player_id}</td>
+      <td class="num">${dt(e.detected_at)}</td>
+      <td class="num">${eur(e.old_cost)}</td>
+      <td class="num" style="color:${e.direction>0?'var(--up)':'var(--down)'}">${eur(e.new_cost)}</td>
+      <td class="num">${e.net_since_prev===null?'—':signed(e.net_since_prev)}</td>
+      <td class="num">${e.owners_estimate===null?'—':nf.format(e.owners_estimate)}</td>
+      <td class="num">${ratio===null?'—':ratio.toLocaleString('nl-NL',{maximumFractionDigits:2})}</td>
+    </tr>`;
+  }).join('') : '<tr><td colspan="7" class="empty">Nog geen prijswijziging waargenomen — de eerste komt vanzelf.</td></tr>';
+}
+function renderLogs(logs){
+  $('#logTbl tbody').innerHTML = logs.map(l => `<tr>
+    <td class="num">${dt(l.ran_at)}</td>
+    <td><span class="pill ${l.ok?'up':'down'}">${l.ok?'ok':'fout'}</span></td>
+    <td class="num">${nf.format(l.players_seen||0)}</td>
+    <td class="num">${nf.format(l.snapshots_written||0)}</td>
+    <td class="num">${nf.format(l.price_changes||0)}</td>
+    <td class="num">${l.duration_ms||0} ms</td>
+  </tr>`).join('');
+}
+
+boot();
+</script>
+</body>
+</html>

@@ -131,10 +131,10 @@
     min-width:120px;text-align:center;
   }
   nav.tabs{display:flex;gap:6px;margin-bottom:22px;border-bottom:1px solid var(--line);}
-  nav.tabs button{
+  nav.tabs button, nav.tabs a{
     border:none;background:none;padding:10px 4px;margin-right:18px;
     font-family:'Archivo',sans-serif;font-weight:600;font-size:14px;color:var(--ink-soft);
-    cursor:pointer;border-bottom:2px solid transparent;
+    cursor:pointer;border-bottom:2px solid transparent;text-decoration:none;display:inline-block;
   }
   nav.tabs button.active{color:var(--ink);border-bottom-color:var(--amber);}
 
@@ -262,7 +262,7 @@
     .datenav{width:100%;justify-content:space-between;}
     .datenav button{width:40px;height:40px;font-size:18px;}
     nav.tabs{overflow-x:auto;-webkit-overflow-scrolling:touch;flex-wrap:nowrap;white-space:nowrap;padding-bottom:2px;}
-    nav.tabs button{margin-right:12px;font-size:13px;padding:8px 2px;flex-shrink:0;}
+    nav.tabs button, nav.tabs a{margin-right:12px;font-size:13px;padding:8px 2px;flex-shrink:0;}
     .card{padding:16px;}
     .balans-number{font-size:40px;}
     .form-grid4{grid-template-columns:1fr 1fr;}
@@ -312,6 +312,7 @@
     <button data-tab="geschiedenis">Geschiedenis</button>
     <button data-tab="team">Team</button>
     <button data-tab="prestaties">Prestaties</button>
+    <a href="/overig" id="overigNavLink" style="display:none;">Overig</a>
   </nav>
 
   <!-- DASHBOARD -->
@@ -1118,6 +1119,15 @@ function currentOwner(){
   try{
     return localStorage.getItem('infood-team-name') || null;
   }catch(e){ return null; }
+}
+// De "Overig"-navlink (ESPN Fantasy-prijstracker, /overig.html) is puur een
+// UI-gemak dat alleen voor Nando zichtbaar is -- de echte afscherming zit in
+// de Microsoft-login op die pagina zelf (alleen nandovelis@connectyou.nl mag
+// erin), dit voorkomt alleen dat andere teamleden de link uberhaupt zien.
+function updateOverigLinkVisibility(){
+  const link = document.getElementById('overigNavLink');
+  if(!link) return;
+  link.style.display = (currentOwner()==='Nando') ? '' : 'none';
 }
 
 function dayKey(dateStr){ return 'day-'+dateStr; }
@@ -3782,6 +3792,7 @@ document.getElementById('teamNameSaveBtn').addEventListener('click', async ()=>{
   await saveTeamName(name);
   statusEl.textContent = 'Opgeslagen. Je data wordt gesynchroniseerd.';
   statusEl.classList.remove('status-err');
+  updateOverigLinkVisibility();
   await maybeShowProfileOnboarding(name);
   renderHiddenDefaults();
   checkTredictSyncStatus();
@@ -5193,6 +5204,7 @@ document
   });
 
 (async () => {
+  updateOverigLinkVisibility();
   await checkTredictSyncStatus();
   await renderDashboard();
 })();

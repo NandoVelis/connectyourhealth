@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - 'supabase/functions/sync-tredict/**'
+      - 'supabase/functions/espn-fantasy-sync/**'
   workflow_dispatch: {}
 
 jobs:
@@ -19,5 +20,10 @@ jobs:
 
       - name: Deploy sync-tredict
         run: supabase functions deploy sync-tredict --project-ref mhvduufxeqyxgkkvwimx
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+
+      - name: Deploy espn-fantasy-sync
+        run: supabase functions deploy espn-fantasy-sync --project-ref mhvduufxeqyxgkkvwimx --no-verify-jwt
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
