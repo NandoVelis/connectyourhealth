@@ -1124,10 +1124,10 @@ function currentOwner(){
 // aan inloggen gekoppeld i.p.v. aan de vrij-invulbare teamnaam: /overig.html
 // logt in via Supabase's e-mail-magic-link (zelfde Supabase-project, dus
 // zelfde browser-sessie op hetzelfde domein) en staat alleen
-// nandovelis@connectyou.nl toe. Hier checken we diezelfde sessie -- geen
+// nandovelis@gmail.com toe. Hier checken we diezelfde sessie -- geen
 // geldige, toegestane sessie betekent geen zichtbare link, ook al staat de
 // teamnaam op "Nando".
-const OVERIG_ALLOWED_EMAILS = ['nandovelis@connectyou.nl'];
+const OVERIG_ALLOWED_EMAILS = ['nandovelis@gmail.com'];
 async function updateOverigLinkVisibility(){
   const link = document.getElementById('overigNavLink');
   if(!link) return;
