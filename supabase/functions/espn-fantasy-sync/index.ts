@@ -124,7 +124,17 @@ Deno.serve(async (req: Request) => {
     for (const t of data.teams ?? []) teams[t.id] = t.short_name;
     seen = elements.length;
 
-    const teamRows = (data.teams ?? []).map((t: any) => ({ id: t.id, name: t.name, short_name: t.short_name }));
+    const teamRows = (data.teams ?? []).map((t: any) => ({
+      id: t.id,
+      name: t.name,
+      short_name: t.short_name,
+      position: t.position ?? null,
+      points: t.points ?? null,
+      played: t.played ?? null,
+      win: t.win ?? null,
+      draw: t.draw ?? null,
+      loss: t.loss ?? null,
+    }));
     await sbPost("espn_teams", teamRows, "return=minimal,resolution=merge-duplicates");
 
     const cur = (data.events ?? []).find((e: any) => e.is_current);

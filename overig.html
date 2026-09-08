@@ -257,6 +257,7 @@
           <option value="ownership">Bezit%</option>
           <option value="price">Prijswijziging</option>
           <option value="form">Vorm</option>
+          <option value="fixture">Volgende wedstrijd</option>
         </select>
       </div>
       <div id="myTeamPitch"><div class="empty">Laden…</div></div>
@@ -706,6 +707,12 @@ function renderMyTeam(team){
       }
       case 'form':
         return `<div class="ptrend">${r.pl.form!=null ? r.pl.form : '—'}</div>`;
+      case 'fixture': {
+        const fx = nextFixturesForTeam(r.pl.team_id);
+        if (!fx.length) return `<div class="ptrend" style="color:var(--muted)">—</div>`;
+        const label = fx.map(f => `${(TEAMS[f.opponentId]||{}).short_name || '?'} (${f.home?'T':'U'})`).join(', ');
+        return `<div class="ptrend">${label}</div>`;
+      }
       default:
         return `<div class="ptrend">${nf.format((r.pl.event_points||0)*r.multiplier)} pt</div>`;
     }
@@ -757,6 +764,20 @@ $('#pitchStat').addEventListener('change', () => {
 // door het aantal wissels; dit houdt geen rekening met de verkoopwaarde
 // van een speler die je laat gaan (die data heeft de API niet openbaar),
 // dus is een ondergrens, geen exacte prijs.
+// Eerstvolgende, nog niet gespeelde wedstrijd(en) van een team -- meerdere
+// bij een dubbele speelronde. Let op: de ESPN Eredivisie Fantasy-API levert
+// (nog) geen teamsterkte/stand-data, dus er is geen betrouwbare
+// moeilijkheidsgraad (FDR) te berekenen -- dit toont daarom alleen de
+// tegenstander(s), niet hoe zwaar de wedstrijd is.
+function nextFixturesForTeam(teamId){
+  const relevant = FIXTURES.filter(f => f.team_h===teamId || f.team_a===teamId);
+  if(!relevant.length) return [];
+  const minEvent = Math.min(...relevant.map(f=>f.event));
+  return relevant.filter(f=>f.event===minEvent).map(f => ({
+    opponentId: f.team_h===teamId ? f.team_a : f.team_h,
+    home: f.team_h===teamId,
+  }));
+}
 function fixturesCountByTeam(windowSize){
   const startEvent = GAME.next_event || ((GAME.current_event||0)+1);
   const endEvent = startEvent + windowSize - 1;
