@@ -3879,6 +3879,7 @@ async function renderPersonalPeriod(days, labelElId, bodyElId, label){
   document.getElementById(labelElId).textContent = label;
 
   const dayNames = ['zo','ma','di','wo','do','vr','za'];
+  const owner = currentOwner();
   const agg = { weights:[], hrRests:[], hrvs:[], sleepMins:[], kcalIns:0, proteins:0, fats:0, burnedTotal:0, scores:[] };
   let rows = '';
   for(const d of days){
@@ -3888,7 +3889,21 @@ async function renderPersonalPeriod(days, labelElId, bodyElId, label){
     const meals = await loadMeals(dateStr);
     const macros = macroKcal(meals);
     const training = await loadTraining(dateStr);
-    const burned = training ? (training.totalKcal||0) : 0;
+    // Zelfde stappen-naar-kcal-logica als het dagoverzicht: telt mee bovenop
+    // de gesynchroniseerde training, met de eigen hardloopstappen eraf
+    // getrokken op trainingsdagen om dubbeltelling te voorkomen.
+    let extraStepsKcal = 0;
+    const stepsWeightKg = (w && w.kg) ? w.kg : null;
+    if(stepsWeightKg && owner){
+      const garminSteps = await loadGarminStepsForDate(owner, dateStr);
+      if(garminSteps && garminSteps.steps_total!=null){
+        const relevantSteps = training
+          ? Math.max(0, garminSteps.steps_total - (garminSteps.steps_training||0))
+          : garminSteps.steps_total;
+        extraStepsKcal = extraKcalFromSteps(relevantSteps, stepsWeightKg);
+      }
+    }
+    const burned = (training ? (training.totalKcal||0) : 0) + extraStepsKcal;
     const balans = macros.kcal - burned;
     const {score} = computeDagscore(macros.kcal, training, c);
 
@@ -5012,7 +5027,20 @@ async function renderHistory(){
       const meals = await loadMeals(dateStr);
       const totals = macroKcal(meals);
       const training = await loadTraining(dateStr);
-      const burned = training ? (training.totalKcal||0) : 0;
+      // Zelfde stappen-naar-kcal-logica als het dagoverzicht.
+      let extraStepsKcal = 0;
+      const weightEntry = await loadWeight(dateStr);
+      const stepsWeightKg = (weightEntry && weightEntry.kg) ? weightEntry.kg : null;
+      if(stepsWeightKg){
+        const garminSteps = await loadGarminStepsForDate(owner, dateStr);
+        if(garminSteps && garminSteps.steps_total!=null){
+          const relevantSteps = training
+            ? Math.max(0, garminSteps.steps_total - (garminSteps.steps_training||0))
+            : garminSteps.steps_total;
+          extraStepsKcal = extraKcalFromSteps(relevantSteps, stepsWeightKg);
+        }
+      }
+      const burned = (training ? (training.totalKcal||0) : 0) + extraStepsKcal;
       const balans = totals.kcal - burned;
       rows += `<tr>
         <td class="desc-cell">${dateStr}</td>
