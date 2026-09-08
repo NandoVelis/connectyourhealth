@@ -1122,12 +1122,12 @@ function currentOwner(){
 }
 // De "Overig"-navlink (ESPN Fantasy-prijstracker, /overig.html) is nu echt
 // aan inloggen gekoppeld i.p.v. aan de vrij-invulbare teamnaam: /overig.html
-// logt in via Supabase's e-mail-magic-link (zelfde Supabase-project, dus
-// zelfde browser-sessie op hetzelfde domein) en staat alleen
-// nandovelis@gmail.com toe. Hier checken we diezelfde sessie -- geen
+// logt in via Supabase (zelfde Supabase-project, dus zelfde browser-sessie
+// op hetzelfde domein) en staat alleen de e-mailadressen in
+// OVERIG_ALLOWED_EMAILS toe. Hier checken we diezelfde sessie -- geen
 // geldige, toegestane sessie betekent geen zichtbare link, ook al staat de
 // teamnaam op "Nando".
-const OVERIG_ALLOWED_EMAILS = ['nandovelis@gmail.com'];
+const OVERIG_ALLOWED_EMAILS = ['nandovelis@gmail.com', 'duncanvelis@ziggo.nl'];
 async function updateOverigLinkVisibility(){
   const link = document.getElementById('overigNavLink');
   if(!link) return;
