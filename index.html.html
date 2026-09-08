@@ -2077,7 +2077,12 @@ function renderTrainingProgressTable(activities, days){
   // tekst bij de trend scheelt dit genoeg breedte om de tabel op mobiel
   // zonder horizontaal scrollen te laten passen.
   const shortLabel = (label) => label.replace(/\s*\(.*\)/, '');
-  const rows = rowsData.map(({cluster:c, sorted, lastPace, trendPct, hrFirst, hrLast})=>{
+  // Elke rij is uitklapbaar (klik op de rij) en toont dan de losse
+  // activiteiten van dat type, nieuwste eerst: datum, afstand, tijd (de
+  // daadwerkelijke duur van die activiteit in uren/minuten, via
+  // formatMinutes -- de hoofdtabel zelf toont alleen tempo, geen tijd), en
+  // hartslag.
+  const rows = rowsData.map(({cluster:c, sorted, lastPace, trendPct, hrFirst, hrLast}, idx)=>{
     let trendHtml = '<span style="color:var(--ink-soft);" title="Onvoldoende data">&mdash;</span>';
     if(trendPct!=null){
       if(trendPct > 2) trendHtml = `<span style="color:#1E9E4A;font-size:16px;" title="${trendPct.toFixed(1)}% sneller geworden">&#9650;</span>`;
@@ -2090,11 +2095,33 @@ function renderTrainingProgressTable(activities, days){
         ${paceSparklineSvg(sorted, days)}
         <span style="font-size:10px;color:var(--ink);white-space:nowrap;">${formatPaceMinPerKm(lastPace)}</span>
       </div>`;
-    return `<tr>
-      <td class="desc-cell" style="padding:6px 4px;">${escapeHtml(shortLabel(c.label))}<br><span style="font-size:10px;color:var(--ink-soft);">${c.runs.length}x</span></td>
+    const activityRows = [...sorted].reverse().map(a=>{
+      const d = new Date(a.date+'T12:00:00');
+      const dateLabel = d.toLocaleDateString('nl-NL',{day:'numeric',month:'short'});
+      const pace = formatPace(a.km, a.minutes);
+      const tijd = formatMinutes(a.minutes);
+      const hr = a.avgHeartrate!=null ? Math.round(a.avgHeartrate)+' bpm' : '&mdash;';
+      return `<div style="display:flex;justify-content:space-between;gap:8px;padding:4px 0;border-bottom:1px solid var(--line);font-size:11px;">
+        <span style="color:var(--ink-soft);white-space:nowrap;">${escapeHtml(dateLabel)}</span>
+        <span style="white-space:nowrap;">${Number(a.km).toFixed(1)}km</span>
+        <span style="white-space:nowrap;">${tijd||'&mdash;'}</span>
+        <span style="white-space:nowrap;">${pace||'&mdash;'}</span>
+        <span style="white-space:nowrap;color:var(--ink-soft);">${hr}</span>
+      </div>`;
+    }).join('');
+    return `<tr class="progress-row-toggle" data-idx="${idx}" style="cursor:pointer;">
+      <td class="desc-cell" style="padding:6px 4px;"><span class="progress-row-chevron" data-idx="${idx}" style="display:inline-block;transition:transform .15s;margin-right:2px;">&#9656;</span>${escapeHtml(shortLabel(c.label))}<br><span style="font-size:10px;color:var(--ink-soft);margin-left:14px;">${c.runs.length}x</span></td>
       <td style="padding:6px 4px;">${tempoCell}</td>
       <td style="padding:6px 4px;text-align:center;">${trendHtml}</td>
       <td style="padding:6px 4px;font-size:11px;white-space:nowrap;">${hrText}</td>
+    </tr>
+    <tr class="progress-row-detail" data-idx="${idx}" style="display:none;">
+      <td colspan="4" style="padding:2px 4px 10px 22px;">
+        <div style="display:flex;justify-content:space-between;gap:8px;padding-bottom:2px;font-size:10px;color:var(--ink-soft);font-weight:600;">
+          <span>Datum</span><span>Afstand</span><span>Tijd</span><span>Tempo</span><span>Hartslag</span>
+        </div>
+        ${activityRows}
+      </td>
     </tr>`;
   }).join('');
   el.innerHTML = `<div style="display:flex;gap:14px;font-size:11px;color:var(--ink-soft);margin-bottom:8px;flex-wrap:wrap;">
@@ -2110,6 +2137,17 @@ function renderTrainingProgressTable(activities, days){
     </tr></thead>
     <tbody>${rows}</tbody>
   </table>`;
+  el.querySelectorAll('.progress-row-toggle').forEach(row=>{
+    row.addEventListener('click', ()=>{
+      const idx = row.getAttribute('data-idx');
+      const detail = el.querySelector(`.progress-row-detail[data-idx="${idx}"]`);
+      const chevron = el.querySelector(`.progress-row-chevron[data-idx="${idx}"]`);
+      if(!detail) return;
+      const open = detail.style.display !== 'none';
+      detail.style.display = open ? 'none' : 'table-row';
+      if(chevron) chevron.style.transform = open ? '' : 'rotate(90deg)';
+    });
+  });
 }
 
 // Testkoppeling naast Tredict (zie scripts/sync_garmin.py): toont de
