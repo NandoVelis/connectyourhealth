@@ -115,7 +115,7 @@
   .shirt .pname{font-size:11px;font-weight:700;margin-top:5px;color:#fff;line-height:1.15;
     text-shadow:0 1px 2px rgba(0,0,0,.4);word-break:break-word}
   .shirt .pteam{font-size:9px;color:rgba(255,255,255,.8);margin-top:1px}
-  .shirt .ptrend{font-size:9px;font-weight:800;margin-top:2px}
+  .shirt .ptrend{font-size:9px;font-weight:800;margin-top:2px;color:#fff}
   .pitch-bench{display:flex;justify-content:center;gap:8px;flex-wrap:wrap;padding:12px 4px 2px}
 
   /* ---------- filters + table ---------- */
@@ -170,6 +170,7 @@
     <div class="spacer"></div>
     <div class="who" id="who"></div>
     <button class="ghost" id="syncNowBtn">&#8635; Sync nu</button>
+    <button class="ghost" id="pushBtn" hidden>&#128276; Pushmeldingen</button>
     <button class="ghost" id="logoutBtn">Uitloggen</button>
   </header>
 
@@ -246,9 +247,17 @@
     <div class="card" style="margin-bottom:16px">
       <h3>Selectie</h3>
       <p class="hint">Basisopstelling bovenaan, bank onderaan. C = kapitein (dubbele punten), VC = vice-kapitein.</p>
-      <div class="viewToggle" role="tablist">
-        <button type="button" data-squadview="pitch" aria-selected="true">Opstelling</button>
-        <button type="button" data-squadview="list" aria-selected="false">Lijst</button>
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:14px">
+        <div class="viewToggle" role="tablist" style="margin-bottom:0">
+          <button type="button" data-squadview="pitch" aria-selected="true">Opstelling</button>
+          <button type="button" data-squadview="list" aria-selected="false">Lijst</button>
+        </div>
+        <select id="pitchStat">
+          <option value="points">Punten</option>
+          <option value="ownership">Bezit%</option>
+          <option value="price">Prijswijziging</option>
+          <option value="form">Vorm</option>
+        </select>
       </div>
       <div id="myTeamPitch"><div class="empty">Laden…</div></div>
       <div id="myTeamSquad" hidden><div class="empty">Laden…</div></div>
@@ -368,6 +377,10 @@ const ALLOWED       = ['nandovelis@gmail.com', 'duncanvelis@ziggo.nl'];   // wie
 const EMAIL_TO_ENTRY = { 'nandovelis@gmail.com': 28264, 'duncanvelis@ziggo.nl': 2640 };
 const POS           = {1:'Keeper',2:'Verdediger',3:'Middenvelder',4:'Spits'};
 const POS_SHORT     = {1:'KEE',2:'VER',3:'MID',4:'SPI'};
+// Publieke VAPID-sleutel voor pushmeldingen -- veilig om in de frontend te
+// staan (de private sleutel staat alleen als Supabase-secret, gebruikt door
+// de sync edge function om daadwerkelijk pushberichten te ondertekenen/versturen).
+const VAPID_PUBLIC_KEY = 'BDt4ttXuidOeNuD4lYBoHDe-amA7PxaBx3PYSXRdR31rKUdDUxDdvelHbD8eOOj5sHLHo0xkDylrtw2xgvQmrDs';
 
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 const $  = (s,r=document)=>r.querySelector(s);
@@ -466,6 +479,83 @@ $('#syncNowBtn').addEventListener('click', async () => {
 });
 
 /* =========================================================================
+   PUSHMELDINGEN
+   ========================================================================= */
+function urlBase64ToUint8Array(base64String){
+  const padding = '='.repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding).replace(/-/g,'+').replace(/_/g,'/');
+  const rawData = atob(base64);
+  return Uint8Array.from([...rawData].map(c => c.charCodeAt(0)));
+}
+async function refreshPushButtonState(){
+  const btn = $('#pushBtn');
+  if (!CURRENT_EMAIL || !('serviceWorker' in navigator) || !('PushManager' in window)){
+    btn.hidden = true;
+    return;
+  }
+  btn.hidden = false;
+  try{
+    const reg = await navigator.serviceWorker.getRegistration('/sw-overig.js');
+    const sub = reg && await reg.pushManager.getSubscription();
+    btn.textContent = sub ? '\u{1F514} Pushmeldingen: aan' : '\u{1F514} Pushmeldingen aanzetten';
+  }catch{
+    btn.textContent = '\u{1F514} Pushmeldingen aanzetten';
+  }
+}
+async function subscribePush(){
+  const reg = await navigator.serviceWorker.register('/sw-overig.js');
+  await navigator.serviceWorker.ready;
+  const perm = await Notification.requestPermission();
+  if (perm !== 'granted') throw new Error('Toestemming voor meldingen geweigerd.');
+  let sub = await reg.pushManager.getSubscription();
+  if (!sub){
+    sub = await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
+    });
+  }
+  const json = sub.toJSON();
+  const { data:{ session } } = await sb.auth.getSession();
+  const token = session?.access_token || SUPABASE_KEY;
+  const r = await fetch(SUPABASE_URL + '/rest/v1/espn_push_subscriptions', {
+    method: 'POST',
+    headers: {
+      apikey: SUPABASE_KEY, Authorization: 'Bearer ' + token,
+      'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates,return=minimal',
+    },
+    body: JSON.stringify([{ endpoint: json.endpoint, alert_email: CURRENT_EMAIL, p256dh: json.keys.p256dh, auth: json.keys.auth }]),
+  });
+  if (!r.ok) throw new Error('Opslaan van subscription mislukt: ' + r.status + ' ' + (await r.text()).slice(0,160));
+}
+async function unsubscribePush(){
+  const reg = await navigator.serviceWorker.getRegistration('/sw-overig.js');
+  const sub = reg && await reg.pushManager.getSubscription();
+  if (!sub) return;
+  const endpoint = sub.endpoint;
+  await sub.unsubscribe();
+  const { data:{ session } } = await sb.auth.getSession();
+  const token = session?.access_token || SUPABASE_KEY;
+  await fetch(SUPABASE_URL + '/rest/v1/espn_push_subscriptions?endpoint=eq.' + encodeURIComponent(endpoint), {
+    method: 'DELETE',
+    headers: { apikey: SUPABASE_KEY, Authorization: 'Bearer ' + token },
+  });
+}
+$('#pushBtn').addEventListener('click', async () => {
+  const btn = $('#pushBtn');
+  btn.disabled = true;
+  try{
+    const reg = await navigator.serviceWorker.getRegistration('/sw-overig.js');
+    const sub = reg && await reg.pushManager.getSubscription();
+    if (sub) await unsubscribePush(); else await subscribePush();
+  }catch(e){
+    alert('Pushmeldingen instellen mislukt: ' + e.message);
+  }finally{
+    btn.disabled = false;
+    await refreshPushButtonState();
+  }
+});
+
+/* =========================================================================
    TABS
    ========================================================================= */
 $$('nav.tabs button').forEach(b => b.addEventListener('click', () => {
@@ -478,12 +568,16 @@ $$('nav.tabs button').forEach(b => b.addEventListener('click', () => {
    ========================================================================= */
 let ROWS = [], GAME = {}, SORT = { key:'progress_signed', dir:-1 };
 let MY_ENTRY_ID = null;
+let CURRENT_EMAIL = null;
+let PITCH_STAT = 'points';
 
 async function start(who){
   $('#gate').hidden = true;
   $('#app').hidden = false;
   $('#who').textContent = who;
   MY_ENTRY_ID = EMAIL_TO_ENTRY[who] || null;
+  CURRENT_EMAIL = ALLOWED.includes(who) ? who : null;
+  refreshPushButtonState();
   await load();
 }
 
@@ -599,17 +693,31 @@ function renderMyTeam(team){
   // Opstelling (pitch view): spelers gegroepeerd per positie, in
   // speelvolgorde keeper -> verdediging -> middenveld -> aanval,
   // zoals in de ESPN-app zelf.
+  const statBadge = r => {
+    switch (PITCH_STAT){
+      case 'ownership':
+        return `<div class="ptrend">${r.pl.selected_by_percent}%</div>`;
+      case 'price': {
+        const v = r.pl.verwachting;
+        const trending = v && v !== 'stabiel' && v !== 'onbekend' && r.pl.progress != null;
+        if (!trending) return `<div class="ptrend" style="color:var(--muted)">stabiel</div>`;
+        const dir = (v === 'stijgt' || v === 'stijgt bijna') ? 'up' : 'down';
+        return `<div class="ptrend" style="color:var(--${dir})">${dir==='up'?'&#9650;':'&#9660;'} ${pct(r.pl.progress)}</div>`;
+      }
+      case 'form':
+        return `<div class="ptrend">${r.pl.form!=null ? r.pl.form : '—'}</div>`;
+      default:
+        return `<div class="ptrend">${nf.format((r.pl.event_points||0)*r.multiplier)} pt</div>`;
+    }
+  };
   const shirtCard = (r, bench) => {
-    const v = r.pl.verwachting;
-    const trending = v && v !== 'stabiel' && v !== 'onbekend' && r.pl.progress != null;
-    const dir = trending ? (v === 'stijgt' || v === 'stijgt bijna' ? 'up' : 'down') : null;
     const initials = (r.pl.web_name||'?').split(/\s+/).map(w=>w[0]).join('').slice(0,3).toUpperCase();
     const badgeLetter = r.is_captain ? 'C' : (r.is_vice_captain ? 'VC' : null);
     return `<div class="shirt">
       <div class="jersey${bench?' bench':''}">${initials}${badgeLetter ? `<span class="badge">${badgeLetter}</span>` : ''}</div>
       <div class="pname">${r.pl.web_name}</div>
       <div class="pteam">${r.pl.team_short}${r.multiplier>1?' &middot;x'+r.multiplier:''}</div>
-      ${trending ? `<div class="ptrend" style="color:var(--${dir})">${dir==='up'?'&#9650;':'&#9660;'} ${pct(r.pl.progress)}</div>` : ''}
+      ${statBadge(r)}
     </div>`;
   };
   const pitchRows = [1,2,3,4].map(pt => {
@@ -636,6 +744,10 @@ $$('[data-squadview]').forEach(btn => btn.addEventListener('click', () => {
   $('#myTeamPitch').hidden = view !== 'pitch';
   $('#myTeamSquad').hidden = view !== 'list';
 }));
+$('#pitchStat').addEventListener('change', () => {
+  PITCH_STAT = $('#pitchStat').value;
+  renderMyTeam(MY_TEAM);
+});
 
 /* ---------- transfersuggesties ---------- */
 // Telt per club het aantal wedstrijden in de komende N speelronden (vanaf

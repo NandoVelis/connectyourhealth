@@ -2,8 +2,10 @@
 // Haalt bootstrap-static op, schrijft snapshots van gewijzigde spelers weg
 // en detecteert prijswijzigingen. Bedoeld om elke 15 min door pg_cron te draaien.
 // Synct daarnaast de eigen teams van elke gebruiker met toegang tot /overig
-// (publiek leesbare endpoints, geen ESPN-login nodig) en mailt een
+// (publiek leesbare endpoints, geen ESPN-login nodig) en mailt/pusht een
 // prijswaarschuwing naar het bijbehorende e-mailadres.
+
+import webpush from "npm:web-push@3.6.7";
 
 const API = "https://fantasy.espngoal.nl/api/bootstrap-static/";
 // Elke gebruiker met toegang tot /overig heeft hier zijn eigen ESPN Fantasy
@@ -57,6 +59,49 @@ const num = (v: unknown) => {
   const n = parseFloat(String(v ?? ""));
   return Number.isFinite(n) ? n : null;
 };
+
+// ---- PUSHMELDINGEN (Web Push) ----
+// Alleen actief als de VAPID-sleutels als Supabase-secrets gezet zijn
+// (Edge Functions -> Manage secrets: VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY,
+// optioneel VAPID_SUBJECT) -- zonder die secrets slaat dit stil over, net
+// als de e-mailwaarschuwing zonder RESEND_API_KEY.
+const vapidPublic = Deno.env.get("VAPID_PUBLIC_KEY");
+const vapidPrivate = Deno.env.get("VAPID_PRIVATE_KEY");
+const vapidSubject = Deno.env.get("VAPID_SUBJECT") || "mailto:nandovelis@gmail.com";
+if (vapidPublic && vapidPrivate) {
+  webpush.setVapidDetails(vapidSubject, vapidPublic, vapidPrivate);
+}
+
+async function sendPush(alertEmail: string, title: string, body: string, url = "/overig") {
+  if (!vapidPublic || !vapidPrivate) return;
+  try {
+    const subs: any[] = await sbGet(
+      `espn_push_subscriptions?select=endpoint,p256dh,auth&alert_email=eq.${encodeURIComponent(alertEmail)}`,
+    );
+    for (const s of subs) {
+      try {
+        await webpush.sendNotification(
+          { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } },
+          JSON.stringify({ title, body, url }),
+        );
+      } catch (e: any) {
+        // Verlopen/ingetrokken subscription (bv. gebruiker heeft meldingen
+        // uitgezet in de browser) -- opruimen zodat we 'm niet blijven
+        // proberen.
+        if (e?.statusCode === 404 || e?.statusCode === 410) {
+          await fetch(
+            `${SB_URL}/rest/v1/espn_push_subscriptions?endpoint=eq.${encodeURIComponent(s.endpoint)}`,
+            { method: "DELETE", headers: sbHeaders() },
+          );
+        } else {
+          console.warn(`Push naar ${alertEmail} mislukt: ${String(e)}`);
+        }
+      }
+    }
+  } catch (e) {
+    console.warn(`Push-lookup (${alertEmail}) mislukt: ${String(e)}`);
+  }
+}
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
@@ -336,6 +381,11 @@ Deno.serve(async (req: Request) => {
                       `Deze spelers in het gevolgde team staan dicht bij een prijswijziging:\n\n${lines}\n\nBekijk het overzicht: https://connectyourhealth.vercel.app/overig`,
                   }),
                 });
+                await sendPush(
+                  alertEmail,
+                  `${toAlert.length} speler(s) dreigen van prijs te veranderen`,
+                  toAlert.map((t) => `${t.web_name}: ${t.verwachting}`).join(", "),
+                );
                 if (mailRes.ok) {
                   await sbPost(
                     "espn_price_alerts_sent",
@@ -403,6 +453,11 @@ Deno.serve(async (req: Request) => {
                     `Deze spelers staan op 90% of meer richting een prijswijziging (ongeacht of ze in een van jullie teams zitten):\n\n${lines}\n\nBekijk het overzicht: https://connectyourhealth.vercel.app/overig`,
                 }),
               });
+              await sendPush(
+                GLOBAL_WATCH_EMAIL,
+                `${toAlert.length} speler(s) op 90%+ richting een prijswijziging`,
+                toAlert.map((t) => `${t.web_name}: ${t.verwachting}`).join(", "),
+              );
               if (mailRes.ok) {
                 await sbPost(
                   "espn_price_alerts_sent",
