@@ -1,5 +1,6 @@
 {
   "rewrites": [
-    { "source": "/overig", "destination": "/overig.html" }
+    { "source": "/overig", "destination": "/overig.html" },
+    { "source": "/overig/", "destination": "/overig.html" }
   ]
 }
