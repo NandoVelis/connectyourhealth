@@ -388,7 +388,11 @@ Deno.serve(async (req) => {
         .limit(1)
         .maybeSingle();
       const weightKg = weightRow?.kg || 63;
-      const restKcal = Math.round(calculateBMR(weightKg, new Date(dateStr)) * 1.31);
+      // 1.2 = puur sedentair (BMR x 1.2, geen dagelijkse basisbeweging erin
+      // verrekend). Voorheen 1.31, wat al wat basisbeweging veronderstelde --
+      // nu telt de app losse stappen apart en volledig mee (extraKcalFromSteps
+      // in index.html.html), dus geen ingebakken "gratis" stappen meer nodig.
+      const restKcal = Math.round(calculateBMR(weightKg, new Date(dateStr)) * 1.2);
       const totalKcal = restKcal + activityKcalSum;
 
       await supabase
@@ -527,7 +531,11 @@ Deno.serve(async (req) => {
       const consumedKcal = mealsKcalByDate.get(dateStr) || 0;
 
       const weightKg = weightOnOrBefore(dateStr);
-      const restKcal = Math.round(calculateBMR(weightKg, new Date(dateStr)) * 1.31);
+      // 1.2 = puur sedentair (BMR x 1.2, geen dagelijkse basisbeweging erin
+      // verrekend). Voorheen 1.31, wat al wat basisbeweging veronderstelde --
+      // nu telt de app losse stappen apart en volledig mee (extraKcalFromSteps
+      // in index.html.html), dus geen ingebakken "gratis" stappen meer nodig.
+      const restKcal = Math.round(calculateBMR(weightKg, new Date(dateStr)) * 1.2);
       const totalKcal = restKcal + activityKcalSum;
 
       const dagscore = computeDagscoreServer(

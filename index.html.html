@@ -2448,11 +2448,16 @@ function macroKcal(meals){
   };
 }
 
-// Schat het dagelijkse rustverbruik (Mifflin-St Jeor x 1.31 zoals de
+// Schat het dagelijkse rustverbruik (Mifflin-St Jeor x 1.2 zoals de
 // Tredict-sync serverside doet) zodat er ook zonder sync al een grove
 // dagelijkse kcal-behoefte is -- iedereen verbrandt immers kcal in rust,
 // ook zonder te sporten. Wordt alleen gebruikt als er nog geen echte
 // Tredict-data voor die dag is.
+// Factor 1.2 = puur sedentair (geen dagelijkse basisbeweging erin verrekend)
+// i.p.v. de eerdere 1.31 (die al wat basisbeweging veronderstelde) -- nu
+// tellen ALLE gelogde stappen apart mee via extraKcalFromSteps() zonder
+// dubbeltelling, i.p.v. dat de eerste ~5000 stappen "gratis" in deze factor
+// zaten en pas stappen daarboven apart meetelden.
 function estimateRestKcalFromProfile(weightKg, birthdateStr, heightCm){
   if(!weightKg || !birthdateStr || !heightCm) return null;
   const birth = new Date(birthdateStr);
@@ -2461,7 +2466,7 @@ function estimateRestKcalFromProfile(weightKg, birthdateStr, heightCm){
   const m = now.getMonth() - birth.getMonth();
   if(m<0 || (m===0 && now.getDate()<birth.getDate())) age--;
   const bmr = 10*weightKg + 6.25*heightCm - 5*age + 5;
-  return Math.round(bmr*1.31);
+  return Math.round(bmr*1.2);
 }
 
 // Berekent iemands gemiddelde hardloopstatistieken op basis van zijn eigen
@@ -2544,10 +2549,10 @@ async function renderDashboard(){
   // Garmin al aan de hardloopsessie zelf toeschrijft eraf (anders tel je die
   // kcal dubbel: eenmaal via de gesynchroniseerde training, eenmaal via losse
   // stappen); zonder training is er geen aparte trainings-kcal om mee te
-  // overlappen, dus tellen alle stappen van vandaag mee. In beide gevallen
-  // telt alleen het deel boven STEPS_BASELINE mee als extra kcal, zie
-  // extraKcalFromSteps() voor hoe dubbeltelling met het geschatte
-  // rustverbruik wordt voorkomen.
+  // overlappen, dus tellen alle stappen van vandaag mee. Geen aparte
+  // "gratis" baseline meer nodig -- het rustverbruik zelf gaat al uit van
+  // BMR x 1.2 (puur sedentair), dus elke stap telt gewoon mee, zie
+  // extraKcalFromSteps() voor hoe dubbeltelling wordt voorkomen.
   let extraStepsKcal = 0;
   let trainingExtraStepsKcal = 0;
   let garminStepsToday = null;
@@ -2581,7 +2586,6 @@ async function renderDashboard(){
       <div class="stat-row" style="border-top:1px solid var(--line);margin-top:10px;padding-top:10px;flex-direction:column;align-items:stretch;gap:6px;border-bottom:none;">
         <span class="stat-label">&#128099; Stappen vandaag (Garmin)</span>
         <span class="stat-val">${garminStepsToday && garminStepsToday.steps_total!=null ? garminStepsToday.steps_total.toLocaleString('nl-NL') : '—'}${extraStepsKcal>0 ? ` &middot; +${extraStepsKcal} kcal extra verbrand` : ''}</span>
-        <div class="meal-meta" style="margin:0;">De eerste ${STEPS_BASELINE.toLocaleString('nl-NL')} stappen zitten al in het geschatte rustverbruik hierboven &mdash; alleen stappen daarboven tellen als extra verbruik mee, om dubbeltelling te voorkomen.</div>
       </div>`;
   } else if(!training){
     detailEl.innerHTML = '<div class="empty">Nog niet opgehaald voor deze dag.</div>';
@@ -3037,19 +3041,15 @@ async function saveWeight(dateStr, kg){
   }catch(e){ console.error('saveWeight exception', e); return false; }
 }
 
-// Rekent stappen om naar EXTRA verbrande kcal, bovenop wat het geschatte
-// rustverbruik (BMR x 1.31) al impliciet meerekent. De 1.31-factor zit
-// tussen "sedentair" (1.2) en "licht actief" (1.375) in en veronderstelt
-// dus al wat dagelijkse basisbeweging -- vandaar dat alleen stappen BOVEN
-// een baseline van 5000 (de gangbare grens voor een sedentaire dag) als
-// extra kcal meetellen, i.p.v. alle stappen los te berekenen en dat
-// bovenop het rustverbruik te tellen (dubbeltelling).
-const STEPS_BASELINE = 5000;
+// Rekent stappen om naar EXTRA verbrande kcal, bovenop het geschatte
+// rustverbruik. Het rustverbruik zelf gaat uit van BMR x 1.2 (puur
+// sedentair, geen dagelijkse basisbeweging erin verrekend) -- dus geen
+// aparte "gratis" baseline aan stappen meer nodig om dubbeltelling te
+// voorkomen: ELKE gelogde stap telt hier gewoon mee.
 const KCAL_PER_STEP_PER_KG = 0.0005;
 function extraKcalFromSteps(steps, weightKg){
   if(!steps || !weightKg) return 0;
-  const extraSteps = Math.max(0, steps - STEPS_BASELINE);
-  return Math.round(extraSteps * KCAL_PER_STEP_PER_KG * weightKg);
+  return Math.round(steps * KCAL_PER_STEP_PER_KG * weightKg);
 }
 
 function trainingDistanceKm(training){
