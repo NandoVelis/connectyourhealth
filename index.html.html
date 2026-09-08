@@ -2505,27 +2505,27 @@ async function renderDashboard(){
       }
     }
   }
-  // Stappen zijn alleen relevant op dagen zonder Tredict-training (anders
-  // telt de wandeling al mee via een gesynchroniseerde activiteit) -- zie
+  // Stappen komen nu altijd automatisch uit Garmin, geen handmatige invoer
+  // meer nodig. Op dagen MET Tredict-training trekken we de stappen die
+  // Garmin al aan de hardloopsessie zelf toeschrijft eraf (anders tel je die
+  // kcal dubbel: eenmaal via de gesynchroniseerde training, eenmaal via losse
+  // stappen); zonder training is er geen aparte trainings-kcal om mee te
+  // overlappen, dus tellen alle stappen van vandaag mee. In beide gevallen
+  // telt alleen het deel boven STEPS_BASELINE mee als extra kcal, zie
   // extraKcalFromSteps() voor hoe dubbeltelling met het geschatte
   // rustverbruik wordt voorkomen.
-  const loggedSteps = !training ? await loadSteps(dateStr) : null;
-  const extraStepsKcal = (!training && loggedSteps && stepsWeightKg) ? extraKcalFromSteps(loggedSteps, stepsWeightKg) : 0;
-  if(extraStepsKcal>0 && burned!=null) burned += extraStepsKcal;
-
-  // Op dagen MET Tredict-training vullen we stappen automatisch aan vanuit
-  // Garmin i.p.v. handmatige invoer. De stappen die Garmin al toeschrijft
-  // aan de hardloopsessie zelf trekken we eraf (anders tel je die kcal
-  // dubbel: eenmaal via de gesynchroniseerde training, eenmaal via losse
-  // stappen) -- en van de rest tellen, net als bij handmatige invoer, alleen
-  // stappen boven STEPS_BASELINE mee.
+  let extraStepsKcal = 0;
   let trainingExtraStepsKcal = 0;
-  if(training && stepsWeightKg){
-    const garminSteps = await loadGarminStepsForDate(owner, dateStr);
-    if(garminSteps && garminSteps.steps_total!=null){
-      const nonRunSteps = Math.max(0, garminSteps.steps_total - (garminSteps.steps_training||0));
-      trainingExtraStepsKcal = extraKcalFromSteps(nonRunSteps, stepsWeightKg);
-      if(trainingExtraStepsKcal>0 && burned!=null) burned += trainingExtraStepsKcal;
+  let garminStepsToday = null;
+  if(stepsWeightKg){
+    garminStepsToday = await loadGarminStepsForDate(owner, dateStr);
+    if(garminStepsToday && garminStepsToday.steps_total!=null){
+      const relevantSteps = training
+        ? Math.max(0, garminStepsToday.steps_total - (garminStepsToday.steps_training||0))
+        : garminStepsToday.steps_total;
+      const kcal = extraKcalFromSteps(relevantSteps, stepsWeightKg);
+      if(training){ trainingExtraStepsKcal = kcal; } else { extraStepsKcal = kcal; }
+      if(kcal>0 && burned!=null) burned += kcal;
     }
   }
 
@@ -2545,23 +2545,10 @@ async function renderDashboard(){
       </div>
       <div class="meal-meta" style="margin-top:4px;">Nog niet gesynchroniseerd met Tredict &mdash; dit is een schatting op basis van je profiel, geen trainingen meegeteld.</div>
       <div class="stat-row" style="border-top:1px solid var(--line);margin-top:10px;padding-top:10px;flex-direction:column;align-items:stretch;gap:6px;border-bottom:none;">
-        <span class="stat-label">Aantal stappen vandaag (bijv. van je Garmin-app)</span>
-        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-          <input type="number" id="stepsInput" value="${loggedSteps||''}" min="0" step="500" placeholder="bijv. 12000" style="width:110px;padding:6px 8px;">
-          <button class="btn-secondary" id="stepsSaveBtn">Opslaan</button>
-          ${extraStepsKcal>0 ? `<span class="meal-meta" style="margin:0;">+${extraStepsKcal} kcal extra verbrand</span>` : ''}
-        </div>
+        <span class="stat-label">&#128099; Stappen vandaag (Garmin)</span>
+        <span class="stat-val">${garminStepsToday && garminStepsToday.steps_total!=null ? garminStepsToday.steps_total.toLocaleString('nl-NL') : '—'}${extraStepsKcal>0 ? ` &middot; +${extraStepsKcal} kcal extra verbrand` : ''}</span>
         <div class="meal-meta" style="margin:0;">De eerste ${STEPS_BASELINE.toLocaleString('nl-NL')} stappen zitten al in het geschatte rustverbruik hierboven &mdash; alleen stappen daarboven tellen als extra verbruik mee, om dubbeltelling te voorkomen.</div>
       </div>`;
-    const stepsBtn = document.getElementById('stepsSaveBtn');
-    if(stepsBtn){
-      stepsBtn.addEventListener('click', async ()=>{
-        const val = Math.max(0, Number(document.getElementById('stepsInput').value)||0);
-        stepsBtn.disabled = true;
-        await saveSteps(dateStr, val);
-        renderDashboard();
-      });
-    }
   } else if(!training){
     detailEl.innerHTML = '<div class="empty">Nog niet opgehaald voor deze dag.</div>';
   } else {
@@ -3016,30 +3003,6 @@ async function saveWeight(dateStr, kg){
   }catch(e){ console.error('saveWeight exception', e); return false; }
 }
 
-// ---- Handmatige stappen (alleen gebruikt op dagen zonder Tredict-training) ----
-async function loadSteps(dateStr){
-  const owner = currentOwner();
-  if(!owner) return null;
-  const { data, error } = await supabaseClient
-    .from('manual_steps')
-    .select('steps')
-    .eq('entry_date', dateStr)
-    .eq('owner', owner)
-    .maybeSingle();
-  if(error || !data) return null;
-  return data.steps;
-}
-async function saveSteps(dateStr, steps){
-  const owner = currentOwner();
-  if(!owner) return false;
-  try{
-    const { error } = await supabaseClient
-      .from('manual_steps')
-      .upsert([{ owner, entry_date: dateStr, steps, updated_at: new Date().toISOString() }], { onConflict: 'owner,entry_date' });
-    if(error){ console.error('saveSteps error', error); return false; }
-    return true;
-  }catch(e){ console.error('saveSteps exception', e); return false; }
-}
 // Rekent stappen om naar EXTRA verbrande kcal, bovenop wat het geschatte
 // rustverbruik (BMR x 1.31) al impliciet meerekent. De 1.31-factor zit
 // tussen "sedentair" (1.2) en "licht actief" (1.375) in en veronderstelt
