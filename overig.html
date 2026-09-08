@@ -252,7 +252,7 @@
 
     <div class="card" style="margin-top:16px">
       <h3>Transfersuggesties</h3>
-      <p class="hint" id="tsHint">Gesorteerd op verwachte punten over het gekozen venster (ESPN's eigen ep_next x aantal wedstrijden) -- spelers met 2 wedstrijden (dubbele speelronde) tellen dus dubbel mee. Per suggestie staat de zwakste eigen speler in dezelfde positie als aanbevolen wissel.</p>
+      <p class="hint" id="tsHint">Gesorteerd op verwachte punten over het gekozen venster (ESPN's eigen ep_next x aantal wedstrijden, dubbele speelronde telt dubbel) plus een kleine bijstelling voor de prijstrend: een speler die binnenkort duurder wordt scoort iets hoger, een speler die binnenkort goedkoper wordt iets lager. Per suggestie staat de zwakste eigen speler in dezelfde positie als aanbevolen wissel.</p>
       <div class="filters">
         <label style="font-size:13px;color:var(--muted);">Aantal wissels
           <select id="tsTransfers">
@@ -611,7 +611,7 @@ function renderMyTeam(team){
   const squadRow = r => `<div class="row">
     <div>
       <div class="name">${r.pl.web_name}${r.badge} <span class="meta">${r.pl.team_short} · ${POS_SHORT[r.pl.element_type]||''}</span></div>
-      <div class="meta">${eur(r.pl.now_cost)} · ${nf.format(r.pl.total_points||0)} pt totaal · ${nf.format(r.pl.event_points||0)} pt deze ronde</div>
+      <div class="meta">${eur(r.pl.now_cost)} · ${nf.format(r.pl.total_points||0)} pt totaal · ${nf.format(r.pl.event_points||0)} pt deze ronde${priceTrendMini(r.pl)}</div>
     </div>
     <div class="pct">${r.multiplier>1?'x'+r.multiplier+' ':''}${nf.format((r.pl.event_points||0)*r.multiplier)}</div>
   </div>`;
@@ -682,6 +682,12 @@ function renderTransferSuggestions(){
   // aanbevolen wissel, EN om diens verkoopwaarde bij het budget op te
   // tellen (de API geeft geen exacte verkoopprijs na winst/verlies sinds
   // aankoop, dus de huidige marktprijs is de beste beschikbare schatting).
+  // combinedScore = verwachte punten + prijstrend-bijstelling: een eigen
+  // speler die binnenkort goedkoper wordt oogt zo "zwakker" (eerder
+  // aanbevolen om te verkopen, ook al zijn de punten gelijk), een speler
+  // die binnenkort duurder wordt oogt sterker (minder snel aanbevolen).
+  const combinedScore = r => expWindowPts(r) + priceTrendAdjust(r);
+
   const myByPos = {};
   for(const p of MY_TEAM.picks){
     const pl = byId[p.element];
@@ -689,7 +695,7 @@ function renderTransferSuggestions(){
     const withExp = { ...pl, fixtureCount: counts[pl.team_id] || 0 };
     (myByPos[pl.element_type] = myByPos[pl.element_type] || []).push(withExp);
   }
-  for(const k in myByPos) myByPos[k].sort((a,b) => expWindowPts(a) - expWindowPts(b));
+  for(const k in myByPos) myByPos[k].sort((a,b) => combinedScore(a) - combinedScore(b));
 
   // Budget per positie = kas-aandeel + geschatte verkoopwaarde (huidige
   // marktprijs) van de zwakste eigen speler in diezelfde positie, die je
@@ -710,16 +716,16 @@ function renderTransferSuggestions(){
     .filter(r => !posFilter || String(r.element_type) === posFilter)
     .filter(r => r.now_cost <= budgetForPos(r.element_type))
     .map(r => ({ ...r, fixtureCount: counts[r.team_id] || 0 }))
-    .sort((a,b) => expWindowPts(b) - expWindowPts(a))
+    .sort((a,b) => combinedScore(b) - combinedScore(a))
     .slice(0, 20);
 
   tbody.innerHTML = candidates.length ? candidates.map(r => {
     const weakest = (myByPos[r.element_type] || [])[0];
     const swapText = weakest
-      ? `${weakest.web_name} <span class="meta">(${expWindowPts(weakest).toFixed(1)} verw.)</span>`
+      ? `${weakest.web_name} <span class="meta">(${expWindowPts(weakest).toFixed(1)} verw.${priceTrendMini(weakest)})</span>`
       : '—';
     return `<tr>
-    <td>${r.web_name}</td>
+    <td>${r.web_name}${priceTrendMini(r)}</td>
     <td>${r.team_short}</td>
     <td>${POS_SHORT[r.element_type]||''}</td>
     <td class="num">${eur(r.now_cost)}</td>
@@ -816,6 +822,38 @@ function formatEta(etaAt, progress){
     ? {hour:'2-digit',minute:'2-digit'}
     : {day:'2-digit',month:'short'};
   return d.toLocaleString('nl-NL', diffH < 24 ? {...opts, weekday:'short'} : opts);
+}
+// Kort "~Nd" tot de geschatte prijswijziging, voor compacte weergave (bijv.
+// in de teamselectie) i.p.v. de volledige datum/tijd van formatEta().
+function daysUntilLabel(etaAt){
+  if (!etaAt) return null;
+  const diffH = (new Date(etaAt) - Date.now()) / 36e5;
+  if (diffH <= 12) return 'vandaag';
+  return `~${Math.round(diffH/24)}d`;
+}
+// Compact stijg/daal-label (percentage + geschatte dagen tot wijziging) voor
+// bij een speler in de teamselectie -- groen bij stijgen, rood bij dalen.
+function priceTrendMini(pl){
+  const v = pl && pl.verwachting;
+  if (!v || v === 'stabiel' || v === 'onbekend' || pl.progress == null) return '';
+  const isUp = v === 'stijgt' || v === 'stijgt bijna';
+  const pct = Math.round(Math.min(1, pl.progress) * 100);
+  const dLabel = daysUntilLabel(pl.eta_at);
+  return ` &middot; <span style="color:var(--${isUp?'up':'down'});font-weight:600;">${isUp?'&#9650;':'&#9660;'} ${pct}%${dLabel?' &middot; '+dLabel:''}</span>`;
+}
+// Bijstelling op verwachte punten o.b.v. de prijstrend: een speler die
+// binnenkort duurder wordt is aantrekkelijker om NU te kopen (later duurder
+// of instromen misgelopen), een speler die binnenkort goedkoper wordt is
+// juist een reden om 'm eerder te verkopen (voor de daling) i.p.v. te
+// wachten. Bewust kleiner dan een typisch puntenverschil, zodat verwachte
+// punten leidend blijven en dit een nuance is, geen doorslaggevende factor.
+function priceTrendAdjust(pl){
+  const v = pl && pl.verwachting;
+  if (v === 'stijgt') return 2;
+  if (v === 'stijgt bijna') return 1;
+  if (v === 'daalt') return -2;
+  if (v === 'daalt bijna') return -1;
+  return 0;
 }
 function renderTable(){
   const rows = filtered().slice(0,300);
