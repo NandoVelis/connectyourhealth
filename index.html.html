@@ -1667,10 +1667,14 @@ async function loadRecentTrainingForTip(days){
 // tempo-/testeffort golden -- tempo onder 4:00/km EN gemiddelde hartslag
 // boven 150bpm -- zodat rustige duurloopjes die toevallig op die afstand
 // uitkomen niet worden meegeteld als "mijn 5k"/"mijn 4 mijl"-tempo.
+// Bij 10km worden de runs binnen die anker verder gesplitst in twee
+// aparte "sectoren": tempo (sneller dan 4:30/km EN gemiddelde hartslag
+// boven 150bpm) en duurloop (de rest) -- zo staat een rustige 10km-
+// duurloop niet meer op één hoop met een 10km-tempotraining.
 const RUN_DISTANCE_ANCHORS = [
   { km: 5, label: '5km', maxPaceMinPerKm: 4.0, minAvgHr: 150 },
   { km: 6.437, label: '6,44km', maxPaceMinPerKm: 4.0, minAvgHr: 150 },
-  { km: 10, label: '10km' },
+  { km: 10, label: '10km', split: { maxPaceMinPerKm: 4.5, minAvgHr: 150, tempoLabel: '10km tempo', restLabel: '10km duurloop' } },
   { km: 15, label: '15km' },
   { km: 21.1, label: 'halve marathon (21,1km)' },
   { km: 25, label: '25km' },
@@ -1702,8 +1706,17 @@ function clusterRunsByDistance(runs){
       if(pace==null || pace >= anchor.maxPaceMinPerKm) continue;
     }
     if(anchor.minAvgHr!=null && !(r.avgHeartrate>anchor.minAvgHr)) continue;
-    if(!byAnchor.has(anchor.km)) byAnchor.set(anchor.km, { anchor, runs: [] });
-    byAnchor.get(anchor.km).runs.push(r);
+
+    let bucketKey = anchor.km;
+    let bucketLabel = anchor.label;
+    if(anchor.split){
+      const pace = r.km>0 ? r.minutes/r.km : null;
+      const isTempo = pace!=null && pace < anchor.split.maxPaceMinPerKm && r.avgHeartrate>anchor.split.minAvgHr;
+      bucketKey = anchor.km + (isTempo ? '-tempo' : '-duurloop');
+      bucketLabel = isTempo ? anchor.split.tempoLabel : anchor.split.restLabel;
+    }
+    if(!byAnchor.has(bucketKey)) byAnchor.set(bucketKey, { anchor: { ...anchor, label: bucketLabel }, runs: [] });
+    byAnchor.get(bucketKey).runs.push(r);
   }
   return [...byAnchor.values()].map(({ anchor, runs }) => ({
     runs,
