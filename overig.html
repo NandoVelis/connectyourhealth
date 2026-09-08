@@ -767,7 +767,7 @@ function watchRow(r, dir){
       <div class="name">${r.web_name} <span class="meta">${r.team_short} · ${POS_SHORT[r.element_type]||''}</span></div>
       <div class="meta">${eur(r.now_cost)} · ${r.selected_by_percent}% bezit · ${signed(r.net_since_change)} netto${r.basis==='geschat'?' · geschat':''} · verwacht ${formatEta(r.eta_at, r.progress)}</div>
     </div>
-    <div class="pct" style="color:var(--${dir})">${pct(r.progress)}</div>
+    <div class="pct" style="color:var(--${dir})">${dir==='down'?'-':''}${pct(r.progress)}</div>
     <div class="bar"><i class="${dir}" style="width:${Math.min(p*100,100)}%"></i></div>
   </div>`;
 }
@@ -865,8 +865,8 @@ function renderTable(){
       <td class="num" style="color:${r.cost_change_start>0?'var(--up)':r.cost_change_start<0?'var(--down)':'inherit'}">${r.cost_change_start===0?'—':signed(r.cost_change_start/10)}</td>
       <td class="num">${r.selected_by_percent}%</td>
       <td class="num">${r.net_since_change===null?'—':signed(r.net_since_change)}</td>
-      <td class="num">${r.threshold===null?'—':nf.format(r.threshold)}</td>
-      <td class="num">${r.progress===null?'—':pct(r.progress)}</td>
+      <td class="num">${r.threshold===null?'—':(r.net_since_change<0?'-':'')+nf.format(r.threshold)}</td>
+      <td class="num">${r.progress===null?'—':(r.net_since_change<0?'-':'')+pct(r.progress)}</td>
       <td class="num">${formatEta(r.eta_at, r.progress)}</td>
       <td>${verwachtingPill(r.verwachting)}</td>
     </tr>`).join('');
