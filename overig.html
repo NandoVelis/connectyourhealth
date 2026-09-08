@@ -700,10 +700,13 @@ function renderMyTeam(team){
         return `<div class="ptrend">${r.pl.selected_by_percent}%</div>`;
       case 'price': {
         const v = r.pl.verwachting;
-        const trending = v && v !== 'stabiel' && v !== 'onbekend' && r.pl.progress != null;
-        if (!trending) return `<div class="ptrend" style="color:var(--muted)">stabiel</div>`;
-        const dir = (v === 'stijgt' || v === 'stijgt bijna') ? 'up' : 'down';
-        return `<div class="ptrend" style="color:var(--${dir})">${dir==='up'?'&#9650;':'&#9660;'} ${pct(r.pl.progress)}</div>`;
+        const p = r.pl.progress;
+        if (p == null) return `<div class="ptrend" style="color:var(--muted)">—</div>`;
+        const trending = v && v !== 'stabiel' && v !== 'onbekend';
+        const isDown = v === 'daalt' || v === 'daalt bijna';
+        const color = trending ? (isDown ? 'var(--down)' : 'var(--up)') : 'var(--muted)';
+        const arrow = trending ? (isDown ? '&#9660; ' : '&#9650; ') : '';
+        return `<div class="ptrend" style="color:${color}">${arrow}${pct(p)}</div>`;
       }
       case 'form':
         return `<div class="ptrend">${r.pl.form!=null ? r.pl.form : '—'}</div>`;
