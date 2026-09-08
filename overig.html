@@ -666,8 +666,7 @@ function renderTransferSuggestions(){
   const { counts, startEvent, endEvent } = fixturesCountByTeam(windowSize);
 
   const bank = MY_TEAM.bank || 0;
-  const budgetPerSlot = Math.floor(bank / transfers);
-  $('#tsBudget').innerHTML = `Beschikbaar: ${eur(bank)} kas over ${transfers} wissel(s) &middot; richtprijs per wissel: <strong>${eur(budgetPerSlot)}</strong> &middot; speelronde ${startEvent}${endEvent>startEvent?'&ndash;'+endEvent:''} &middot; dit houdt geen rekening met de verkoopwaarde van een speler die je laat gaan.`;
+  const bankPerSlot = Math.floor(bank / transfers);
 
   // Verwachte punten over het venster = ESPN's eigen ep_next (verwachte
   // punten voor de eerstvolgende speelronde) x aantal wedstrijden in het
@@ -680,7 +679,9 @@ function renderTransferSuggestions(){
   // Mijn eigen spelers (met hun eigen verwachte punten over hetzelfde
   // venster), gegroepeerd per positie -- gebruikt om per suggestie de
   // zwakste eigen speler in diezelfde positie aan te wijzen als
-  // aanbevolen wissel.
+  // aanbevolen wissel, EN om diens verkoopwaarde bij het budget op te
+  // tellen (de API geeft geen exacte verkoopprijs na winst/verlies sinds
+  // aankoop, dus de huidige marktprijs is de beste beschikbare schatting).
   const myByPos = {};
   for(const p of MY_TEAM.picks){
     const pl = byId[p.element];
@@ -690,11 +691,24 @@ function renderTransferSuggestions(){
   }
   for(const k in myByPos) myByPos[k].sort((a,b) => expWindowPts(a) - expWindowPts(b));
 
+  // Budget per positie = kas-aandeel + geschatte verkoopwaarde (huidige
+  // marktprijs) van de zwakste eigen speler in diezelfde positie, die je
+  // er voor deze suggestie voor zou laten gaan.
+  const budgetForPos = elementType => {
+    const weakest = (myByPos[elementType] || [])[0];
+    return bankPerSlot + (weakest ? weakest.now_cost : 0);
+  };
+  const posLabel = posFilter ? POS[posFilter] : null;
+  const budgetNote = posFilter
+    ? `${eur(budgetForPos(Number(posFilter)))} (kas + geschatte verkoopwaarde van ${((myByPos[posFilter]||[])[0]||{}).web_name || 'je zwakste ' + (posLabel||'speler').toLowerCase()})`
+    : 'per positie berekend (kas + geschatte verkoopwaarde van de speler die je daar zou laten gaan)';
+  $('#tsBudget').innerHTML = `Beschikbaar: ${eur(bank)} kas over ${transfers} wissel(s) &middot; richtbudget: <strong>${budgetNote}</strong> &middot; speelronde ${startEvent}${endEvent>startEvent?'&ndash;'+endEvent:''} &middot; verkoopwaarde is een schatting op basis van de huidige marktprijs, niet de exacte prijs na winst/verlies sinds aankoop.`;
+
   const candidates = ROWS
     .filter(r => !ownedIds.has(r.id))
     .filter(r => r.status === 'a')
     .filter(r => !posFilter || String(r.element_type) === posFilter)
-    .filter(r => r.now_cost <= budgetPerSlot)
+    .filter(r => r.now_cost <= budgetForPos(r.element_type))
     .map(r => ({ ...r, fixtureCount: counts[r.team_id] || 0 }))
     .sort((a,b) => expWindowPts(b) - expWindowPts(a))
     .slice(0, 20);
@@ -752,10 +766,11 @@ function watchRow(r, dir){
   </div>`;
 }
 function renderWatch(){
-  // Spelers onder 1,5% bezit weggefilterd -- bij zo weinig eigenaren zegt
-  // de voortgangsbalk weinig (een paar transfers duwen 'm al ver omhoog),
-  // dus die vertroebelen de lijst met echt relevante kandidaten.
-  const up = ROWS.filter(r => r.net_since_change > 0 && r.progress !== null && Number(r.selected_by_percent) >= 1.5)
+  // Dalers onder 1,5% bezit weggefilterd -- bij zo weinig eigenaren zegt de
+  // voortgangsbalk weinig en heb je 'm waarschijnlijk toch niet in je team.
+  // Stijgers mogen al vanaf 0,5% meetellen: een vroege prijsstijging bij een
+  // nog weinig-gekozen speler is juist een kans om vroeg in te stappen.
+  const up = ROWS.filter(r => r.net_since_change > 0 && r.progress !== null && Number(r.selected_by_percent) >= 0.5)
                  .sort((a,b) => b.progress - a.progress).slice(0,8);
   const dn = ROWS.filter(r => r.net_since_change < 0 && r.progress !== null && Number(r.selected_by_percent) >= 1.5)
                  .sort((a,b) => b.progress - a.progress).slice(0,8);
