@@ -252,6 +252,8 @@
             <option value="1">1</option>
             <option value="2" selected>2</option>
             <option value="3">3</option>
+            <option value="4">4</option>
+            <option value="5">5</option>
           </select>
         </label>
         <label style="font-size:13px;color:var(--muted);">Positie
@@ -265,6 +267,7 @@
         </label>
       </div>
       <div id="tsBudget" class="note" style="margin-top:0;margin-bottom:10px;"></div>
+      <div id="tsCombo" class="note" style="margin-top:0;margin-bottom:10px;" hidden></div>
       <div class="tablewrap">
         <table id="tsTbl">
           <thead><tr>
@@ -603,6 +606,7 @@ function renderTransferSuggestions(){
   if(!MY_TEAM || !MY_TEAM.picks || !MY_TEAM.picks.length || !FIXTURES.length){
     tbody.innerHTML = '<tr><td colspan="7" class="empty">Nog geen teamgegevens of wedstrijdschema beschikbaar.</td></tr>';
     $('#tsBudget').textContent = '';
+    $('#tsCombo').hidden = true;
     return;
   }
   const transfers = parseInt($('#tsTransfers').value, 10) || 1;
@@ -655,6 +659,16 @@ function renderTransferSuggestions(){
     : 'per positie berekend (kas + geschatte verkoopwaarde van de speler die je daar zou laten gaan)';
   $('#tsBudget').innerHTML = `Beschikbaar: ${eur(bank)} kas over ${transfers} wissel(s) &middot; richtbudget: <strong>${budgetNote}</strong> &middot; speelronde ${startEvent}${endEvent>startEvent?'&ndash;'+endEvent:''} &middot; verkoopwaarde is een schatting op basis van de huidige marktprijs, niet de exacte prijs na winst/verlies sinds aankoop.`;
 
+  // Bij 2+ wissels tegelijk is de optimale combinatie niet zomaar de som
+  // van de losse beste suggesties (het budget wordt gedeeld). Neemt de
+  // zwakste eigen spelers als kandidaat-'uit' en zoekt daarbij, met
+  // gedeeld budget, de beste combinatie vervangers.
+  const allMine = Object.values(myByPos).flat().sort((a,b) => combinedScore(a) - combinedScore(b));
+  const combo = transfers >= 2
+    ? bestCombo(allMine.slice(0, Math.min(allMine.length, transfers + 3)), transfers, bank, counts, combinedScore, ownedIds)
+    : null;
+  renderCombo(combo, transfers, startEvent, endEvent);
+
   const candidates = ROWS
     .filter(r => !ownedIds.has(r.id))
     .filter(r => r.status === 'a')
@@ -679,6 +693,67 @@ function renderTransferSuggestions(){
     <td>i.p.v. ${swapText}</td>
   </tr>`;
   }).join('') : '<tr><td colspan="7" class="empty">Geen spelers gevonden binnen dit budget/filter.</td></tr>';
+}
+// Alle combinaties van precies k elementen uit arr (voor kleine arr/k
+// probleemloos, hier gebruikt met arr.length <= transfers+3 en k <= 3).
+function kCombinations(arr, k){
+  const results = [];
+  (function rec(start, combo){
+    if(combo.length === k){ results.push([...combo]); return; }
+    for(let i = start; i < arr.length; i++){ combo.push(arr[i]); rec(i+1, combo); combo.pop(); }
+  })(0, []);
+  return results;
+}
+// Zoekt, gegeven een pool van kandidaat-'uit'-spelers (de zwakste eigen
+// spelers), de beste combinatie van precies n wissels tegelijk mét
+// gedeeld budget: welke n verkoop je samen, en welke n vervangers koop
+// je daarvoor terug, zodat de totale verwachte-puntenwinst over het
+// venster maximaal is binnen budget. Backtracking over een beperkte pool
+// (top 8 kandidaten per positie) houdt dit rekenkundig licht.
+function bestCombo(outPool, n, bank, counts, combinedScore, ownedIds){
+  if(outPool.length < n) return null;
+  const poolsByPos = {};
+  const candidatePool = elementType => poolsByPos[elementType] || (poolsByPos[elementType] = ROWS
+    .filter(r => !ownedIds.has(r.id) && r.status === 'a' && r.element_type === elementType)
+    .map(r => ({ ...r, fixtureCount: counts[r.team_id] || 0 }))
+    .sort((a,b) => combinedScore(b) - combinedScore(a))
+    .slice(0, 8));
+
+  let best = null;
+  for(const outs of kCombinations(outPool, n)){
+    const budget = bank + outs.reduce((s,o) => s + o.now_cost, 0);
+    const usedIds = new Set();
+    (function rec(i, spent, gain, picks){
+      if(i === outs.length){
+        if(!best || gain > best.gain) best = { outs, picks: [...picks], gain, spent, budget };
+        return;
+      }
+      for(const cand of candidatePool(outs[i].element_type)){
+        if(usedIds.has(cand.id)) continue;
+        const cost = spent + cand.now_cost;
+        if(cost > budget) continue;
+        usedIds.add(cand.id);
+        picks.push(cand);
+        rec(i+1, cost, gain + (combinedScore(cand) - combinedScore(outs[i])), picks);
+        picks.pop();
+        usedIds.delete(cand.id);
+      }
+    })(0, 0, 0, []);
+  }
+  return best;
+}
+function renderCombo(combo, transfers, startEvent, endEvent){
+  const el = $('#tsCombo');
+  if(transfers < 2){ el.hidden = true; return; }
+  el.hidden = false;
+  if(!combo){
+    el.innerHTML = `Geen haalbare combinatie van ${transfers} wissels tegelijk gevonden binnen budget.`;
+    return;
+  }
+  const outText = combo.outs.map(o => `${o.web_name} <span class="meta">(${POS_SHORT[o.element_type]||''})</span>`).join(' + ');
+  const inText = combo.picks.map(p => `${p.web_name} <span class="meta">(${POS_SHORT[p.element_type]||''}, ${eur(p.now_cost)})${priceTrendMini(p)}</span>`).join(' + ');
+  el.innerHTML = `<strong>Beste combinatie bij ${transfers} wissels tegelijk</strong> (ronde ${startEvent}${endEvent>startEvent?'&ndash;'+endEvent:''}): verkoop ${outText} &rarr; koop ${inText}. `
+    + `Budget: ${eur(combo.spent)} van ${eur(combo.budget)} gebruikt. Verwachte winst: <strong style="color:var(--up)">+${combo.gain.toFixed(1)} punten</strong> over het venster t.o.v. nu.`;
 }
 ['#tsTransfers','#tsWindow','#tsPos'].forEach(s => $(s).addEventListener('change', renderTransferSuggestions));
 
