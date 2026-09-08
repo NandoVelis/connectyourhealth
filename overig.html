@@ -257,7 +257,7 @@
           <option value="ownership">Bezit%</option>
           <option value="price">Prijswijziging</option>
           <option value="form">Vorm</option>
-          <option value="fixture">Volgende wedstrijd</option>
+          <option value="fixture">Komende 3 wedstrijden</option>
         </select>
       </div>
       <div id="myTeamPitch"><div class="empty">Laden…</div></div>
@@ -715,12 +715,8 @@ function renderMyTeam(team){
       }
       case 'form':
         return `<div class="ptrend">${r.pl.form!=null ? r.pl.form : '—'}</div>`;
-      case 'fixture': {
-        const fx = nextFixturesForTeam(r.pl.team_id);
-        if (!fx.length) return `<div class="ptrend" style="color:var(--muted)">—</div>`;
-        const label = fx.map(f => `${(TEAMS[f.opponentId]||{}).short_name || '?'} (${f.home?'T':'U'})`).join(', ');
-        return `<div class="ptrend">${label}</div>`;
-      }
+      case 'fixture':
+        return `<div class="ptrend">${upcomingFixturesLabel(r.pl.team_id, 3)}</div>`;
       default:
         return `<div class="ptrend">${nf.format((r.pl.event_points||0)*r.multiplier)} pt</div>`;
     }
@@ -772,19 +768,37 @@ $('#pitchStat').addEventListener('change', () => {
 // door het aantal wissels; dit houdt geen rekening met de verkoopwaarde
 // van een speler die je laat gaan (die data heeft de API niet openbaar),
 // dus is een ondergrens, geen exacte prijs.
-// Eerstvolgende, nog niet gespeelde wedstrijd(en) van een team -- meerdere
-// bij een dubbele speelronde. Let op: de ESPN Eredivisie Fantasy-API levert
-// (nog) geen teamsterkte/stand-data, dus er is geen betrouwbare
-// moeilijkheidsgraad (FDR) te berekenen -- dit toont daarom alleen de
-// tegenstander(s), niet hoe zwaar de wedstrijd is.
+// Eerstvolgende wedstrijd(en) van een team, geankerd op GAME.next_event
+// (net als fixturesCountByTeam) i.p.v. simpelweg de eerstvolgende
+// niet-afgevinkte wedstrijd -- anders bleef de lopende speelronde nog
+// "volgende wedstrijd" tonen zolang niet alle wedstrijden ervan waren
+// afgerond. Meerdere resultaten bij een dubbele speelronde.
 function nextFixturesForTeam(teamId){
-  const relevant = FIXTURES.filter(f => f.team_h===teamId || f.team_a===teamId);
-  if(!relevant.length) return [];
-  const minEvent = Math.min(...relevant.map(f=>f.event));
-  return relevant.filter(f=>f.event===minEvent).map(f => ({
+  const startEvent = GAME.next_event || ((GAME.current_event||0)+1);
+  return FIXTURES.filter(f => (f.team_h===teamId || f.team_a===teamId) && f.event===startEvent).map(f => ({
     opponentId: f.team_h===teamId ? f.team_a : f.team_h,
     home: f.team_h===teamId,
   }));
+}
+// Tegenstander(s) over de eerstkomende `windowSize` speelrondes, per ronde
+// gegroepeerd (dubbele speelronde = twee tegenstanders in dezelfde ronde,
+// met "+" ertussen). Let op: de ESPN Eredivisie Fantasy-API levert (nog)
+// geen teamsterkte/stand-data, dus er is geen betrouwbare
+// moeilijkheidsgraad (FDR) te berekenen -- dit toont daarom alleen de
+// tegenstander(s), niet hoe zwaar de wedstrijd is.
+function upcomingFixturesLabel(teamId, windowSize){
+  const startEvent = GAME.next_event || ((GAME.current_event||0)+1);
+  const endEvent = startEvent + windowSize - 1;
+  const relevant = FIXTURES.filter(f =>
+    (f.team_h===teamId || f.team_a===teamId) && f.event!=null && f.event>=startEvent && f.event<=endEvent
+  );
+  if (!relevant.length) return '—';
+  const byEvent = {};
+  for (const f of relevant) (byEvent[f.event] = byEvent[f.event] || []).push(f);
+  return Object.keys(byEvent).sort((a,b)=>a-b).map(ev => byEvent[ev].map(f => {
+    const oppId = f.team_h===teamId ? f.team_a : f.team_h;
+    return `${(TEAMS[oppId]||{}).short_name || '?'}${f.team_h===teamId ? '(T)' : '(U)'}`;
+  }).join('+')).join(' ');
 }
 function fixturesCountByTeam(windowSize){
   const startEvent = GAME.next_event || ((GAME.current_event||0)+1);
