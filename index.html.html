@@ -353,6 +353,16 @@
           <span class="stat-val" id="vitalWeight">&mdash;</span>
           <span class="meal-meta" id="vitalWeightWeek">week gem. &mdash;</span>
         </div>
+        <div class="stat-row" style="border-bottom:none;flex-direction:column;align-items:flex-start;">
+          <span class="stat-label">&#129749; VO2max</span>
+          <span class="stat-val" id="vitalVo2max">&mdash;</span>
+          <span class="meal-meta" id="vitalVo2maxSource">Garmin (test)</span>
+        </div>
+        <div class="stat-row" style="border-bottom:none;flex-direction:column;align-items:flex-start;">
+          <span class="stat-label">&#9878;&#65039; Trainingsbelasting</span>
+          <span class="stat-val" id="vitalTrainingLoad">&mdash;</span>
+          <span class="meal-meta" id="vitalTrainingLoadHint">Garmin (test)</span>
+        </div>
       </div>
     </div>
 
@@ -390,11 +400,6 @@
     <div class="card" style="margin-bottom:16px;">
       <h3>&#128200; Trainingsvoortgang per type</h3>
       <div id="trainingProgressTable"></div>
-    </div>
-
-    <div class="card" style="margin-bottom:16px;">
-      <h3>&#8986; Garmin (test)</h3>
-      <div id="garminMetricsCard"></div>
     </div>
 
     <div class="card" style="margin-bottom:16px;background:linear-gradient(115deg,#7A0A66 0%,#4B1F6B 40%,#1A1240 100%);border:none;">
@@ -1244,7 +1249,7 @@ async function loadGarminVitalsForDate(owner, dateStr){
   try{
     const { data, error } = await supabaseClient
       .from('garmin_metrics')
-      .select('resting_hr, hrv, sleep_minutes')
+      .select('resting_hr, hrv, sleep_minutes, sleep_score, vo2max, training_load_ratio, acwr_status')
       .eq('owner', owner)
       .eq('metric_date', dateStr)
       .maybeSingle();
@@ -1252,20 +1257,39 @@ async function loadGarminVitalsForDate(owner, dateStr){
     return data || null;
   }catch(e){ console.error('Laden Garmin-vitals', e); return null; }
 }
+// Totaal-stappen van vandaag + de stappen die Garmin toeschrijft aan de
+// hardloopsessie van vandaag -- gebruikt om op trainingsdagen automatisch
+// "extra stappen naast de training" te tonen i.p.v. handmatige invoer.
+async function loadGarminStepsForDate(owner, dateStr){
+  if(!owner) return null;
+  try{
+    const { data, error } = await supabaseClient
+      .from('garmin_metrics')
+      .select('steps_total, steps_training')
+      .eq('owner', owner)
+      .eq('metric_date', dateStr)
+      .maybeSingle();
+    if(error) throw error;
+    return data || null;
+  }catch(e){ console.error('Laden Garmin-stappen', e); return null; }
+}
 // Vult Tredict-vitals (het bestaande "Herstel"-blok) aan met Garmin-
-// testdata voor dezelfde dag zodra een veld ontbreekt -- nu Tredict
-// binnenkort stopt, blijft het Herstel-blok zo bruikbaar i.p.v. dat het
-// terugvalt op "—". Tredict-waarden hebben voorrang waar aanwezig, Garmin
-// vult alleen de gaten.
+// testdata voor dezelfde dag -- nu Tredict binnenkort stopt, blijft het
+// Herstel-blok zo bruikbaar i.p.v. dat het terugvalt op "—". Rusthartslag/
+// HRV: Tredict heeft voorrang waar aanwezig, Garmin vult alleen de gaten.
+// Slaap komt bewust uitsluitend uit Garmin (betrouwbaardere data + een
+// slaapscore, die Tredict niet had), dus geen Tredict-fallback daar.
+// De ruwe Garmin-rij (o.a. sleep_score/vo2max/training_load_ratio) wordt
+// meegegeven als .garmin, voor de extra weergavevelden in de kaart.
 async function loadVitalsWithGarminFallback(owner, dateStr){
   const vitals = await loadVitals(dateStr);
   const garmin = await loadGarminVitalsForDate(owner, dateStr);
-  if(!garmin) return vitals;
   const pick = (tredictVal, garminVal) => tredictVal!=null ? tredictVal : (garminVal!=null ? Math.round(garminVal) : null);
   return {
-    hrRest: pick(vitals?.hrRest, garmin.resting_hr),
-    hrv: pick(vitals?.hrv, garmin.hrv),
-    sleepMinutes: pick(vitals?.sleepMinutes, garmin.sleep_minutes),
+    hrRest: pick(vitals?.hrRest, garmin?.resting_hr),
+    hrv: pick(vitals?.hrv, garmin?.hrv),
+    sleepMinutes: garmin?.sleep_minutes!=null ? Math.round(garmin.sleep_minutes) : null,
+    garmin,
   };
 }
 async function saveVitals(dateStr, data){
@@ -2035,48 +2059,6 @@ async function loadLatestGarminMetrics(owner){
     return data || null;
   }catch(e){ console.error('Laden Garmin-metrics', e); return null; }
 }
-async function renderGarminMetricsCard(){
-  const el = document.getElementById('garminMetricsCard');
-  if(!el) return;
-  const owner = currentOwner();
-  if(!owner){ el.innerHTML = ''; return; }
-  try{
-    const data = await loadLatestGarminMetrics(owner);
-    if(!data){
-      el.innerHTML = '<div class="empty">Nog geen Garmin-data (testkoppeling nog niet gesynchroniseerd).</div>';
-      return;
-    }
-    const cells = [];
-    const addCell = (label, val) => { if(val!=null) cells.push({label, val}); };
-    addCell('VO2max', data.vo2max!=null ? Math.round(data.vo2max*10)/10 : null);
-    addCell('Rusthartslag', data.resting_hr!=null ? Math.round(data.resting_hr)+' bpm' : null);
-    addCell('HRV', data.hrv!=null ? Math.round(data.hrv)+'ms'+(data.hrv_status?` (${humanizeGarminLabel(data.hrv_status)})`:'') : null);
-    if(data.sleep_minutes!=null){
-      const h = Math.floor(data.sleep_minutes/60), m = data.sleep_minutes%60;
-      addCell('Slaap', `${h}u${String(m).padStart(2,'0')}m`+(data.sleep_score!=null?` &middot; score ${Math.round(data.sleep_score)}`:'')+(data.sleep_quality?` (${humanizeGarminLabel(data.sleep_quality)})`:''));
-    }
-    addCell('Body Battery herstel', data.body_battery_change!=null ? '+'+Math.round(data.body_battery_change) : null);
-    addCell('Ademhaling', data.respiration!=null ? Math.round(data.respiration*10)/10+'/min' : null);
-    if(data.training_load_acute!=null || data.training_load_chronic!=null){
-      addCell('Trainingsbelasting (acuut/chronisch)', `${data.training_load_acute!=null?Math.round(data.training_load_acute):'—'} / ${data.training_load_chronic!=null?Math.round(data.training_load_chronic):'—'}`+(data.training_load_ratio!=null?` &middot; ratio ${Number(data.training_load_ratio).toFixed(2)}`:''));
-    }
-    addCell('Trainingsstatus', humanizeGarminLabel(data.training_feedback));
-    addCell('Belastingsbalans', humanizeGarminLabel(data.acwr_status)+(data.training_balance_feedback?` &middot; ${humanizeGarminLabel(data.training_balance_feedback)}`:''));
-
-    const cellsHtml = cells.map(c=>`
-      <div class="stat-row" style="border-bottom:none;flex-direction:column;align-items:flex-start;">
-        <span class="stat-label">${escapeHtml(c.label)}</span>
-        <span class="stat-val" style="font-size:16px;">${c.val}</span>
-      </div>`).join('');
-    el.innerHTML = `
-      <div class="meal-meta" style="margin-bottom:8px;">${escapeHtml(fmtDateLabel(new Date(data.metric_date+'T12:00:00')))}</div>
-      <div class="vitals-grid" style="grid-template-columns:repeat(3,1fr);">${cellsHtml}</div>`;
-  }catch(e){
-    console.error('Laden Garmin-metrics', e);
-    el.innerHTML = '<div class="empty">Kon Garmin-data niet laden.</div>';
-  }
-}
-
 function generateNutritionTip(totals, targets, burned, vitals, trainingHadActivity, recoveryConcern, openMealMoments, weightKg, runningStats, customItems){
   if(targets.protein==null){
     return escapeHtml("Vul je gewicht in (via de Tredict-sync) zodat ik een tip op maat kan geven.");
@@ -2465,18 +2447,15 @@ async function renderDashboard(){
   let burned = training ? training.totalKcal : null;
   let burnedIsEstimate = false;
   let estimatedRestKcal = null;
-  let stepsWeightKg = null;
-  if(burned==null){
-    const fallbackWeight = (weightEntry && weightEntry.kg) ? weightEntry : await loadMostRecentWeight(dateStr);
-    if(fallbackWeight && fallbackWeight.kg){
-      stepsWeightKg = fallbackWeight.kg;
-      const profile = await loadProfile(owner);
-      if(profile && profile.birthdate && profile.heightCm){
-        estimatedRestKcal = estimateRestKcalFromProfile(fallbackWeight.kg, profile.birthdate, profile.heightCm);
-        if(estimatedRestKcal){
-          burned = estimatedRestKcal;
-          burnedIsEstimate = true;
-        }
+  const fallbackWeight = (weightEntry && weightEntry.kg) ? weightEntry : await loadMostRecentWeight(dateStr);
+  const stepsWeightKg = (fallbackWeight && fallbackWeight.kg) ? fallbackWeight.kg : null;
+  if(burned==null && stepsWeightKg){
+    const profile = await loadProfile(owner);
+    if(profile && profile.birthdate && profile.heightCm){
+      estimatedRestKcal = estimateRestKcalFromProfile(stepsWeightKg, profile.birthdate, profile.heightCm);
+      if(estimatedRestKcal){
+        burned = estimatedRestKcal;
+        burnedIsEstimate = true;
       }
     }
   }
@@ -2487,6 +2466,22 @@ async function renderDashboard(){
   const loggedSteps = !training ? await loadSteps(dateStr) : null;
   const extraStepsKcal = (!training && loggedSteps && stepsWeightKg) ? extraKcalFromSteps(loggedSteps, stepsWeightKg) : 0;
   if(extraStepsKcal>0 && burned!=null) burned += extraStepsKcal;
+
+  // Op dagen MET Tredict-training vullen we stappen automatisch aan vanuit
+  // Garmin i.p.v. handmatige invoer. De stappen die Garmin al toeschrijft
+  // aan de hardloopsessie zelf trekken we eraf (anders tel je die kcal
+  // dubbel: eenmaal via de gesynchroniseerde training, eenmaal via losse
+  // stappen) -- en van de rest tellen, net als bij handmatige invoer, alleen
+  // stappen boven STEPS_BASELINE mee.
+  let trainingExtraStepsKcal = 0;
+  if(training && stepsWeightKg){
+    const garminSteps = await loadGarminStepsForDate(owner, dateStr);
+    if(garminSteps && garminSteps.steps_total!=null){
+      const nonRunSteps = Math.max(0, garminSteps.steps_total - (garminSteps.steps_training||0));
+      trainingExtraStepsKcal = extraKcalFromSteps(nonRunSteps, stepsWeightKg);
+      if(trainingExtraStepsKcal>0 && burned!=null) burned += trainingExtraStepsKcal;
+    }
+  }
 
   document.getElementById('consumedVal').textContent = totals.kcal + ' kcal';
 
@@ -2552,9 +2547,14 @@ async function renderDashboard(){
         <span class="stat-label">Rust / dagelijks verbruik</span>
         <span class="stat-val">${training.restKcal ?? 0} kcal</span>
       </div>
+      ${trainingExtraStepsKcal>0 ? `
+      <div class="stat-row">
+        <span class="stat-label">&#128099; Extra stappen (Garmin, buiten hardloopsessie)</span>
+        <span class="stat-val">+${trainingExtraStepsKcal} kcal</span>
+      </div>` : ''}
       <div class="stat-row" style="border-bottom:none;">
         <span class="stat-label" style="font-weight:700;">Totaal verbrand</span>
-        <span class="stat-val">${training.totalKcal ?? 0} kcal</span>
+        <span class="stat-val">${burned ?? training.totalKcal ?? 0} kcal</span>
       </div>`;
   }
 
@@ -2581,7 +2581,31 @@ async function renderDashboard(){
   const vitals = await loadVitalsWithGarminFallback(owner, dateStr);
   document.getElementById('vitalHrRest').textContent = (vitals && vitals.hrRest!=null) ? vitals.hrRest+' bpm' : '\u2014';
   document.getElementById('vitalHrv').textContent = (vitals && vitals.hrv!=null) ? vitals.hrv+' ms' : '\u2014';
-  document.getElementById('vitalSleep').textContent = (vitals && vitals.sleepMinutes) ? (Math.floor(vitals.sleepMinutes/60)+'u'+String(vitals.sleepMinutes%60).padStart(2,'0')+'m') : '\u2014';
+  const gToday = vitals && vitals.garmin;
+  document.getElementById('vitalSleep').textContent = (vitals && vitals.sleepMinutes)
+    ? (Math.floor(vitals.sleepMinutes/60)+'u'+String(vitals.sleepMinutes%60).padStart(2,'0')+'m') + (gToday && gToday.sleep_score!=null ? ` (score ${Math.round(gToday.sleep_score)})` : '')
+    : '\u2014';
+
+  // VO2max en trainingsbelasting-ratio (Garmin-testdata, geen Tredict-
+  // equivalent) -- de ratio geeft aan of rust nu relevant is: >1,3 duidt op
+  // een hogere acute t.o.v. chronische belasting (rust kan verstandig zijn),
+  // <0,8 op ruimte voor meer trainingsprikkel, ertussenin op een gebalanceerde
+  // opbouw waar rust niet per se nodig is.
+  document.getElementById('vitalVo2max').textContent = (gToday && gToday.vo2max!=null) ? (Math.round(gToday.vo2max*10)/10) : '\u2014';
+  const loadEl = document.getElementById('vitalTrainingLoad');
+  const loadHintEl = document.getElementById('vitalTrainingLoadHint');
+  if(gToday && gToday.training_load_ratio!=null){
+    const ratio = Number(gToday.training_load_ratio);
+    loadEl.textContent = ratio.toFixed(2);
+    let hint;
+    if(ratio > 1.3) hint = 'hoger dan optimaal \u2014 rust kan verstandig zijn';
+    else if(ratio < 0.8) hint = 'lager dan optimaal \u2014 ruimte voor meer trainingsprikkel';
+    else hint = 'gebalanceerd \u2014 rust niet per se nodig';
+    loadHintEl.textContent = hint;
+  } else {
+    loadEl.textContent = '\u2014';
+    loadHintEl.textContent = 'Garmin (test)';
+  }
 
   const weekDays = weekDates(state.currentDate);
   const weekVitals = await Promise.all(weekDays.map(d=>loadVitalsWithGarminFallback(owner, fmtDate(d))));
@@ -2711,7 +2735,6 @@ async function renderDashboard(){
   const progressDays = 90;
   const recentTrainingForProgress = progressDays===trainingTipDays ? recentTrainingForTip : await loadRecentTrainingForTip(progressDays);
   renderTrainingProgressTable(recentTrainingForProgress);
-  renderGarminMetricsCard();
 
   syncTeamEntry(dateStr, {
     dagscore: dagscoreVal,

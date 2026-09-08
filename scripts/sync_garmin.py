@@ -134,6 +134,13 @@ def main():
     sleep = safe(garmin.get_sleep_daily, week_start.isoformat(), today.isoformat())
     max_metrics = safe(garmin.get_max_metrics_range, week_start.isoformat(), today.isoformat())
     training_status = safe(garmin.get_training_status, today.isoformat())
+    # Alleen voor vandaag: totaal-stappen (voor de "extra stappen naast
+    # training"-functie in de app) en de stappen die Garmin toeschrijft aan
+    # de hardloopactiviteit(en) van vandaag, zodat de app die eraf kan
+    # trekken (anders tellen dezelfde stappen twee keer mee: eenmaal via de
+    # gesynchroniseerde training, eenmaal via het losse stappenverbruik).
+    today_stats = safe(garmin.get_stats, today.isoformat())
+    today_run_activities = safe(garmin.get_activities_by_date, today.isoformat(), today.isoformat(), "running")
     for name, val in [("rhr", rhr), ("hrv", hrv), ("sleep", sleep), ("max_metrics", max_metrics)]:
         if not isinstance(val, list):
             print(f"  (let op: {name} kwam terug als {type(val).__name__} i.p.v. een lijst -- ruwe vorm: {str(val)[:300]})")
@@ -169,6 +176,8 @@ def main():
             "training_feedback": None,
             "acwr_status": None,
             "training_balance_feedback": None,
+            "steps_total": None,
+            "steps_training": None,
             "updated_at": datetime.now(timezone.utc).isoformat(),
             "raw": {},
         })
@@ -262,6 +271,17 @@ def main():
             row["training_balance_feedback"] = balance_entry.get("trainingBalanceFeedbackPhrase")
 
         row["raw"]["training_status"] = training_status
+
+    if today_stats:
+        row = bucket(today.isoformat())
+        row["steps_total"] = today_stats.get("totalSteps")
+        row["raw"]["stats"] = today_stats
+
+    if isinstance(today_run_activities, list):
+        row = bucket(today.isoformat())
+        run_steps = sum(a.get("steps") or 0 for a in today_run_activities)
+        row["steps_training"] = run_steps if today_run_activities else None
+        row["raw"]["run_activities_steps"] = run_steps
 
     rows = list(per_date.values())
     print(f"{len(rows)} dag(en) met metrics gevonden, opslaan in Supabase...")
