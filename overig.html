@@ -135,6 +135,13 @@
   </div>
   <div class="err" id="gateErr" hidden></div>
   <div class="err" id="gateMsg" hidden style="color:var(--up);"></div>
+  <p style="margin-top:24px;font-size:12px;color:var(--muted);">of met wachtwoord:</p>
+  <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;">
+    <input type="password" id="pwInput" placeholder="wachtwoord" autocomplete="current-password"
+      style="font:inherit;background:var(--card);color:var(--cream);border:1px solid var(--line);
+      border-radius:10px;padding:10px 14px;min-width:180px;">
+    <button class="ghost" id="pwLoginBtn">Inloggen met wachtwoord</button>
+  </div>
 </div>
 
 <!-- ======================= APP ======================= -->
@@ -392,6 +399,33 @@ $('#verifyBtn').addEventListener('click', async () => {
   boot();
 });
 $('#codeInput').addEventListener('keydown', e => { if (e.key === 'Enter') $('#verifyBtn').click(); });
+
+$('#pwLoginBtn').addEventListener('click', async () => {
+  const email = $('#emailInput').value.trim().toLowerCase();
+  const password = $('#pwInput').value;
+  $('#gateErr').hidden = true;
+  if (!email || !password){
+    $('#gateErr').hidden = false;
+    $('#gateErr').textContent = 'Vul e-mail en wachtwoord in.';
+    return;
+  }
+  if (!ALLOWED.includes(email)){
+    $('#gateErr').hidden = false;
+    $('#gateErr').textContent = 'Dit account (' + email + ') heeft geen toegang tot deze pagina.';
+    return;
+  }
+  const btn = $('#pwLoginBtn');
+  btn.disabled = true;
+  const { error } = await sb.auth.signInWithPassword({ email, password });
+  btn.disabled = false;
+  if (error){
+    $('#gateErr').hidden = false;
+    $('#gateErr').textContent = 'Inloggen mislukt: ' + error.message;
+    return;
+  }
+  boot();
+});
+$('#pwInput').addEventListener('keydown', e => { if (e.key === 'Enter') $('#pwLoginBtn').click(); });
 
 $('#logoutBtn').addEventListener('click', async () => {
   await sb.auth.signOut();
