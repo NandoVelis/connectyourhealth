@@ -2628,20 +2628,23 @@ async function renderDashboard(){
     }
   }
   // Stappen komen nu altijd automatisch uit Garmin, geen handmatige invoer
-  // meer nodig. Garmin's eigen dagtotaal-stappenteller (steps_total) telt
-  // stappen tíjdens een hardloopactiviteit zelf NIET mee (bevestigd doordat
-  // steps_total op trainingsdagen regelmatig lager is dan de losse
-  // hardloopstappen van die activiteit) -- dus geen aftrek meer nodig om
-  // dubbeltelling te voorkomen, steps_total is al "stappen naast de
-  // training". Het rustverbruik gaat uit van BMR x 1.2 (puur sedentair),
-  // dus elke stap telt gewoon mee, zie extraKcalFromSteps().
+  // meer nodig. Garmin's dagtotaal (steps_total) telt de hardloopstappen
+  // ZELF ook mee (bevestigd in de Garmin Connect-app -- de dagstappen-
+  // grafiek springt omhoog tijdens de run), dus die trekken we op
+  // trainingsdagen eraf om dubbeltelling te voorkomen (eenmaal via de
+  // gesynchroniseerde training-kcal, eenmaal via losse stappen). Kan tijdelijk
+  // te laag lijken vlak na de sync als Garmin's eigen dagtotaal de run nog
+  // niet heeft bijgewerkt -- lost zichzelf op bij de eerstvolgende sync.
   let extraStepsKcal = 0;
   let trainingExtraStepsKcal = 0;
   let garminStepsToday = null;
   if(stepsWeightKg){
     garminStepsToday = await loadGarminStepsForDate(owner, dateStr);
     if(garminStepsToday && garminStepsToday.steps_total!=null){
-      const kcal = extraKcalFromSteps(garminStepsToday.steps_total, stepsWeightKg);
+      const relevantSteps = training
+        ? Math.max(0, garminStepsToday.steps_total - (garminStepsToday.steps_training||0))
+        : garminStepsToday.steps_total;
+      const kcal = extraKcalFromSteps(relevantSteps, stepsWeightKg);
       if(training){ trainingExtraStepsKcal = kcal; } else { extraStepsKcal = kcal; }
       if(kcal>0 && burned!=null) burned += kcal;
     }
@@ -2702,8 +2705,8 @@ async function renderDashboard(){
         <span class="stat-val">${training.restKcal ?? 0} kcal</span>
       </div>
       <div class="stat-row">
-        <span class="stat-label">&#128099; Stappen vandaag (Garmin)</span>
-        <span class="stat-val">${garminStepsToday && garminStepsToday.steps_total!=null ? garminStepsToday.steps_total.toLocaleString('nl-NL') + ` (+${trainingExtraStepsKcal} kcal)` : '&mdash;'}</span>
+        <span class="stat-label">&#128099; Stappen vandaag (Garmin, incl. hardloopsessie)</span>
+        <span class="stat-val">${garminStepsToday && garminStepsToday.steps_total!=null ? garminStepsToday.steps_total.toLocaleString('nl-NL') + ` (+${trainingExtraStepsKcal} kcal buiten training)` : '&mdash;'}</span>
       </div>
       <div class="stat-row" style="border-bottom:none;">
         <span class="stat-label" style="font-weight:700;">Totaal verbrand</span>
@@ -3885,15 +3888,17 @@ async function renderPersonalPeriod(days, labelElId, bodyElId, label){
     const meals = await loadMeals(dateStr);
     const macros = macroKcal(meals);
     const training = await loadTraining(dateStr);
-    // Zelfde stappen-naar-kcal-logica als het dagoverzicht: Garmin's eigen
-    // dagtotaal telt stappen tíjdens een hardloopactiviteit al niet mee,
-    // dus telt gewoon mee bovenop de gesynchroniseerde training.
+    // Zelfde stappen-naar-kcal-logica als het dagoverzicht: hardloopstappen
+    // eraf getrokken op trainingsdagen om dubbeltelling te voorkomen.
     let extraStepsKcal = 0;
     const stepsWeightKg = (w && w.kg) ? w.kg : null;
     if(stepsWeightKg && owner){
       const garminSteps = await loadGarminStepsForDate(owner, dateStr);
       if(garminSteps && garminSteps.steps_total!=null){
-        extraStepsKcal = extraKcalFromSteps(garminSteps.steps_total, stepsWeightKg);
+        const relevantSteps = training
+          ? Math.max(0, garminSteps.steps_total - (garminSteps.steps_training||0))
+          : garminSteps.steps_total;
+        extraStepsKcal = extraKcalFromSteps(relevantSteps, stepsWeightKg);
       }
     }
     const burned = (training ? (training.totalKcal||0) : 0) + extraStepsKcal;
@@ -5027,7 +5032,10 @@ async function renderHistory(){
       if(stepsWeightKg){
         const garminSteps = await loadGarminStepsForDate(owner, dateStr);
         if(garminSteps && garminSteps.steps_total!=null){
-          extraStepsKcal = extraKcalFromSteps(garminSteps.steps_total, stepsWeightKg);
+          const relevantSteps = training
+            ? Math.max(0, garminSteps.steps_total - (garminSteps.steps_training||0))
+            : garminSteps.steps_total;
+          extraStepsKcal = extraKcalFromSteps(relevantSteps, stepsWeightKg);
         }
       }
       const burned = (training ? (training.totalKcal||0) : 0) + extraStepsKcal;
