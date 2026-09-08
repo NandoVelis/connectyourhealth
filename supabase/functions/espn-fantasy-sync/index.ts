@@ -9,9 +9,12 @@ const API = "https://fantasy.espngoal.nl/api/bootstrap-static/";
 // Elke gebruiker met toegang tot /overig heeft hier zijn eigen ESPN Fantasy
 // entry-ID + het e-mailadres waarnaar zijn prijswaarschuwingen gaan.
 const MY_TEAMS = [
-  { entryId: 28264, alertEmail: "nandovelis@gmail.com" },
-  { entryId: 2640, alertEmail: "duncanvelis@ziggo.nl" },
+  { entryId: 28264, alertEmails: ["nandovelis@gmail.com"] },
+  { entryId: 2640, alertEmails: ["duncanvelis@ziggo.nl", "nandovelis@gmail.com"] },
 ];
+// Los van een eigen team: mailt Nando zodra ÉÉN willekeurige speler (ook een
+// die hij niet bezit) de 90%-drempel van een prijswijziging nadert.
+const GLOBAL_WATCH_EMAIL = "nandovelis@gmail.com";
 const SB_URL = Deno.env.get("SUPABASE_URL")!;
 const SB_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
@@ -236,7 +239,7 @@ Deno.serve(async (req: Request) => {
     // per team: gaat er eentje mis, dan proberen de andere teams en de rest
     // van de sync (prijzen, kritieker) gewoon door.
     const resendKey = Deno.env.get("RESEND_API_KEY");
-    for (const { entryId, alertEmail } of MY_TEAMS) {
+    for (const { entryId, alertEmails } of MY_TEAMS) {
       try {
         const entryRes = await fetch(`https://fantasy.espngoal.nl/api/entry/${entryId}/`);
         if (!entryRes.ok) {
@@ -298,7 +301,12 @@ Deno.serve(async (req: Request) => {
             const threatened = board.filter((b) =>
               b.verwachting && b.verwachting !== "stabiel" && b.verwachting !== "onbekend"
             );
-            if (threatened.length) {
+            // Elk gekoppeld e-mailadres van dit team (bv. zowel Duncan als
+            // Nando bij Duncan's team) krijgt zijn eigen, los bijgehouden
+            // waarschuwing -- zo mist niemand een mail omdat een ander 'm
+            // al kreeg voor dezelfde speler.
+            for (const alertEmail of alertEmails) {
+              if (!threatened.length) continue;
               const alreadyRes = await fetch(
                 `${SB_URL}/rest/v1/espn_price_alerts_sent?select=player_id,verwachting&alert_email=eq.${
                   encodeURIComponent(alertEmail)
@@ -323,9 +331,9 @@ Deno.serve(async (req: Request) => {
                   body: JSON.stringify({
                     from: "ConnectYourHealth <onboarding@resend.dev>",
                     to: [alertEmail],
-                    subject: `ESPN Fantasy: ${toAlert.length} speler(s) in jouw team dreigen van prijs te veranderen`,
+                    subject: `ESPN Fantasy: ${toAlert.length} speler(s) in dit team dreigen van prijs te veranderen`,
                     text:
-                      `Deze spelers in jouw team staan dicht bij een prijswijziging:\n\n${lines}\n\nBekijk het overzicht: https://connectyourhealth.vercel.app/overig`,
+                      `Deze spelers in het gevolgde team staan dicht bij een prijswijziging:\n\n${lines}\n\nBekijk het overzicht: https://connectyourhealth.vercel.app/overig`,
                   }),
                 });
                 if (mailRes.ok) {
@@ -348,6 +356,72 @@ Deno.serve(async (req: Request) => {
         }
       } catch (e) {
         console.warn(`Mijn-team-sync (entry ${entryId}) mislukt: ${String(e)}`);
+      }
+    }
+
+    // ---- ALGEMENE 90%-WAARSCHUWING (los van eigen team) ----
+    // Mailt Nando zodra ÉÉN willekeurige speler (ook een die hij niet
+    // bezit) 90% of meer van de drempel van een prijswijziging heeft
+    // bereikt. Gebruikt dezelfde dedup-tabel als de team-waarschuwingen
+    // hierboven, dus een speler die al gemaild is (bv. omdat hij ook in
+    // een van de gevolgde teams zit) wordt niet dubbel gemaild.
+    if (resendKey) {
+      try {
+        const boardRes = await fetch(
+          `${SB_URL}/rest/v1/espn_price_board?select=id,web_name,team_short,now_cost,verwachting,progress&progress=gte.0.9`,
+          { headers: sbHeaders() },
+        );
+        if (boardRes.ok) {
+          const board: any[] = await boardRes.json();
+          if (board.length) {
+            const alreadyRes = await fetch(
+              `${SB_URL}/rest/v1/espn_price_alerts_sent?select=player_id,verwachting&alert_email=eq.${
+                encodeURIComponent(GLOBAL_WATCH_EMAIL)
+              }&player_id=in.(${board.map((t) => t.id).join(",")})`,
+              { headers: sbHeaders() },
+            );
+            const already: any[] = alreadyRes.ok ? await alreadyRes.json() : [];
+            const alreadySet = new Set(already.map((a) => `${a.player_id}:${a.verwachting}`));
+            const toAlert = board.filter((t) => !alreadySet.has(`${t.id}:${t.verwachting}`));
+            if (toAlert.length) {
+              const lines = toAlert.map((t) =>
+                `- ${t.web_name} (${t.team_short}): ${t.verwachting} (${
+                  Math.round((t.progress || 0) * 100)
+                }% van de drempel, huidige prijs €${(t.now_cost / 10).toFixed(1)})`
+              ).join("\n");
+              const mailRes = await fetch("https://api.resend.com/emails", {
+                method: "POST",
+                headers: {
+                  Authorization: `Bearer ${resendKey}`,
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                  from: "ConnectYourHealth <onboarding@resend.dev>",
+                  to: [GLOBAL_WATCH_EMAIL],
+                  subject: `ESPN Fantasy: ${toAlert.length} speler(s) op 90%+ richting een prijswijziging`,
+                  text:
+                    `Deze spelers staan op 90% of meer richting een prijswijziging (ongeacht of ze in een van jullie teams zitten):\n\n${lines}\n\nBekijk het overzicht: https://connectyourhealth.vercel.app/overig`,
+                }),
+              });
+              if (mailRes.ok) {
+                await sbPost(
+                  "espn_price_alerts_sent",
+                  toAlert.map((t) => ({
+                    alert_email: GLOBAL_WATCH_EMAIL,
+                    player_id: t.id,
+                    verwachting: t.verwachting,
+                    sent_at: capturedAt,
+                  })),
+                  "return=minimal,resolution=merge-duplicates",
+                );
+              } else {
+                console.warn(`90%-waarschuwing-mail mislukt: ${mailRes.status} ${await mailRes.text()}`);
+              }
+            }
+          }
+        }
+      } catch (e) {
+        console.warn(`Algemene 90%-waarschuwing mislukt: ${String(e)}`);
       }
     }
 
