@@ -2637,6 +2637,7 @@ async function renderDashboard(){
   // niet heeft bijgewerkt -- lost zichzelf op bij de eerstvolgende sync.
   let extraStepsKcal = 0;
   let trainingExtraStepsKcal = 0;
+  let trainingRelevantSteps = null;
   let garminStepsToday = null;
   if(stepsWeightKg){
     garminStepsToday = await loadGarminStepsForDate(owner, dateStr);
@@ -2644,6 +2645,7 @@ async function renderDashboard(){
       const relevantSteps = training
         ? Math.max(0, garminStepsToday.steps_total - (garminStepsToday.steps_training||0))
         : garminStepsToday.steps_total;
+      if(training) trainingRelevantSteps = relevantSteps;
       const kcal = extraKcalFromSteps(relevantSteps, stepsWeightKg);
       if(training){ trainingExtraStepsKcal = kcal; } else { extraStepsKcal = kcal; }
       if(kcal>0 && burned!=null) burned += kcal;
@@ -2705,8 +2707,8 @@ async function renderDashboard(){
         <span class="stat-val">${training.restKcal ?? 0} kcal</span>
       </div>
       <div class="stat-row">
-        <span class="stat-label">&#128099; Stappen vandaag (Garmin, incl. hardloopsessie)</span>
-        <span class="stat-val">${garminStepsToday && garminStepsToday.steps_total!=null ? garminStepsToday.steps_total.toLocaleString('nl-NL') + ` (+${trainingExtraStepsKcal} kcal buiten training)` : '&mdash;'}</span>
+        <span class="stat-label">&#128099; Stappen (excl. hardlopen)</span>
+        <span class="stat-val">${trainingRelevantSteps!=null ? trainingRelevantSteps.toLocaleString('nl-NL') + ` (+${trainingExtraStepsKcal} kcal)` : '&mdash;'}</span>
       </div>
       <div class="stat-row" style="border-bottom:none;">
         <span class="stat-label" style="font-weight:700;">Totaal verbrand</span>
