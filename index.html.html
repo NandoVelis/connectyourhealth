@@ -1239,6 +1239,35 @@ hrv: data.hrv,
 sleepMinutes: data.sleep_minutes
 };
 }
+async function loadGarminVitalsForDate(owner, dateStr){
+  if(!owner) return null;
+  try{
+    const { data, error } = await supabaseClient
+      .from('garmin_metrics')
+      .select('resting_hr, hrv, sleep_minutes')
+      .eq('owner', owner)
+      .eq('metric_date', dateStr)
+      .maybeSingle();
+    if(error) throw error;
+    return data || null;
+  }catch(e){ console.error('Laden Garmin-vitals', e); return null; }
+}
+// Vult Tredict-vitals (het bestaande "Herstel"-blok) aan met Garmin-
+// testdata voor dezelfde dag zodra een veld ontbreekt -- nu Tredict
+// binnenkort stopt, blijft het Herstel-blok zo bruikbaar i.p.v. dat het
+// terugvalt op "—". Tredict-waarden hebben voorrang waar aanwezig, Garmin
+// vult alleen de gaten.
+async function loadVitalsWithGarminFallback(owner, dateStr){
+  const vitals = await loadVitals(dateStr);
+  const garmin = await loadGarminVitalsForDate(owner, dateStr);
+  if(!garmin) return vitals;
+  const pick = (tredictVal, garminVal) => tredictVal!=null ? tredictVal : (garminVal!=null ? Math.round(garminVal) : null);
+  return {
+    hrRest: pick(vitals?.hrRest, garmin.resting_hr),
+    hrv: pick(vitals?.hrv, garmin.hrv),
+    sleepMinutes: pick(vitals?.sleepMinutes, garmin.sleep_minutes),
+  };
+}
 async function saveVitals(dateStr, data){
   const owner = currentOwner();
   if(!owner) return false;
@@ -2549,15 +2578,15 @@ async function renderDashboard(){
         : 'kcal ingenomen (training nog niet opgehaald)';
   }
 
-  const vitals = await loadVitals(dateStr);
+  const vitals = await loadVitalsWithGarminFallback(owner, dateStr);
   document.getElementById('vitalHrRest').textContent = (vitals && vitals.hrRest!=null) ? vitals.hrRest+' bpm' : '\u2014';
   document.getElementById('vitalHrv').textContent = (vitals && vitals.hrv!=null) ? vitals.hrv+' ms' : '\u2014';
   document.getElementById('vitalSleep').textContent = (vitals && vitals.sleepMinutes) ? (Math.floor(vitals.sleepMinutes/60)+'u'+String(vitals.sleepMinutes%60).padStart(2,'0')+'m') : '\u2014';
 
   const weekDays = weekDates(state.currentDate);
-  const weekVitals = await Promise.all(weekDays.map(d=>loadVitals(fmtDate(d))));
+  const weekVitals = await Promise.all(weekDays.map(d=>loadVitalsWithGarminFallback(owner, fmtDate(d))));
   const prevWeekDaysForVitals = lastWeekDates(state.currentDate);
-  const prevWeekVitals = await Promise.all(prevWeekDaysForVitals.map(d=>loadVitals(fmtDate(d))));
+  const prevWeekVitals = await Promise.all(prevWeekDaysForVitals.map(d=>loadVitalsWithGarminFallback(owner, fmtDate(d))));
 
   const wAvg = arr => arr.length ? Math.round(arr.reduce((a,b)=>a+b,0)/arr.length) : null;
   const avgOfField = (list, field) => wAvg(list.filter(v=>v && v[field]!=null).map(v=>v[field]));
