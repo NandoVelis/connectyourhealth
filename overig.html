@@ -205,6 +205,7 @@
           <th data-sort="net_since_change">Netto sinds wijziging</th>
           <th data-sort="threshold">Drempel</th>
           <th data-sort="progress_signed">Voortgang</th>
+          <th data-sort="eta_at">Verwacht op</th>
           <th data-sort="verwachting">Verwachting</th>
         </tr></thead>
         <tbody></tbody>
@@ -534,7 +535,7 @@ function watchRow(r, dir){
   return `<div class="row">
     <div>
       <div class="name">${r.web_name} <span class="meta">${r.team_short} · ${POS_SHORT[r.element_type]||''}</span></div>
-      <div class="meta">${eur(r.now_cost)} · ${r.selected_by_percent}% bezit · ${signed(r.net_since_change)} netto${r.basis==='geschat'?' · geschat':''}</div>
+      <div class="meta">${eur(r.now_cost)} · ${r.selected_by_percent}% bezit · ${signed(r.net_since_change)} netto${r.basis==='geschat'?' · geschat':''} · verwacht ${formatEta(r.eta_at, r.progress)}</div>
     </div>
     <div class="pct" style="color:var(--${dir})">${pct(r.progress)}</div>
     <div class="bar"><i class="${dir}" style="width:${Math.min(p*100,100)}%"></i></div>
@@ -573,6 +574,21 @@ function verwachtingPill(v){
   if (v === 'onbekend') return `<span class="pill est">wacht op meting</span>`;
   return `<span class="pill flat">stabiel</span>`;
 }
+// Geschatte datum van de eerstvolgende prijswijziging (eta_at uit
+// espn_price_board, geschat via de recente netto-transfersnelheid van die
+// speler). Al over de drempel: "binnenkort" (eerstvolgende sync). Geen
+// bruikbare trend: "—".
+function formatEta(etaAt, progress){
+  if (!etaAt) return '—';
+  const d = new Date(etaAt);
+  const diffH = (d - Date.now()) / 36e5;
+  if (diffH <= 0.5) return 'binnenkort';
+  if (progress !== null && progress >= 1) return 'binnenkort';
+  const opts = diffH < 24
+    ? {hour:'2-digit',minute:'2-digit'}
+    : {day:'2-digit',month:'short'};
+  return d.toLocaleString('nl-NL', diffH < 24 ? {...opts, weekday:'short'} : opts);
+}
 function renderTable(){
   const rows = filtered().slice(0,300);
   $('#tbl tbody').innerHTML = rows.map(r => `
@@ -585,6 +601,7 @@ function renderTable(){
       <td class="num">${r.net_since_change===null?'—':signed(r.net_since_change)}</td>
       <td class="num">${r.threshold===null?'—':nf.format(r.threshold)}</td>
       <td class="num">${r.progress===null?'—':pct(r.progress)}</td>
+      <td class="num">${formatEta(r.eta_at, r.progress)}</td>
       <td>${verwachtingPill(r.verwachting)}</td>
     </tr>`).join('');
   $('#modelNote').innerHTML =
