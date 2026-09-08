@@ -151,6 +151,7 @@
     <h1>Overig</h1>
     <div class="spacer"></div>
     <div class="who" id="who"></div>
+    <button class="ghost" id="syncNowBtn">&#8635; Sync nu</button>
     <button class="ghost" id="logoutBtn">Uitloggen</button>
   </header>
 
@@ -430,6 +431,32 @@ $('#pwInput').addEventListener('keydown', e => { if (e.key === 'Enter') $('#pwLo
 $('#logoutBtn').addEventListener('click', async () => {
   await sb.auth.signOut();
   location.reload();
+});
+
+// Trekt de sync-function direct aan (i.p.v. te wachten op de eerstvolgende
+// pg_cron-run, elke 15 min) en herlaadt daarna de pagina-data.
+$('#syncNowBtn').addEventListener('click', async () => {
+  const btn = $('#syncNowBtn');
+  const origText = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'Bezig...';
+  try{
+    const r = await fetch(SUPABASE_URL + '/functions/v1/espn-fantasy-sync', {
+      method: 'POST',
+      headers: { apikey: SUPABASE_KEY, Authorization: 'Bearer ' + SUPABASE_KEY }
+    });
+    const data = await r.json();
+    if (!r.ok || data.ok === false){
+      alert('Sync mislukt: ' + (data.error || r.status));
+    } else {
+      await load();
+    }
+  }catch(e){
+    alert('Sync mislukt: ' + e.message);
+  }finally{
+    btn.disabled = false;
+    btn.textContent = origText;
+  }
 });
 
 /* =========================================================================
