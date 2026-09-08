@@ -117,17 +117,15 @@
 <div id="gate" class="gate" hidden>
   <div class="brand" style="margin-bottom:20px">CONNECT<span>YOU</span></div>
   <h2>Overig</h2>
-  <p>Deze pagina is privé. Log in met je ConnectYou-account.</p>
-  <button class="ms-btn" id="loginBtn">
-    <svg class="ms-logo" viewBox="0 0 23 23" aria-hidden="true">
-      <rect x="0" y="0" width="10.5" height="10.5" fill="#f25022"/>
-      <rect x="12.5" y="0" width="10.5" height="10.5" fill="#7fba00"/>
-      <rect x="0" y="12.5" width="10.5" height="10.5" fill="#00a4ef"/>
-      <rect x="12.5" y="12.5" width="10.5" height="10.5" fill="#ffb900"/>
-    </svg>
-    Inloggen met Microsoft
-  </button>
+  <p>Deze pagina is privé. Vul je e-mailadres in, dan sturen we een inloglink.</p>
+  <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;">
+    <input type="email" id="emailInput" placeholder="jij@connectyou.nl" autocomplete="email"
+      style="font:inherit;background:var(--card);color:var(--cream);border:1px solid var(--line);
+      border-radius:10px;padding:10px 14px;min-width:220px;">
+    <button class="primary" id="loginBtn">Stuur inloglink</button>
+  </div>
   <div class="err" id="gateErr" hidden></div>
+  <div class="err" id="gateMsg" hidden style="color:var(--up);"></div>
 </div>
 
 <!-- ======================= APP ======================= -->
@@ -294,23 +292,41 @@ async function boot(){
 function showGate(msg){
   $('#app').hidden = true;
   $('#gate').hidden = false;
+  $('#gateMsg').hidden = true;
   if (msg){ $('#gateErr').hidden = false; $('#gateErr').textContent = msg; }
+  else { $('#gateErr').hidden = true; }
 }
 
 $('#loginBtn').addEventListener('click', async () => {
-  const { error } = await sb.auth.signInWithOAuth({
-    provider: 'azure',
-    options: {
-      scopes: 'openid profile email',
-      redirectTo: location.origin + location.pathname
-    }
+  const email = $('#emailInput').value.trim().toLowerCase();
+  $('#gateErr').hidden = true;
+  $('#gateMsg').hidden = true;
+  if (!email){
+    $('#gateErr').hidden = false;
+    $('#gateErr').textContent = 'Vul een e-mailadres in.';
+    return;
+  }
+  if (!ALLOWED.includes(email)){
+    $('#gateErr').hidden = false;
+    $('#gateErr').textContent = 'Dit account (' + email + ') heeft geen toegang tot deze pagina.';
+    return;
+  }
+  const btn = $('#loginBtn');
+  btn.disabled = true;
+  const { error } = await sb.auth.signInWithOtp({
+    email,
+    options: { emailRedirectTo: location.origin + location.pathname }
   });
+  btn.disabled = false;
   if (error){
     $('#gateErr').hidden = false;
-    $('#gateErr').textContent = 'Inloggen mislukt: ' + error.message +
-      ' — staat de Azure-provider aan in Supabase (Authentication → Providers)?';
+    $('#gateErr').textContent = 'Versturen mislukt: ' + error.message;
+    return;
   }
+  $('#gateMsg').hidden = false;
+  $('#gateMsg').textContent = 'Inloglink verstuurd naar ' + email + ' — check je inbox (ook spam) en klik op de link.';
 });
+$('#emailInput').addEventListener('keydown', e => { if (e.key === 'Enter') $('#loginBtn').click(); });
 
 $('#logoutBtn').addEventListener('click', async () => {
   await sb.auth.signOut();
