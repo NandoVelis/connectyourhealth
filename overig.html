@@ -94,6 +94,30 @@
   .bar i.up{background:var(--up)} .bar i.down{background:var(--down)}
   .empty{color:var(--muted);font-size:13px;padding:10px 0}
 
+  /* ---------- opstelling (pitch view) ---------- */
+  .viewToggle{display:inline-flex;background:var(--card);border:1px solid var(--line);border-radius:999px;padding:3px;margin-bottom:14px}
+  .viewToggle button{border:none;background:transparent;border-radius:999px;padding:7px 18px;font-size:13px;font-weight:600;color:var(--muted)}
+  .viewToggle button:hover{border-color:transparent}
+  .viewToggle button[aria-selected="true"]{background:var(--magenta);color:#fff}
+  .pitch{background:linear-gradient(180deg,#1f8a4c 0%,#1c7a44 50%,#186b3c 100%);
+    border-radius:16px;padding:22px 10px 14px;position:relative;overflow:hidden}
+  .pitch::before{content:'';position:absolute;inset:10px;border:1px solid rgba(255,255,255,.28);border-radius:8px;pointer-events:none}
+  .pitch::after{content:'';position:absolute;left:50%;top:10px;bottom:10px;width:1px;background:rgba(255,255,255,.28);transform:translateX(-50%);pointer-events:none}
+  .pitch-row{display:flex;justify-content:center;gap:8px;margin-bottom:20px;flex-wrap:wrap;position:relative}
+  .shirt{display:flex;flex-direction:column;align-items:center;width:66px;text-align:center}
+  .shirt .jersey{width:42px;height:38px;border-radius:9px 9px 3px 3px;background:var(--magenta);
+    display:flex;align-items:center;justify-content:center;font-weight:800;font-size:11px;color:#fff;
+    position:relative;box-shadow:0 3px 8px rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.25)}
+  .shirt .jersey.bench{background:#5b3b6e}
+  .shirt .badge{position:absolute;top:-7px;right:-7px;background:#fff;color:#111;border-radius:50%;
+    width:17px;height:17px;font-size:9px;display:flex;align-items:center;justify-content:center;font-weight:800;
+    box-shadow:0 1px 3px rgba(0,0,0,.4)}
+  .shirt .pname{font-size:11px;font-weight:700;margin-top:5px;color:#fff;line-height:1.15;
+    text-shadow:0 1px 2px rgba(0,0,0,.4);word-break:break-word}
+  .shirt .pteam{font-size:9px;color:rgba(255,255,255,.8);margin-top:1px}
+  .shirt .ptrend{font-size:9px;font-weight:800;margin-top:2px}
+  .pitch-bench{display:flex;justify-content:center;gap:8px;flex-wrap:wrap;padding:12px 4px 2px}
+
   /* ---------- filters + table ---------- */
   .filters{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
   input[type=search],select{font:inherit;background:var(--card);color:var(--cream);
@@ -222,7 +246,12 @@
     <div class="card" style="margin-bottom:16px">
       <h3>Selectie</h3>
       <p class="hint">Basisopstelling bovenaan, bank onderaan. C = kapitein (dubbele punten), VC = vice-kapitein.</p>
-      <div id="myTeamSquad"><div class="empty">Laden…</div></div>
+      <div class="viewToggle" role="tablist">
+        <button type="button" data-squadview="pitch" aria-selected="true">Opstelling</button>
+        <button type="button" data-squadview="list" aria-selected="false">Lijst</button>
+      </div>
+      <div id="myTeamPitch"><div class="empty">Laden…</div></div>
+      <div id="myTeamSquad" hidden><div class="empty">Laden…</div></div>
     </div>
     <div class="card">
       <h3>Puntenverloop per speelronde</h3>
@@ -522,10 +551,11 @@ async function load(){
 
 /* ---------- mijn team ---------- */
 function renderMyTeam(team){
-  const tilesEl = $('#myTeamTiles'), squadEl = $('#myTeamSquad'), histBody = $('#myTeamHistoryTbl tbody');
+  const tilesEl = $('#myTeamTiles'), squadEl = $('#myTeamSquad'), pitchEl = $('#myTeamPitch'), histBody = $('#myTeamHistoryTbl tbody');
   if (!team){
     tilesEl.innerHTML = '<div class="tile"><div class="label">Nog geen data</div><div class="sub">Wacht op de eerstvolgende sync.</div></div>';
     squadEl.innerHTML = '<div class="empty">Nog geen data.</div>';
+    pitchEl.innerHTML = '<div class="empty">Nog geen data.</div>';
     histBody.innerHTML = '';
     return;
   }
@@ -566,6 +596,29 @@ function renderMyTeam(team){
   squadEl.innerHTML = (starters.length ? starters.map(squadRow).join('') : '<div class="empty">Geen basisopstelling gevonden.</div>')
     + (bench.length ? `<div class="hint" style="margin:12px 0 4px">Bank</div>` + bench.map(squadRow).join('') : '');
 
+  // Opstelling (pitch view): spelers gegroepeerd per positie, in
+  // speelvolgorde keeper -> verdediging -> middenveld -> aanval,
+  // zoals in de ESPN-app zelf.
+  const shirtCard = (r, bench) => {
+    const v = r.pl.verwachting;
+    const trending = v && v !== 'stabiel' && v !== 'onbekend' && r.pl.progress != null;
+    const dir = trending ? (v === 'stijgt' || v === 'stijgt bijna' ? 'up' : 'down') : null;
+    const initials = (r.pl.web_name||'?').split(/\s+/).map(w=>w[0]).join('').slice(0,3).toUpperCase();
+    const badgeLetter = r.is_captain ? 'C' : (r.is_vice_captain ? 'VC' : null);
+    return `<div class="shirt">
+      <div class="jersey${bench?' bench':''}">${initials}${badgeLetter ? `<span class="badge">${badgeLetter}</span>` : ''}</div>
+      <div class="pname">${r.pl.web_name}</div>
+      <div class="pteam">${r.pl.team_short}${r.multiplier>1?' &middot;x'+r.multiplier:''}</div>
+      ${trending ? `<div class="ptrend" style="color:var(--${dir})">${dir==='up'?'&#9650;':'&#9660;'} ${pct(r.pl.progress)}</div>` : ''}
+    </div>`;
+  };
+  const pitchRows = [1,2,3,4].map(pt => {
+    const group = starters.filter(r => r.pl.element_type === pt);
+    return group.length ? `<div class="pitch-row">${group.map(r => shirtCard(r,false)).join('')}</div>` : '';
+  }).join('');
+  const pitchBench = bench.length ? `<div class="pitch-bench">${bench.map(r => shirtCard(r,true)).join('')}</div>` : '';
+  pitchEl.innerHTML = starters.length ? `<div class="pitch">${pitchRows}${pitchBench}</div>` : '<div class="empty">Geen basisopstelling gevonden.</div>';
+
   const hist = team.history || [];
   histBody.innerHTML = hist.length ? [...hist].reverse().map(h => `<tr>
     <td class="num">${h.event}</td>
@@ -577,6 +630,12 @@ function renderMyTeam(team){
   </tr>`).join('') : '<tr><td colspan="6" class="empty">Nog geen speelrondes gespeeld.</td></tr>';
 }
 $('#refresh').addEventListener('click', load);
+$$('[data-squadview]').forEach(btn => btn.addEventListener('click', () => {
+  const view = btn.dataset.squadview;
+  $$('[data-squadview]').forEach(b => b.setAttribute('aria-selected', b === btn ? 'true' : 'false'));
+  $('#myTeamPitch').hidden = view !== 'pitch';
+  $('#myTeamSquad').hidden = view !== 'list';
+}));
 
 /* ---------- transfersuggesties ---------- */
 // Telt per club het aantal wedstrijden in de komende N speelronden (vanaf
