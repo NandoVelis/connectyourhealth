@@ -1663,9 +1663,13 @@ async function loadRecentTrainingForTip(days){
 // cluster met een losse 25km-duurloop. Vaste ankerafstanden voorkomen die
 // drift en matchen bovendien wat een loper zelf als "mijn 10k" of "mijn
 // halve marathon" herkent.
+// Bij 5km en 6,44km (4 mijl) tellen alleen runs mee die ook echt als
+// tempo-/testeffort golden -- tempo onder 4:00/km EN gemiddelde hartslag
+// boven 150bpm -- zodat rustige duurloopjes die toevallig op die afstand
+// uitkomen niet worden meegeteld als "mijn 5k"/"mijn 4 mijl"-tempo.
 const RUN_DISTANCE_ANCHORS = [
-  { km: 5, label: '5km' },
-  { km: 6.437, label: '6,44km' },
+  { km: 5, label: '5km', maxPaceMinPerKm: 4.0, minAvgHr: 150 },
+  { km: 6.437, label: '6,44km', maxPaceMinPerKm: 4.0, minAvgHr: 150 },
   { km: 10, label: '10km' },
   { km: 15, label: '15km' },
   { km: 21.1, label: 'halve marathon (21,1km)' },
@@ -1693,6 +1697,11 @@ function clusterRunsByDistance(runs){
   for(const r of runs){
     const anchor = nearestRunAnchor(r.km);
     if(!anchor) continue;
+    if(anchor.maxPaceMinPerKm!=null){
+      const pace = r.km>0 ? r.minutes/r.km : null;
+      if(pace==null || pace >= anchor.maxPaceMinPerKm) continue;
+    }
+    if(anchor.minAvgHr!=null && !(r.avgHeartrate>anchor.minAvgHr)) continue;
     if(!byAnchor.has(anchor.km)) byAnchor.set(anchor.km, { anchor, runs: [] });
     byAnchor.get(anchor.km).runs.push(r);
   }
