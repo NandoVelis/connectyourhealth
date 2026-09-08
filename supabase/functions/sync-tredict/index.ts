@@ -412,6 +412,56 @@ Deno.serve(async (req) => {
       trainingDaysWritten++;
     }
 
+    // ---- GEPLANDE TRAININGEN (Tredict-agenda) ----
+    // Voor het koppelen van de trainingstip aan wat er al in Tredict's eigen
+    // planning staat i.p.v. alleen het vaste weekschema te volgen. Best-effort:
+    // als dit misgaat, mag de rest van de sync (training/vitals/teambord,
+    // allemaal kritieker) gewoon doorlopen.
+    let plannedWorkoutsSynced = 0;
+    try {
+      const plannedResponse = await fetchWithTimeout(
+        "https://www.tredict.com/api/oauth/v2/plannedTrainingList",
+        { headers: authHeaders }
+      );
+      if (plannedResponse.ok) {
+        const plannedData = await plannedResponse.json();
+        const plannedList =
+          plannedData?._embedded?.plannedTrainingList ||
+          (Array.isArray(plannedData) ? plannedData : []);
+        const plannedWindowStart = new Date();
+        plannedWindowStart.setDate(plannedWindowStart.getDate() - 3);
+        const plannedWindowEnd = new Date();
+        plannedWindowEnd.setDate(plannedWindowEnd.getDate() + 30);
+        const plannedRows = plannedList
+          .filter((p: any) => {
+            const d = new Date(p.date);
+            return d >= plannedWindowStart && d <= plannedWindowEnd;
+          })
+          .map((p: any) => ({
+            owner,
+            workout_id: String(p.id || p.workoutId),
+            workout_date: toAmsterdamDateStr(p.date),
+            sport_type: p.sportType || null,
+            title: p.title || null,
+            notes: p.notes || null,
+            distance_m: p.distance ?? null,
+            duration_s: p.duration ?? null,
+            executed_training_id: p.executedTrainingId ? String(p.executedTrainingId) : null,
+            updated_at: new Date().toISOString(),
+          }));
+        if (plannedRows.length) {
+          const { error: plannedErr } = await supabase
+            .from("tredict_planned_workouts")
+            .upsert(plannedRows, { onConflict: "owner,workout_id" });
+          if (!plannedErr) plannedWorkoutsSynced = plannedRows.length;
+        }
+      } else {
+        console.warn(`Tredict plannedTrainingList gaf status ${plannedResponse.status}, overgeslagen.`);
+      }
+    } catch (e) {
+      console.warn(`Geplande trainingen ophalen mislukt: ${String(e)}`);
+    }
+
     // ---- TEAMBORD (real-time) ----
     // Voorheen werd het gedeelde teambord alleen bijgewerkt als iemand zelf
     // het dashboard opende (client-side push) — dus nieuwe Tredict-data
@@ -527,6 +577,7 @@ Deno.serve(async (req) => {
           vitalsUpdated,
           trainingDaysWritten,
           teamEntriesUpdated,
+          plannedWorkoutsSynced,
           daysBack: DAYS_BACK,
           message: "Sync completed",
         },

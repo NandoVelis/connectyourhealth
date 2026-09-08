@@ -1192,6 +1192,23 @@ restKcal: data[0].rest_kcal,
 totalKcal: data[0].total_kcal
 };
 }
+// Geplande training uit Tredict's eigen agenda voor deze dag (gesynchroniseerd
+// door sync-tredict via plannedTrainingList), gebruikt door de trainingstip
+// om de concrete Tredict-planning te tonen i.p.v. alleen het vaste weekschema.
+async function loadPlannedWorkoutForDate(owner, dateStr){
+  if(!owner) return null;
+  try{
+    const { data, error } = await supabaseClient
+      .from('tredict_planned_workouts')
+      .select('sport_type, title, notes, distance_m, duration_s, executed_training_id')
+      .eq('owner', owner)
+      .eq('workout_date', dateStr)
+      .is('executed_training_id', null)
+      .limit(1);
+    if(error) throw error;
+    return (data && data[0]) || null;
+  }catch(e){ console.error('Laden geplande training', e); return null; }
+}
 async function saveTraining(dateStr, data){
   const owner = currentOwner();
   if(!owner) return false;
@@ -1776,6 +1793,19 @@ function sessionDescription(type, goalPaceMinPerKm){
       return 'geen training, of eventueel lichte cross-training (fietsen/zwemmen/wandelen). Herstel is net zo belangrijk als trainen.';
   }
 }
+// Formatteert een geplande training uit Tredict's eigen agenda (titel +
+// afstand/duur + notities) als leesbare tekst voor de trainingstip.
+function formatPlannedWorkoutDesc(plannedWorkout){
+  const parts = [];
+  if(plannedWorkout.title) parts.push(plannedWorkout.title);
+  const distBits = [];
+  if(plannedWorkout.distance_m) distBits.push((plannedWorkout.distance_m/1000).toFixed(1).replace(/\.0$/,'')+'km');
+  if(plannedWorkout.duration_s) distBits.push(Math.round(plannedWorkout.duration_s/60)+' min');
+  if(distBits.length) parts.push('('+distBits.join(', ')+')');
+  let desc = parts.join(' ');
+  if(plannedWorkout.notes) desc += (desc?' — ':'') + plannedWorkout.notes;
+  return desc || 'geplande training';
+}
 function currentAmsterdamWeekdayName(){
   return new Intl.DateTimeFormat('nl-NL', { timeZone:'Europe/Amsterdam', weekday:'long' }).format(new Date());
 }
@@ -1806,7 +1836,7 @@ function computeRestStreak(activities, todayStr){
 // afgezwakt naar herstel/rust. Zonder ingesteld doel: een korte tip puur op
 // basis van herstel en trainingsfrequentie, met de vraag om een doel in te
 // vullen voor een schema op maat.
-function generateTrainingTip(activities, days, recoveryConcern, goal, vitals){
+function generateTrainingTip(activities, days, recoveryConcern, goal, vitals, plannedWorkout){
   const activeDates = new Set((activities||[]).map(a=>a.date));
   const consistencyPct = days>0 ? Math.round(activeDates.size / days * 100) : 0;
   const runs = (activities||[]).filter(a => a.type==='hardlopen' && a.km>0 && a.minutes>0);
@@ -1837,15 +1867,22 @@ function generateTrainingTip(activities, days, recoveryConcern, goal, vitals){
   // relevant als de dag nog moet gebeuren).
   const todayActivities = (activities||[]).filter(a=>a.date===todayStr);
   const alreadyTrainedToday = todayActivities.length>0;
+  // Staat er in Tredict's eigen agenda een concrete geplande training voor
+  // vandaag (nog niet uitgevoerd), dan is die leidend boven het generieke
+  // vaste weekschema -- Tredict's planning is wat de gebruiker zelf heeft
+  // ingesteld/aangepast, dus specifieker dan de vaste interval/tempo/duurloop-
+  // cyclus hieronder.
+  const usingPlannedWorkout = !!plannedWorkout && !alreadyTrainedToday;
 
   // Het vaste schema plant losse rustdagen in, maar houdt geen rekening met
   // rustdagen die er al ván zichzelf tussen zaten (bijv. door een gemiste
   // training of een drukke week). Staat er vandaag een rustdag gepland
   // terwijl de laatste 2+ dagen al niets gelogd is, dan is nóg een rustdag
   // overbodig -- dan wordt de eerstvolgende geplande trainingsdag naar
-  // voren gehaald i.p.v. het schema blind te volgen.
+  // voren gehaald i.p.v. het schema blind te volgen. Niet relevant als
+  // Tredict al een concrete training voor vandaag gepland heeft.
   let shiftNote = '';
-  if(!alreadyTrainedToday && todayType==='rust'){
+  if(!alreadyTrainedToday && !usingPlannedWorkout && todayType==='rust'){
     const restStreak = computeRestStreak(activities, todayStr);
     if(restStreak>=2){
       for(let step=1; step<=6; step++){
@@ -1861,16 +1898,22 @@ function generateTrainingTip(activities, days, recoveryConcern, goal, vitals){
   }
 
   // Bij matig herstel vandaag: een geplande interval/tempo-dag afzwakken.
+  // Staat er een concrete Tredict-planning, dan passen we die niet zelf aan
+  // (dat doet de gebruiker desgewenst zelf in Tredict) -- wel een waarschuwing.
   let recoveryNote = '';
   if(!alreadyTrainedToday && recoveryConcern && (todayType==='interval' || todayType==='tempo')){
-    const origLabel = SESSION_TYPE_META[todayType].label;
-    todayType = 'herstel';
-    scheduleOverrides[weekdayName] = todayType;
     const vitalsBits = [];
     if(vitals && vitals.hrv!=null) vitalsBits.push(`HRV ${Math.round(vitals.hrv)}ms`);
     if(vitals && vitals.sleepMinutes!=null) vitalsBits.push(`slaap ${Math.floor(vitals.sleepMinutes/60)}u${String(Math.round(vitals.sleepMinutes%60)).padStart(2,'0')}m`);
     const vitalsTxt = vitalsBits.length ? ` (${vitalsBits.join(', ')})` : '';
-    recoveryNote = `Je herstelwaarden${vitalsTxt} zien er vandaag wat minder uit, dus in plaats van de geplande ${origLabel} vandaag liever een hersteldag.`;
+    if(usingPlannedWorkout){
+      recoveryNote = `Je herstelwaarden${vitalsTxt} zien er vandaag wat minder uit — overweeg om de geplande training hieronder rustiger aan te doen, of verzet 'm in Tredict.`;
+    } else {
+      const origLabel = SESSION_TYPE_META[todayType].label;
+      todayType = 'herstel';
+      scheduleOverrides[weekdayName] = todayType;
+      recoveryNote = `Je herstelwaarden${vitalsTxt} zien er vandaag wat minder uit, dus in plaats van de geplande ${origLabel} vandaag liever een hersteldag.`;
+    }
   }
 
   const goalPaceLabel = formatPaceMinPerKm(goalPaceMinPerKm);
@@ -1909,6 +1952,9 @@ function generateTrainingTip(activities, days, recoveryConcern, goal, vitals){
       return a.minutes>0 ? `${a.type} (${Math.round(a.minutes)} min)` : a.type;
     });
     todayLine = `<strong>Vandaag (${escapeHtml(todayEntry.label)}): al getraind &#9989;</strong><br>${escapeHtml(doneParts.join(', '))} gelogd — gepland stond ${escapeHtml(todayLabel.toLowerCase())}. Goed bezig!`;
+  } else if(usingPlannedWorkout){
+    const desc = formatPlannedWorkoutDesc(plannedWorkout);
+    todayLine = `<strong>Vandaag (${escapeHtml(todayEntry.label)}): geplande training</strong> <span style="font-size:12px;color:var(--ink-soft);">(uit je Tredict-planning)</span><br>${escapeHtml(desc)}`;
   } else {
     const todayDesc = sessionDescription(todayType, goalPaceMinPerKm);
     todayLine = `<strong>Vandaag (${escapeHtml(todayEntry.label)}): ${escapeHtml(todayLabel)}</strong><br>${escapeHtml(todayDesc)}`;
@@ -2726,8 +2772,9 @@ async function renderDashboard(){
   if(trainingGoalInputEl && document.activeElement !== trainingGoalInputEl){
     trainingGoalInputEl.value = trainingGoal ? trainingGoal.goal_text : '';
   }
+  const plannedWorkoutToday = await loadPlannedWorkoutForDate(owner, currentAmsterdamDateStr());
   const trainingTipEl = document.getElementById('trainingTip');
-  if(trainingTipEl) trainingTipEl.innerHTML = generateTrainingTip(recentTrainingForTip, trainingTipDays, recoveryConcern, trainingGoal, vitals);
+  if(trainingTipEl) trainingTipEl.innerHTML = generateTrainingTip(recentTrainingForTip, trainingTipDays, recoveryConcern, trainingGoal, vitals, plannedWorkoutToday);
 
   // Voortgangstabel kijkt verder terug (90 dagen) dan de dagelijkse tip
   // (28 dagen), zodat een langzaam zichtbare trend niet steeds uit beeld
