@@ -2682,11 +2682,10 @@ async function renderDashboard(){
         <span class="stat-label">Rust / dagelijks verbruik</span>
         <span class="stat-val">${training.restKcal ?? 0} kcal</span>
       </div>
-      ${trainingExtraStepsKcal>0 ? `
       <div class="stat-row">
-        <span class="stat-label">&#128099; Extra stappen (Garmin, buiten hardloopsessie)</span>
-        <span class="stat-val">+${trainingExtraStepsKcal} kcal</span>
-      </div>` : ''}
+        <span class="stat-label">&#128099; Stappen vandaag (Garmin, buiten hardloopsessie)</span>
+        <span class="stat-val">${garminStepsToday && garminStepsToday.steps_total!=null ? garminStepsToday.steps_total.toLocaleString('nl-NL') : '&mdash;'}${trainingExtraStepsKcal>0 ? ` &middot; +${trainingExtraStepsKcal} kcal` : ''}</span>
+      </div>
       <div class="stat-row" style="border-bottom:none;">
         <span class="stat-label" style="font-weight:700;">Totaal verbrand</span>
         <span class="stat-val">${burned ?? training.totalKcal ?? 0} kcal</span>
