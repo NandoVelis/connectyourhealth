@@ -149,6 +149,7 @@
 
   <nav class="tabs" role="tablist">
     <button role="tab" aria-selected="true"  data-tab="prijzen">Prijzen</button>
+    <button role="tab" aria-selected="false" data-tab="team">Mijn team</button>
     <button role="tab" aria-selected="false" data-tab="transfers">Transfers</button>
     <button role="tab" aria-selected="false" data-tab="log">Metingen</button>
   </nav>
@@ -210,6 +211,27 @@
       </table>
     </div>
     <p class="note" id="modelNote"></p>
+  </section>
+
+  <!-- ---------- MIJN TEAM ---------- -->
+  <section class="panel" id="panel-team" hidden>
+    <div class="tiles" id="myTeamTiles"><div class="loading">Laden…</div></div>
+    <div class="card" style="margin-bottom:16px">
+      <h3>Selectie</h3>
+      <p class="hint">Basisopstelling bovenaan, bank onderaan. C = kapitein (dubbele punten), VC = vice-kapitein.</p>
+      <div id="myTeamSquad"><div class="empty">Laden…</div></div>
+    </div>
+    <div class="card">
+      <h3>Puntenverloop per speelronde</h3>
+      <div class="tablewrap">
+        <table id="myTeamHistoryTbl">
+          <thead><tr>
+            <th>Ronde</th><th>Punten</th><th>Totaal</th><th>Rank (ronde)</th><th>Rank (totaal)</th><th>Op de bank</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
   </section>
 
   <!-- ---------- TRANSFERS ---------- -->
@@ -405,11 +427,12 @@ async function api(path){
 
 async function load(){
   try{
-    const [game, board, events, logs] = await Promise.all([
+    const [game, board, events, logs, myTeam] = await Promise.all([
       api('espn_game?id=eq.1&select=*'),
       api('espn_price_board?select=*&limit=1000'),
       api('espn_price_events?select=*&order=detected_at.desc&limit=60'),
-      api('espn_sync_log?select=*&order=ran_at.desc&limit=25')
+      api('espn_sync_log?select=*&order=ran_at.desc&limit=25'),
+      api('espn_my_team?select=*&limit=1')
     ]);
     GAME = game[0] || {};
     ROWS = board.map(r => {
@@ -425,9 +448,61 @@ async function load(){
     });
     renderTiles(); renderWatch(); renderTable();
     renderTransfers(); renderEvents(events); renderLogs(logs);
+    renderMyTeam(myTeam[0] || null);
   }catch(e){
     $('#tiles').innerHTML = '<div class="tile"><div class="label">Fout</div><div class="sub">' + e.message + '</div></div>';
   }
+}
+
+/* ---------- mijn team ---------- */
+function renderMyTeam(team){
+  const tilesEl = $('#myTeamTiles'), squadEl = $('#myTeamSquad'), histBody = $('#myTeamHistoryTbl tbody');
+  if (!team){
+    tilesEl.innerHTML = '<div class="tile"><div class="label">Nog geen data</div><div class="sub">Wacht op de eerstvolgende sync.</div></div>';
+    squadEl.innerHTML = '<div class="empty">Nog geen data.</div>';
+    histBody.innerHTML = '';
+    return;
+  }
+  tilesEl.innerHTML = `
+    <div class="tile"><div class="label">Totaal punten</div><div class="value">${nf.format(team.overall_points||0)}</div>
+      <div class="sub">rank ${nf.format(team.overall_rank||0)}</div></div>
+    <div class="tile"><div class="label">Deze speelronde</div><div class="value">${nf.format(team.event_points||0)}</div>
+      <div class="sub">rank ${nf.format(team.event_rank||0)}</div></div>
+    <div class="tile"><div class="label">Teamwaarde</div><div class="value">${team.team_value!=null?eur(team.team_value):'—'}</div>
+      <div class="sub">${team.bank!=null?'in kas: '+eur(team.bank):''}</div></div>
+    <div class="tile"><div class="label">Speelronde</div><div class="value">${team.current_event||'—'}</div>
+      <div class="sub">${dt(team.updated_at)}</div></div>`;
+
+  const byId = Object.fromEntries(ROWS.map(r => [r.id, r]));
+  const picks = team.picks || [];
+  const rows = picks.map(p => {
+    const pl = byId[p.element];
+    if (!pl) return null;
+    const badge = p.is_captain ? ' <span class="pill up">C</span>' : p.is_vice_captain ? ' <span class="pill est">VC</span>' : '';
+    return { ...p, pl, badge };
+  }).filter(Boolean);
+  const starters = rows.filter(r => r.multiplier > 0).sort((a,b) => a.position - b.position);
+  const bench = rows.filter(r => r.multiplier === 0).sort((a,b) => a.position - b.position);
+
+  const squadRow = r => `<div class="row">
+    <div>
+      <div class="name">${r.pl.web_name}${r.badge} <span class="meta">${r.pl.team_short} · ${POS_SHORT[r.pl.element_type]||''}</span></div>
+      <div class="meta">${eur(r.pl.now_cost)} · ${nf.format(r.pl.total_points||0)} pt totaal · ${nf.format(r.pl.event_points||0)} pt deze ronde</div>
+    </div>
+    <div class="pct">${r.multiplier>1?'x'+r.multiplier+' ':''}${nf.format((r.pl.event_points||0)*r.multiplier)}</div>
+  </div>`;
+  squadEl.innerHTML = (starters.length ? starters.map(squadRow).join('') : '<div class="empty">Geen basisopstelling gevonden.</div>')
+    + (bench.length ? `<div class="hint" style="margin:12px 0 4px">Bank</div>` + bench.map(squadRow).join('') : '');
+
+  const hist = team.history || [];
+  histBody.innerHTML = hist.length ? [...hist].reverse().map(h => `<tr>
+    <td class="num">${h.event}</td>
+    <td class="num">${nf.format(h.points||0)}</td>
+    <td class="num">${nf.format(h.total_points||0)}</td>
+    <td class="num">${nf.format(h.rank||0)}</td>
+    <td class="num">${nf.format(h.overall_rank||0)}</td>
+    <td class="num">${nf.format(h.points_on_bench||0)}</td>
+  </tr>`).join('') : '<tr><td colspan="6" class="empty">Nog geen speelrondes gespeeld.</td></tr>';
 }
 $('#refresh').addEventListener('click', load);
 
