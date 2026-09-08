@@ -1,11 +1,17 @@
 // ESPN Fantasy Voetbal (Eredivisie) — price tracker sync
 // Haalt bootstrap-static op, schrijft snapshots van gewijzigde spelers weg
 // en detecteert prijswijzigingen. Bedoeld om elke 15 min door pg_cron te draaien.
-// Synct daarnaast Nando's eigen team (entry 28264) -- publiek leesbare
-// endpoints, geen ESPN-login nodig.
+// Synct daarnaast de eigen teams van elke gebruiker met toegang tot /overig
+// (publiek leesbare endpoints, geen ESPN-login nodig) en mailt een
+// prijswaarschuwing naar het bijbehorende e-mailadres.
 
 const API = "https://fantasy.espngoal.nl/api/bootstrap-static/";
-const ENTRY_ID = 28264;
+// Elke gebruiker met toegang tot /overig heeft hier zijn eigen ESPN Fantasy
+// entry-ID + het e-mailadres waarnaar zijn prijswaarschuwingen gaan.
+const MY_TEAMS = [
+  { entryId: 28264, alertEmail: "nandovelis@gmail.com" },
+  { entryId: 2640, alertEmail: "duncanvelis@ziggo.nl" },
+];
 const SB_URL = Deno.env.get("SUPABASE_URL")!;
 const SB_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
@@ -225,21 +231,27 @@ Deno.serve(async (req: Request) => {
       console.warn(`Fixtures-sync mislukt: ${String(e)}`);
     }
 
-    // ---- MIJN TEAM (entry 28264, publiek leesbare endpoints) ----
-    // Best-effort: gaat dit mis, dan mag de rest van de sync (prijzen,
-    // kritieker) gewoon doorlopen.
-    try {
-      const entryRes = await fetch(`https://fantasy.espngoal.nl/api/entry/${ENTRY_ID}/`);
-      if (entryRes.ok) {
+    // ---- MIJN TEAMS (publiek leesbare endpoints, geen ESPN-login nodig) ----
+    // Voor elke gebruiker met toegang tot /overig (zie MY_TEAMS). Best-effort
+    // per team: gaat er eentje mis, dan proberen de andere teams en de rest
+    // van de sync (prijzen, kritieker) gewoon door.
+    const resendKey = Deno.env.get("RESEND_API_KEY");
+    for (const { entryId, alertEmail } of MY_TEAMS) {
+      try {
+        const entryRes = await fetch(`https://fantasy.espngoal.nl/api/entry/${entryId}/`);
+        if (!entryRes.ok) {
+          console.warn(`espn entry ${entryId} gaf status ${entryRes.status}, overgeslagen.`);
+          continue;
+        }
         const entry = await entryRes.json();
-        const historyRes = await fetch(`https://fantasy.espngoal.nl/api/entry/${ENTRY_ID}/history/`);
+        const historyRes = await fetch(`https://fantasy.espngoal.nl/api/entry/${entryId}/history/`);
         const history = historyRes.ok ? await historyRes.json() : null;
 
         const currentEvent: number | null = entry.current_event ?? null;
         let picks: any = null;
         if (currentEvent) {
           const picksRes = await fetch(
-            `https://fantasy.espngoal.nl/api/entry/${ENTRY_ID}/event/${currentEvent}/picks/`,
+            `https://fantasy.espngoal.nl/api/entry/${entryId}/event/${currentEvent}/picks/`,
           );
           if (picksRes.ok) picks = await picksRes.json();
         }
@@ -248,7 +260,7 @@ Deno.serve(async (req: Request) => {
           method: "POST",
           headers: sbHeaders({ Prefer: "return=minimal,resolution=merge-duplicates" }),
           body: JSON.stringify([{
-            entry_id: ENTRY_ID,
+            entry_id: entryId,
             player_name: `${entry.player_first_name ?? ""} ${entry.player_last_name ?? ""}`.trim(),
             current_event: currentEvent,
             overall_points: entry.summary_overall_points ?? null,
@@ -264,14 +276,15 @@ Deno.serve(async (req: Request) => {
           }]),
         });
 
-        // ---- PRIJSWAARSCHUWING VOOR SPELERS IN MIJN TEAM ----
+        // ---- PRIJSWAARSCHUWING VOOR SPELERS IN DIT TEAM ----
         // Mailt alleen als RESEND_API_KEY als Supabase-secret gezet is
         // (Edge Functions -> Manage secrets) -- zonder die secret slaat dit
         // stil over, de rest van de sync blijft gewoon werken. Elke speler
-        // wordt maar 1x per "verwachting"-status gemaild (bijgehouden in
-        // espn_price_alerts_sent, opgeschoond zodra de prijs echt wijzigt),
-        // zodat dezelfde dreigende wijziging niet elke 15 min opnieuw mailt.
-        const resendKey = Deno.env.get("RESEND_API_KEY");
+        // wordt maar 1x per gebruiker per "verwachting"-status gemaild
+        // (bijgehouden in espn_price_alerts_sent, opgeschoond zodra de prijs
+        // echt wijzigt), zodat dezelfde dreigende wijziging niet elke 15 min
+        // opnieuw mailt -- en niet gedeeld tussen teams, anders mist de een
+        // een mail omdat de ander 'm al kreeg voor dezelfde speler.
         if (resendKey && picks?.picks?.length) {
           const elementIds = picks.picks.map((p: any) => p.element);
           const boardRes = await fetch(
@@ -287,9 +300,9 @@ Deno.serve(async (req: Request) => {
             );
             if (threatened.length) {
               const alreadyRes = await fetch(
-                `${SB_URL}/rest/v1/espn_price_alerts_sent?select=player_id,verwachting&player_id=in.(${
-                  threatened.map((t) => t.id).join(",")
-                })`,
+                `${SB_URL}/rest/v1/espn_price_alerts_sent?select=player_id,verwachting&alert_email=eq.${
+                  encodeURIComponent(alertEmail)
+                }&player_id=in.(${threatened.map((t) => t.id).join(",")})`,
                 { headers: sbHeaders() },
               );
               const already: any[] = alreadyRes.ok ? await alreadyRes.json() : [];
@@ -309,7 +322,7 @@ Deno.serve(async (req: Request) => {
                   },
                   body: JSON.stringify({
                     from: "ConnectYourHealth <onboarding@resend.dev>",
-                    to: ["nandovelis@gmail.com"],
+                    to: [alertEmail],
                     subject: `ESPN Fantasy: ${toAlert.length} speler(s) in jouw team dreigen van prijs te veranderen`,
                     text:
                       `Deze spelers in jouw team staan dicht bij een prijswijziging:\n\n${lines}\n\nBekijk het overzicht: https://connectyourhealth.vercel.app/overig`,
@@ -318,21 +331,24 @@ Deno.serve(async (req: Request) => {
                 if (mailRes.ok) {
                   await sbPost(
                     "espn_price_alerts_sent",
-                    toAlert.map((t) => ({ player_id: t.id, verwachting: t.verwachting, sent_at: capturedAt })),
+                    toAlert.map((t) => ({
+                      alert_email: alertEmail,
+                      player_id: t.id,
+                      verwachting: t.verwachting,
+                      sent_at: capturedAt,
+                    })),
                     "return=minimal,resolution=merge-duplicates",
                   );
                 } else {
-                  console.warn(`Prijswaarschuwing-mail mislukt: ${mailRes.status} ${await mailRes.text()}`);
+                  console.warn(`Prijswaarschuwing-mail (${alertEmail}) mislukt: ${mailRes.status} ${await mailRes.text()}`);
                 }
               }
             }
           }
         }
-      } else {
-        console.warn(`espn entry ${ENTRY_ID} gaf status ${entryRes.status}, overgeslagen.`);
+      } catch (e) {
+        console.warn(`Mijn-team-sync (entry ${entryId}) mislukt: ${String(e)}`);
       }
-    } catch (e) {
-      console.warn(`Mijn-team-sync mislukt: ${String(e)}`);
     }
 
     const ms = Date.now() - t0;

@@ -344,6 +344,10 @@
 const SUPABASE_URL  = 'https://mhvduufxeqyxgkkvwimx.supabase.co';
 const SUPABASE_KEY  = 'sb_publishable_Oy2NNm-yMP358eH3NPHl1A_d24-72WS';
 const ALLOWED       = ['nandovelis@gmail.com', 'duncanvelis@ziggo.nl'];   // wie deze pagina mag zien
+// Elk toegestaan e-mailadres heeft zijn eigen ESPN Fantasy team-ID -- "Mijn
+// team" en de transfersuggesties tonen na het inloggen het team dat bij dat
+// adres hoort i.p.v. altijd hetzelfde team.
+const EMAIL_TO_ENTRY = { 'nandovelis@gmail.com': 28264, 'duncanvelis@ziggo.nl': 2640 };
 const POS           = {1:'Keeper',2:'Verdediger',3:'Middenvelder',4:'Spits'};
 const POS_SHORT     = {1:'KEE',2:'VER',3:'MID',4:'SPI'};
 
@@ -518,11 +522,13 @@ $$('nav.tabs button').forEach(b => b.addEventListener('click', () => {
    DATA
    ========================================================================= */
 let ROWS = [], GAME = {}, SORT = { key:'progress_signed', dir:-1 };
+let MY_ENTRY_ID = null;
 
 async function start(who){
   $('#gate').hidden = true;
   $('#app').hidden = false;
   $('#who').textContent = who;
+  MY_ENTRY_ID = EMAIL_TO_ENTRY[who] || null;
   await load();
 }
 
@@ -550,7 +556,7 @@ async function load(){
       api('espn_price_board?select=*&limit=1000'),
       api('espn_price_events?select=*&order=detected_at.desc&limit=60'),
       api('espn_sync_log?select=*&order=ran_at.desc&limit=25'),
-      api('espn_my_team?select=*&limit=1'),
+      MY_ENTRY_ID ? api(`espn_my_team?entry_id=eq.${MY_ENTRY_ID}&select=*&limit=1`) : Promise.resolve([]),
       api('espn_fixtures?select=*&finished=eq.false&order=event.asc&limit=200'),
       api('espn_teams?select=*')
     ]);
