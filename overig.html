@@ -125,31 +125,17 @@
 <div id="gate" class="gate" hidden>
   <div class="brand" style="margin-bottom:20px">CONNECT<span>YOU</span></div>
   <h2>Overig</h2>
-  <p id="gateStep1Text">Deze pagina is privé. Vul je e-mailadres in, dan sturen we een inlogcode.</p>
-  <div id="gateStep1" style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;">
+  <p>Deze pagina is privé. Log in met je e-mailadres en wachtwoord.</p>
+  <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;">
     <input type="email" id="emailInput" placeholder="jij@connectyou.nl" autocomplete="email"
       style="font:inherit;background:var(--card);color:var(--cream);border:1px solid var(--line);
       border-radius:10px;padding:10px 14px;min-width:220px;">
-    <button class="primary" id="loginBtn">Stuur code</button>
-  </div>
-  <div id="gateStep2" hidden>
-    <p>Vul de 6-cijferige code in uit de mail (geen link nodig -- werkt ook als je mail door je organisatie automatisch wordt gescand).</p>
-    <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;">
-      <input type="text" id="codeInput" placeholder="123456" inputmode="numeric" autocomplete="one-time-code" maxlength="6"
-        style="font:inherit;background:var(--card);color:var(--cream);border:1px solid var(--line);
-        border-radius:10px;padding:10px 14px;min-width:140px;text-align:center;letter-spacing:.2em;">
-      <button class="primary" id="verifyBtn">Inloggen</button>
-    </div>
-  </div>
-  <div class="err" id="gateErr" hidden></div>
-  <div class="err" id="gateMsg" hidden style="color:var(--up);"></div>
-  <p style="margin-top:24px;font-size:12px;color:var(--muted);">of met wachtwoord:</p>
-  <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;">
     <input type="password" id="pwInput" placeholder="wachtwoord" autocomplete="current-password"
       style="font:inherit;background:var(--card);color:var(--cream);border:1px solid var(--line);
       border-radius:10px;padding:10px 14px;min-width:180px;">
-    <button class="ghost" id="pwLoginBtn">Inloggen met wachtwoord</button>
+    <button class="primary" id="pwLoginBtn">Inloggen</button>
   </div>
+  <div class="err" id="gateErr" hidden></div>
 </div>
 
 <!-- ======================= APP ======================= -->
@@ -383,74 +369,11 @@ async function boot(){
 function showGate(msg){
   $('#app').hidden = true;
   $('#gate').hidden = false;
-  $('#gateMsg').hidden = true;
-  $('#gateStep1').hidden = false;
-  $('#gateStep1Text').hidden = false;
-  $('#gateStep2').hidden = true;
   if (msg){ $('#gateErr').hidden = false; $('#gateErr').textContent = msg; }
   else { $('#gateErr').hidden = true; }
 }
 
-let PENDING_EMAIL = null;
-
-// Een klikbare magic-link wordt bij een Microsoft 365-mailbox vaak door
-// Safe Links vooraf "bezocht" (malware-scan) voordat de gebruiker de mail
-// zelf opent -- dat verbruikt de eenmalige link meteen, waardoor inloggen
-// alsnog mislukt. Een 6-cijferige code die je met de hand intypt heeft dat
-// probleem niet: er is geen URL voor een scanner om te prefetchen.
-$('#loginBtn').addEventListener('click', async () => {
-  const email = $('#emailInput').value.trim().toLowerCase();
-  $('#gateErr').hidden = true;
-  $('#gateMsg').hidden = true;
-  if (!email){
-    $('#gateErr').hidden = false;
-    $('#gateErr').textContent = 'Vul een e-mailadres in.';
-    return;
-  }
-  if (!ALLOWED.includes(email)){
-    $('#gateErr').hidden = false;
-    $('#gateErr').textContent = 'Dit account (' + email + ') heeft geen toegang tot deze pagina.';
-    return;
-  }
-  const btn = $('#loginBtn');
-  btn.disabled = true;
-  const { error } = await sb.auth.signInWithOtp({ email });
-  btn.disabled = false;
-  if (error){
-    $('#gateErr').hidden = false;
-    $('#gateErr').textContent = 'Versturen mislukt: ' + error.message;
-    return;
-  }
-  PENDING_EMAIL = email;
-  $('#gateStep1').hidden = true;
-  $('#gateStep1Text').hidden = true;
-  $('#gateStep2').hidden = false;
-  $('#gateMsg').hidden = false;
-  $('#gateMsg').textContent = 'Code verstuurd naar ' + email + ' — check je inbox (ook spam/quarantaine).';
-  $('#codeInput').focus();
-});
-$('#emailInput').addEventListener('keydown', e => { if (e.key === 'Enter') $('#loginBtn').click(); });
-
-$('#verifyBtn').addEventListener('click', async () => {
-  const code = $('#codeInput').value.trim();
-  $('#gateErr').hidden = true;
-  if (!PENDING_EMAIL || !code){
-    $('#gateErr').hidden = false;
-    $('#gateErr').textContent = 'Vul de code uit de mail in.';
-    return;
-  }
-  const btn = $('#verifyBtn');
-  btn.disabled = true;
-  const { error } = await sb.auth.verifyOtp({ email: PENDING_EMAIL, token: code, type: 'email' });
-  btn.disabled = false;
-  if (error){
-    $('#gateErr').hidden = false;
-    $('#gateErr').textContent = 'Inloggen mislukt: ' + error.message;
-    return;
-  }
-  boot();
-});
-$('#codeInput').addEventListener('keydown', e => { if (e.key === 'Enter') $('#verifyBtn').click(); });
+$('#emailInput').addEventListener('keydown', e => { if (e.key === 'Enter') $('#pwLoginBtn').click(); });
 
 $('#pwLoginBtn').addEventListener('click', async () => {
   const email = $('#emailInput').value.trim().toLowerCase();
