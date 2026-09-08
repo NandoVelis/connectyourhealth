@@ -5,8 +5,8 @@
   "start_url": "/overig",
   "scope": "/overig",
   "display": "standalone",
-  "background_color": "#000725",
-  "theme_color": "#000725",
+  "background_color": "#2c0f66",
+  "theme_color": "#2c0f66",
   "icons": [
     {
       "src": "icon-overig-192.png",
