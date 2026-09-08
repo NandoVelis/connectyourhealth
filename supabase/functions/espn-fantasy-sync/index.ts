@@ -490,6 +490,87 @@ Deno.serve(async (req: Request) => {
       }
     }
 
+    // ---- BEKENDE MANAGERS (mogelijke inside info) ----
+    // Volgt transfers van handmatig toegevoegde bekende personen (bv.
+    // oud-profs) -- een onverwachte aan-/verkoop kan wijzen op kennis over
+    // een aankomende opstelling die nog niet publiek is. Best-effort: faalt
+    // dit, dan gaat de rest van de sync gewoon door.
+    try {
+      const knownManagers: any[] = await sbGet("espn_known_managers?select=entry_id,name&active=eq.true");
+      if (knownManagers.length) {
+        const newTransfers: any[] = [];
+        for (const km of knownManagers) {
+          const trRes = await fetch(`https://fantasy.espngoal.nl/api/entry/${km.entry_id}/transfers/`);
+          if (!trRes.ok) continue;
+          const transfers: any[] = await trRes.json();
+          for (const t of transfers) {
+            const already: any[] = await sbGet(
+              `espn_known_manager_transfers_seen?select=entry_id&entry_id=eq.${km.entry_id}&element_in=eq.${t.element_in}&element_out=eq.${t.element_out}&occurred_at=eq.${
+                encodeURIComponent(t.time)
+              }`,
+            );
+            if (already.length) continue;
+            newTransfers.push({
+              entry_id: km.entry_id,
+              manager: km.name,
+              element_in: t.element_in,
+              element_out: t.element_out,
+              event: t.event,
+              occurred_at: t.time,
+            });
+          }
+        }
+        if (newTransfers.length) {
+          const ids = [...new Set(newTransfers.flatMap((t) => [t.element_in, t.element_out]))];
+          const players: any[] = await sbGet(`espn_players?select=id,web_name,team_short&id=in.(${ids.join(",")})`);
+          const byId = new Map(players.map((p) => [p.id, p]));
+          const detail = newTransfers.map((t) => {
+            const pin = byId.get(t.element_in), pout = byId.get(t.element_out);
+            const inLabel = pin ? `${pin.web_name} (${pin.team_short})` : `#${t.element_in}`;
+            const outLabel = pout ? `${pout.web_name} (${pout.team_short})` : `#${t.element_out}`;
+            return `${t.manager}: ${outLabel} → ${inLabel} (ronde ${t.event})`;
+          });
+          if (resendKey) {
+            const mailRes = await fetch("https://api.resend.com/emails", {
+              method: "POST",
+              headers: {
+                Authorization: `Bearer ${resendKey}`,
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                from: "ConnectYourHealth <onboarding@resend.dev>",
+                to: [GLOBAL_WATCH_EMAIL],
+                subject: `ESPN Fantasy: ${newTransfers.length} nieuwe transfer(s) van bekende manager(s)`,
+                text: `Mogelijk relevant (inside info?):\n\n${detail.map((d) => `- ${d}`).join("\n")}\n\nBekijk het overzicht: https://connectyourhealth.vercel.app/overig`,
+              }),
+            });
+            if (!mailRes.ok) {
+              console.warn(`Bekende-manager-mail mislukt: ${mailRes.status} ${await mailRes.text()}`);
+            }
+          }
+          await sendPush(
+            GLOBAL_WATCH_EMAIL,
+            `${newTransfers.length} nieuwe transfer(s) van bekende manager(s)`,
+            detail.join(", "),
+          );
+          await sbPost(
+            "espn_known_manager_transfers_seen",
+            newTransfers.map((t) => ({
+              entry_id: t.entry_id,
+              element_in: t.element_in,
+              element_out: t.element_out,
+              event: t.event,
+              occurred_at: t.occurred_at,
+              notified_at: capturedAt,
+            })),
+            "return=minimal,resolution=merge-duplicates",
+          );
+        }
+      }
+    } catch (e) {
+      console.warn(`Bekende-managers-check mislukt: ${String(e)}`);
+    }
+
     const ms = Date.now() - t0;
     await sbPost("espn_sync_log", [{
       ok: true,

@@ -337,6 +337,11 @@
       <p class="hint">Spelers die dicht bij een wijziging staan (80%+ van de drempel), gegroepeerd op de dag waarop het model een wijziging verwacht, met hun eerstvolgende tegenstander.</p>
       <div id="dailyOutlook"><div class="empty">Laden…</div></div>
     </div>
+    <div class="card" style="margin-top:16px">
+      <h3>Bekende managers</h3>
+      <p class="hint">Handmatig gevolgde personen (bv. oud-profs) -- een onverwachte transfer van hen kan wijzen op kennis over een aankomende opstelling die nog niet publiek is.</p>
+      <div id="knownManagers"><div class="empty">Laden…</div></div>
+    </div>
   </section>
 
   <!-- ---------- LOG ---------- -->
@@ -606,14 +611,16 @@ let FIXTURES = [], TEAMS = {}, MY_TEAM = null;
 
 async function load(){
   try{
-    const [game, board, events, logs, myTeam, fixtures, teams] = await Promise.all([
+    const [game, board, events, logs, myTeam, fixtures, teams, knownManagers, knownTransfers] = await Promise.all([
       api('espn_game?id=eq.1&select=*'),
       api('espn_price_board?select=*&limit=1000'),
       api('espn_price_events?select=*&order=detected_at.desc&limit=60'),
       api('espn_sync_log?select=*&order=ran_at.desc&limit=25'),
       MY_ENTRY_ID ? api(`espn_my_team?entry_id=eq.${MY_ENTRY_ID}&select=*&limit=1`) : Promise.resolve([]),
       api('espn_fixtures?select=*&finished=eq.false&order=event.asc&limit=200'),
-      api('espn_teams?select=*')
+      api('espn_teams?select=*'),
+      api('espn_known_managers?select=*&active=eq.true'),
+      api('espn_known_manager_transfers_seen?select=*&order=occurred_at.desc&limit=30')
     ]);
     GAME = game[0] || {};
     ROWS = board.map(r => {
@@ -644,6 +651,7 @@ async function load(){
     renderTransfers(); renderEvents(events); renderLogs(logs);
     renderMyTeam(MY_TEAM);
     renderTransferSuggestions();
+    renderKnownManagers(knownManagers, knownTransfers);
   }catch(e){
     $('#tiles').innerHTML = '<div class="tile"><div class="label">Fout</div><div class="sub">' + e.message + '</div></div>';
   }
@@ -1181,6 +1189,36 @@ function renderDailyPriceOutlook(){
     }).join('');
     return `<div class="hint" style="margin:14px 0 4px;font-weight:600;color:var(--cream)">${key}</div>${rowsHtml}`;
   }).join('');
+}
+// Transfers van handmatig gevolgde bekende personen (espn_known_managers),
+// als mogelijk signaal voor inside info over een opstelling.
+function renderKnownManagers(managers, transfers){
+  const el = $('#knownManagers');
+  if (!el) return;
+  if (!managers.length){
+    el.innerHTML = '<div class="empty">Nog geen bekende managers toegevoegd.</div>';
+    return;
+  }
+  const nameByEntry = Object.fromEntries(managers.map(m => [m.entry_id, m.name]));
+  const byId = Object.fromEntries(ROWS.map(r => [r.id, r]));
+  const header = `<div class="hint" style="margin-bottom:10px">Gevolgd: ${managers.map(m => m.name + (m.note ? ' ('+m.note+')' : '')).join(', ')}</div>`;
+  if (!transfers.length){
+    el.innerHTML = header + '<div class="empty">Nog geen transfers waargenomen.</div>';
+    return;
+  }
+  const rowsHtml = transfers.map(t => {
+    const pin = byId[t.element_in], pout = byId[t.element_out];
+    const inLabel = pin ? `${pin.web_name} (${pin.team_short})` : '#'+t.element_in;
+    const outLabel = pout ? `${pout.web_name} (${pout.team_short})` : '#'+t.element_out;
+    return `<div class="row">
+      <div>
+        <div class="name">${nameByEntry[t.entry_id] || 'Onbekend'} <span class="meta">ronde ${t.event ?? '—'}</span></div>
+        <div class="meta">${outLabel} &rarr; ${inLabel}</div>
+      </div>
+      <div class="pct" style="font-size:12px;color:var(--muted)">${dt(t.occurred_at)}</div>
+    </div>`;
+  }).join('');
+  el.innerHTML = header + rowsHtml;
 }
 
 /* ---------- metingen ---------- */
