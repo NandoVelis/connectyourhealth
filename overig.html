@@ -332,6 +332,11 @@
         <div id="tOut"><div class="empty">Laden…</div></div>
       </div>
     </div>
+    <div class="card" style="margin-top:16px">
+      <h3>Verwachte prijswijzigingen per dag</h3>
+      <p class="hint">Spelers die dicht bij een wijziging staan (80%+ van de drempel), gegroepeerd op de dag waarop het model een wijziging verwacht, met hun eerstvolgende tegenstander.</p>
+      <div id="dailyOutlook"><div class="empty">Laden…</div></div>
+    </div>
   </section>
 
   <!-- ---------- LOG ---------- -->
@@ -1099,12 +1104,18 @@ $$('#tbl thead th').forEach(th => th.addEventListener('click', () => {
 ['#q','#fPos','#fOwn','#fDir'].forEach(s => $(s).addEventListener('input', renderTable));
 
 /* ---------- transfers ---------- */
+// Compact label voor de eerstvolgende tegenstander(s) van een team, voor
+// bij een speler in een lijst -- '—' als er (nog) geen wedstrijdschema is.
+function opponentLabel(teamId){
+  const fx = nextFixturesForTeam(teamId);
+  return fx.length ? fx.map(f => `${(TEAMS[f.opponentId]||{}).short_name || '?'} (${f.home?'T':'U'})`).join(', ') : '—';
+}
 function tRow(r, dir){
   const n = Math.abs(r.net_event);
   return `<div class="row">
     <div>
       <div class="name">${r.web_name} <span class="meta">${r.team_short} · ${POS_SHORT[r.element_type]||''}</span></div>
-      <div class="meta">${eur(r.now_cost)} · ${r.selected_by_percent}% bezit</div>
+      <div class="meta">${eur(r.now_cost)} · ${r.selected_by_percent}% bezit · eerstvolgend: ${opponentLabel(r.team_id)}</div>
     </div>
     <div class="pct" style="color:var(--${dir})">${signed(r.net_event)}</div>
     <div class="bar"><i class="${dir}" style="width:${Math.min(n/MAXNET*100,100)}%"></i></div>
@@ -1117,6 +1128,45 @@ function renderTransfers(){
   MAXNET = Math.max(1, Math.abs(ins[0]?.net_event||1), Math.abs(outs[0]?.net_event||1));
   $('#tIn').innerHTML  = ins.map(r => tRow(r,'up')).join('');
   $('#tOut').innerHTML = outs.map(r => tRow(r,'down')).join('');
+  renderDailyPriceOutlook();
+}
+// Groepeert spelers die dicht bij een prijswijziging staan (voortgang
+// >=80%) per verwachte dag (eta_at), met hun eerstvolgende tegenstander --
+// een dag-voor-dag vooruitblik i.p.v. alleen "wie staat er nu bovenaan".
+function dayKey(d){
+  return new Date(d).toLocaleDateString('nl-NL', { weekday:'short', day:'2-digit', month:'short' });
+}
+function renderDailyPriceOutlook(){
+  const el = $('#dailyOutlook');
+  if (!el) return;
+  const candidates = ROWS.filter(r =>
+    r.eta_at && r.progress != null && r.progress >= 0.8 &&
+    r.verwachting && r.verwachting !== 'stabiel' && r.verwachting !== 'onbekend'
+  );
+  if (!candidates.length){
+    el.innerHTML = '<div class="empty">Nog geen spelers dicht bij een wijziging.</div>';
+    return;
+  }
+  const groups = {};
+  for (const r of candidates){
+    const key = dayKey(r.eta_at);
+    (groups[key] = groups[key] || []).push(r);
+  }
+  const sortedKeys = Object.keys(groups).sort((a,b) => new Date(groups[a][0].eta_at) - new Date(groups[b][0].eta_at));
+  el.innerHTML = sortedKeys.map(key => {
+    const rows = [...groups[key]].sort((a,b) => b.progress - a.progress);
+    const rowsHtml = rows.map(r => {
+      const dir = (r.verwachting === 'stijgt' || r.verwachting === 'stijgt bijna') ? 'up' : 'down';
+      return `<div class="row">
+        <div>
+          <div class="name">${r.web_name} <span class="meta">${r.team_short} · ${POS_SHORT[r.element_type]||''}</span></div>
+          <div class="meta">${eur(r.now_cost)} · eerstvolgend: ${opponentLabel(r.team_id)}</div>
+        </div>
+        <div class="pct" style="color:var(--${dir})">${dir==='down'?'-':''}${pct(r.progress)}</div>
+      </div>`;
+    }).join('');
+    return `<div class="hint" style="margin:14px 0 4px;font-weight:600;color:var(--cream)">${key}</div>${rowsHtml}`;
+  }).join('');
 }
 
 /* ---------- metingen ---------- */
