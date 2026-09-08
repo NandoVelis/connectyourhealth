@@ -2741,7 +2741,7 @@ async function renderDashboard(){
   document.getElementById('vitalHrv').textContent = (vitals && vitals.hrv!=null) ? vitals.hrv+' ms' : '\u2014';
   const gToday = vitals && vitals.garmin;
   document.getElementById('vitalSleep').textContent = (vitals && vitals.sleepMinutes)
-    ? (Math.floor(vitals.sleepMinutes/60)+'u'+String(vitals.sleepMinutes%60).padStart(2,'0')+'m') + (gToday && gToday.sleep_score!=null ? ` (score ${Math.round(gToday.sleep_score)})` : '')
+    ? (Math.floor(vitals.sleepMinutes/60)+'u'+String(vitals.sleepMinutes%60).padStart(2,'0')+'m') + (gToday && gToday.sleep_score!=null ? ` (${Math.round(gToday.sleep_score)})` : '')
     : '\u2014';
 
   // VO2max en trainingsbelasting-ratio (Garmin-testdata, geen Tredict-
