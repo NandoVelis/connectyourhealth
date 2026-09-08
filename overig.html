@@ -487,12 +487,22 @@ async function load(){
     ROWS = board.map(r => {
       const n = r.net_since_change;
       const p = r.progress === null ? null : Number(r.progress);
+      // Bij "wacht op meting" (n === null) is er geen betrouwbare telling
+      // sinds de vorige wijziging, maar de netto transfers van déze
+      // speelronde (net_event) en de huidige drempel geven wel een grove
+      // indicatie -- als schatting getoond, niet als echte meting.
+      const approxNet = n === null ? r.net_event : null;
+      const approxThreshold = approxNet === null ? null : (approxNet >= 0 ? r.rise_threshold : r.fall_threshold);
+      const approxProgress = (approxNet !== null && approxThreshold > 0) ? Math.abs(approxNet) / approxThreshold : null;
       return {
         ...r,
         net_since_change: n === null ? null : Number(n),
         progress: p,
         progress_signed: p === null ? 0 : (n >= 0 ? p : -p),
-        threshold: n === null ? null : (n >= 0 ? r.rise_threshold : r.fall_threshold)
+        threshold: n === null ? null : (n >= 0 ? r.rise_threshold : r.fall_threshold),
+        approx_net: approxNet,
+        approx_threshold: approxThreshold,
+        approx_progress: approxProgress
       };
     });
     FIXTURES = fixtures;
@@ -793,16 +803,16 @@ function renderTable(){
       <td class="num">${eur(r.now_cost)}</td>
       <td class="num" style="color:${r.cost_change_start>0?'var(--up)':r.cost_change_start<0?'var(--down)':'inherit'}">${r.cost_change_start===0?'—':signed(r.cost_change_start/10)}</td>
       <td class="num">${r.selected_by_percent}%</td>
-      <td class="num">${r.net_since_change===null?'—':signed(r.net_since_change)}</td>
-      <td class="num">${r.threshold===null?'—':(r.net_since_change<0?'-':'')+nf.format(r.threshold)}</td>
-      <td class="num">${r.progress===null?'—':(r.net_since_change<0?'-':'')+pct(r.progress)}</td>
+      <td class="num">${r.net_since_change!==null?signed(r.net_since_change):(r.approx_net===null?'—':`<span style="color:var(--lavender)" title="Netto transfers deze speelronde (geen meting sinds vorige wijziging)">~${signed(r.approx_net)}</span>`)}</td>
+      <td class="num">${r.threshold!==null?(r.net_since_change<0?'-':'')+nf.format(r.threshold):(r.approx_threshold===null?'—':`<span style="color:var(--lavender)">~${(r.approx_net<0?'-':'')+nf.format(r.approx_threshold)}</span>`)}</td>
+      <td class="num">${r.progress!==null?(r.net_since_change<0?'-':'')+pct(r.progress):(r.approx_progress===null?'—':`<span style="color:var(--lavender)">~${(r.approx_net<0?'-':'')+pct(r.approx_progress)}</span>`)}</td>
       <td class="num">${formatEta(r.eta_at, r.progress)}</td>
       <td>${verwachtingPill(r.verwachting)}</td>
     </tr>`).join('');
   $('#modelNote').innerHTML =
     'Model: een <b>stijging</b> vraagt ongeveer 3,5% van alle managers aan netto instroom (' +
     nf.format(Math.round((GAME.total_players||0)*0.035)) + ' transfers), een <b>daling</b> ongeveer de helft van de eigenaren netto eruit. ' +
-    'Rijen met “wacht op meting” hadden deze speelronde al een prijswijziging vóór de tracker meekeek — die krijgen een echte meting zodra hun volgende wijziging langskomt. ' +
+    'Rijen met “wacht op meting” hadden deze speelronde al een prijswijziging vóór de tracker meekeek — die krijgen een echte meting zodra hun volgende wijziging langskomt. De paarse “~”-cijfers bij die rijen zijn een grove schatting op basis van de netto transfers van déze speelronde, niet sinds de vorige wijziging. ' +
     '“Geschat” betekent dat de teller is gevuld met de netto transfers van deze speelronde; “gemeten” betekent dat de tracker de vorige wijziging zelf heeft gezien.';
 }
 $$('#tbl thead th').forEach(th => th.addEventListener('click', () => {
