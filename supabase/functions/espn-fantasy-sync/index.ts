@@ -149,6 +149,7 @@ Deno.serve(async (req: Request) => {
 
     const capturedAt = new Date().toISOString();
     const playerRows: any[] = [];
+    const changedRows: any[] = [];
     const snapRows: any[] = [];
     const eventRows: any[] = [];
     const changedPlayerIds: number[] = [];
@@ -231,14 +232,19 @@ Deno.serve(async (req: Request) => {
         net_at_last_change: netAtLastChange,
         updated_at: capturedAt,
       };
-      if (lastChangeAt !== undefined) {
-        row.last_change_at = lastChangeAt;
-        row.last_change_direction = lastDir;
-      }
       playerRows.push(row);
+      // Losse batch voor spelers met een net gedetecteerde prijswijziging:
+      // PostgREST vereist dat alle objecten in één bulk-insert dezelfde
+      // sleutels hebben, dus deze twee extra velden (alleen relevant bij
+      // een echte wijziging) kunnen niet zomaar aan een deel van de rijen
+      // in dezelfde POST hangen.
+      if (lastChangeAt !== undefined) {
+        changedRows.push({ ...row, last_change_at: lastChangeAt, last_change_direction: lastDir });
+      }
     }
 
     await sbPost("espn_players", playerRows, "return=minimal,resolution=merge-duplicates");
+    await sbPost("espn_players", changedRows, "return=minimal,resolution=merge-duplicates");
     await sbPost("espn_snapshots", snapRows);
     await sbPost("espn_price_events", eventRows);
     snaps = snapRows.length;
