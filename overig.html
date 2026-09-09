@@ -841,20 +841,29 @@ function upcomingFixturesLabel(teamId, windowSize){
     return `${(TEAMS[oppId]||{}).short_name || '?'}${f.team_h===teamId ? '(T)' : '(U)'}`;
   }).join('+')).join(' ');
 }
+// Thuis/uit-weging voor de verwachte-puntenberekening: zonder teamsterkte-
+// data (ESPN's API levert geen FDR, zie eerder in dit bestand) is dit geen
+// vervanging voor een echte moeilijkheidsgraad, maar een thuiswedstrijd
+// levert statistisch gezien gemiddeld meer punten op dan een uitwedstrijd
+// -- een bescheiden, symmetrische bijstelling (+10%/-10%) die dat verschil
+// meeweegt zonder handmatige data nodig te hebben.
+const HOME_WEIGHT = 1.1, AWAY_WEIGHT = 0.9;
 function fixturesCountByTeam(windowSize){
   const startEvent = GAME.next_event || ((GAME.current_event||0)+1);
   const endEvent = startEvent + windowSize - 1;
   const counts = {};
+  const weighted = {};
   const detail = {};
   for(const f of FIXTURES){
     if(f.event==null || f.event < startEvent || f.event > endEvent) continue;
     for(const teamId of [f.team_h, f.team_a]){
       if(teamId==null) continue;
       counts[teamId] = (counts[teamId]||0) + 1;
+      weighted[teamId] = (weighted[teamId]||0) + (f.team_h===teamId ? HOME_WEIGHT : AWAY_WEIGHT);
       (detail[teamId] = detail[teamId]||[]).push(f.event);
     }
   }
-  return { counts, detail, startEvent, endEvent };
+  return { counts, weighted, detail, startEvent, endEvent };
 }
 function renderTransferSuggestions(){
   const tbody = $('#tsTbl tbody');
@@ -867,16 +876,18 @@ function renderTransferSuggestions(){
   const transfers = parseInt($('#tsTransfers').value, 10) || 1;
   const windowSize = parseInt($('#tsWindow').value, 10) || 2;
   const posFilter = $('#tsPos').value;
-  const { counts, startEvent, endEvent } = fixturesCountByTeam(windowSize);
+  const { counts, weighted, startEvent, endEvent } = fixturesCountByTeam(windowSize);
 
   const bank = MY_TEAM.bank || 0;
   const bankPerSlot = Math.floor(bank / transfers);
 
   // Verwachte punten over het venster = ESPN's eigen ep_next (verwachte
-  // punten voor de eerstvolgende speelronde) x aantal wedstrijden in het
-  // venster -- een grove maar bruikbare inschatting: een dubbele speelronde
-  // telt zo ook echt dubbel mee, niet alleen als tiebreaker.
-  const expWindowPts = r => (Number(r.ep_next) || 0) * Math.max(1, r.fixtureCount || 0);
+  // punten voor de eerstvolgende speelronde) x het gewogen aantal
+  // wedstrijden in het venster (thuis telt zwaarder dan uit, zie
+  // fixturesCountByTeam) -- een grove maar bruikbare inschatting: een
+  // dubbele speelronde telt zo ook echt dubbel mee, niet alleen als
+  // tiebreaker.
+  const expWindowPts = r => (Number(r.ep_next) || 0) * Math.max(1, r.weightedFixtures || 0);
 
   const ownedIds = new Set(MY_TEAM.picks.map(p => p.element));
   const byId = Object.fromEntries(ROWS.map(r => [r.id, r]));
@@ -906,7 +917,7 @@ function renderTransferSuggestions(){
   for(const p of MY_TEAM.picks){
     const pl = byId[p.element];
     if(!pl) continue;
-    const withExp = { ...pl, fixtureCount: counts[pl.team_id] || 0 };
+    const withExp = { ...pl, fixtureCount: counts[pl.team_id] || 0, weightedFixtures: weighted[pl.team_id] || 0 };
     (myByPos[pl.element_type] = myByPos[pl.element_type] || []).push(withExp);
   }
   for(const k in myByPos) myByPos[k].sort((a,b) => combinedScore(a) - combinedScore(b));
@@ -930,7 +941,7 @@ function renderTransferSuggestions(){
   // gedeeld budget, de beste combinatie vervangers.
   const allMine = Object.values(myByPos).flat().sort((a,b) => combinedScore(a) - combinedScore(b));
   const combo = transfers >= 2
-    ? bestCombo(allMine.slice(0, Math.min(allMine.length, transfers + 3)), transfers, bank, counts, combinedScore, ownedIds, ownedTeamCounts, MAX_PER_TEAM)
+    ? bestCombo(allMine.slice(0, Math.min(allMine.length, transfers + 3)), transfers, bank, counts, weighted, combinedScore, ownedIds, ownedTeamCounts, MAX_PER_TEAM)
     : null;
   renderCombo(combo, transfers, startEvent, endEvent);
 
@@ -948,7 +959,7 @@ function renderTransferSuggestions(){
       const projected = (ownedTeamCounts[r.team_id] || 0) + (removesSameClub ? 0 : 1);
       return projected <= MAX_PER_TEAM;
     })
-    .map(r => ({ ...r, fixtureCount: counts[r.team_id] || 0 }))
+    .map(r => ({ ...r, fixtureCount: counts[r.team_id] || 0, weightedFixtures: weighted[r.team_id] || 0 }))
     .sort((a,b) => combinedScore(b) - combinedScore(a))
     .slice(0, 20);
 
@@ -984,12 +995,12 @@ function kCombinations(arr, k){
 // je daarvoor terug, zodat de totale verwachte-puntenwinst over het
 // venster maximaal is binnen budget. Backtracking over een beperkte pool
 // (top 8 kandidaten per positie) houdt dit rekenkundig licht.
-function bestCombo(outPool, n, bank, counts, combinedScore, ownedIds, ownedTeamCounts, maxPerTeam){
+function bestCombo(outPool, n, bank, counts, weighted, combinedScore, ownedIds, ownedTeamCounts, maxPerTeam){
   if(outPool.length < n) return null;
   const poolsByPos = {};
   const candidatePool = elementType => poolsByPos[elementType] || (poolsByPos[elementType] = ROWS
     .filter(r => !ownedIds.has(r.id) && r.status === 'a' && r.element_type === elementType)
-    .map(r => ({ ...r, fixtureCount: counts[r.team_id] || 0 }))
+    .map(r => ({ ...r, fixtureCount: counts[r.team_id] || 0, weightedFixtures: weighted[r.team_id] || 0 }))
     .sort((a,b) => combinedScore(b) - combinedScore(a))
     .slice(0, 8));
 
