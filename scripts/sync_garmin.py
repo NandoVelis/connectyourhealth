@@ -148,9 +148,15 @@ def latest_weight_before(owner, date_str):
 def upsert_weight(owner, rows):
     if not rows:
         return
+    # De "weight"-tabel heeft een losse "id"-kolom als primary key (i.t.t.
+    # garmin_metrics, waar owner+metric_date de primary key zelf is) --
+    # zonder expliciete on_conflict probeert PostgREST te conflicten op "id"
+    # i.p.v. de echte unieke combinatie owner+weight_date, wat een 409
+    # "duplicate key" opleverde in plaats van een update.
     resp = requests.post(
         f"{SUPABASE_URL}/rest/v1/weight",
         headers={**supabase_headers(), "Prefer": "resolution=merge-duplicates"},
+        params={"on_conflict": "owner,weight_date"},
         json=rows,
         timeout=30,
     )
