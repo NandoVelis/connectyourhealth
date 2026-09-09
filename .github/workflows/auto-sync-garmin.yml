@@ -16,10 +16,11 @@ name: Auto-sync Garmin
 
 on:
   schedule:
-    # Elke 2 uur -- Garmin's metrics veranderen niet minuut-voor-minuut zoals
-    # Tredict-activiteiten, en een lagere frequentie verkleint het risico op
-    # anti-bot-rate-limiting bij de onofficiele login.
-    - cron: '0 */2 * * *'
+    # Elk uur -- vaker dan de eerdere 2 uur, op verzoek (o.a. om
+    # sync-timing-vertraging na een training sneller te laten bijtrekken).
+    # Nog steeds niet elke paar minuten, om het risico op rate-limiting bij
+    # Garmin's onofficiele login te beperken.
+    - cron: '0 * * * *'
   workflow_dispatch:
     inputs:
       mfa_code:
