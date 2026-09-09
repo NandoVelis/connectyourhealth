@@ -24,9 +24,12 @@ Alle volgende (geplande) runs hergebruiken daarna de opgeslagen sessie.
 import os
 import sys
 from datetime import date, datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 from garminconnect import Garmin, GarminConnectAuthenticationError
 import requests
+
+AMSTERDAM = ZoneInfo("Europe/Amsterdam")
 
 # Zelfde sportnaam-mapping als de (nu grotendeels buiten werking) Tredict-sync
 # (supabase/functions/sync-tredict/index.ts), zodat activity_type-waarden in
@@ -415,15 +418,27 @@ def main():
     # ---- GEWICHT ----
     print("Gewicht ophalen...")
     body_comp = safe(garmin.get_body_composition, week_start.isoformat(), today.isoformat())
-    weight_rows = []
+    # Amsterdam-tijd i.p.v. UTC voor de datumconversie -- anders kan een
+    # weging laat op de avond per ongeluk op "morgen" belanden. En per datum
+    # maar 1 rij (laatste meting van die dag wint): als Garmin ooit 2x
+    # dezelfde dag teruggeeft, crasht een bulk-upsert met 2 rijen op dezelfde
+    # conflict-sleutel anders ("ON CONFLICT DO UPDATE command cannot affect
+    # row a second time") -- zelfde reden waarom de Tredict-sync dit ook al
+    # via een Map per datum oplost.
+    weight_by_date = {}
     if isinstance(body_comp, dict):
         for entry in body_comp.get("dateWeightList") or []:
-            ts = entry.get("date")
             grams = entry.get("weight")
-            if not ts or not grams:
+            if not grams:
                 continue
-            d = datetime.fromtimestamp(ts / 1000, tz=timezone.utc).date().isoformat()
-            weight_rows.append({"owner": owner, "weight_date": d, "kg": round(grams / 1000, 1)})
+            d = entry.get("calendarDate")
+            if not d:
+                ts = entry.get("date")
+                if not ts:
+                    continue
+                d = datetime.fromtimestamp(ts / 1000, tz=AMSTERDAM).date().isoformat()
+            weight_by_date[d] = round(grams / 1000, 1)
+    weight_rows = [{"owner": owner, "weight_date": d, "kg": kg} for d, kg in weight_by_date.items()]
     if weight_rows:
         print(f"  {len(weight_rows)} gewichtmeting(en) gevonden, opslaan...")
         upsert_weight(owner, weight_rows)
