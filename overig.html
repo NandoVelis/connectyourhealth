@@ -714,14 +714,18 @@ function renderMyTeam(team){
       case 'ownership':
         return `<div class="ptrend">${r.pl.selected_by_percent}%</div>`;
       case 'price': {
-        const v = r.pl.verwachting;
-        const p = r.pl.progress;
+        // Zelfde logica als priceTrendMini(): altijd gekleurd op basis van de
+        // netto-richting (ook bij "wacht op meting", dan de geschatte
+        // ~-waarde), niet alleen bij spelers die al dicht bij een drempel
+        // staan.
+        const approx = r.pl.progress == null;
+        const p = approx ? r.pl.approx_progress : r.pl.progress;
         if (p == null) return `<div class="ptrend" style="color:var(--muted)">—</div>`;
-        const trending = v && v !== 'stabiel' && v !== 'onbekend';
-        const isDown = v === 'daalt' || v === 'daalt bijna';
-        const color = trending ? (isDown ? 'var(--down)' : 'var(--up)') : 'var(--muted)';
-        const arrow = trending ? (isDown ? '&#9660; ' : '&#9650; ') : '';
-        return `<div class="ptrend" style="color:${color}">${arrow}${pct(p)}</div>`;
+        const net = approx ? r.pl.approx_net : r.pl.net_since_change;
+        const isUp = net != null ? net >= 0 : (r.pl.verwachting === 'stijgt' || r.pl.verwachting === 'stijgt bijna');
+        const color = isUp ? 'var(--up)' : 'var(--down)';
+        const arrow = isUp ? '&#9650; ' : '&#9660; ';
+        return `<div class="ptrend" style="color:${color}">${approx?'~':''}${arrow}${pct(p)}</div>`;
       }
       case 'form':
         return `<div class="ptrend">${r.pl.form!=null ? r.pl.form : '—'}</div>`;
