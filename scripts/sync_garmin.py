@@ -467,6 +467,9 @@ def main():
             activity_type = ((act.get("activityType") or {}).get("typeKey")) or "misc"
             distance_m = act.get("distance") or 0
             duration_s = act.get("duration") or 0
+            # Extra Garmin-detail alvast opgeslagen voor later (nog niet
+            # getoond in de app) -- fietsen gebruikt een andere cadans-
+            # veldnaam dan hardlopen, vandaar de dubbele .get().
             activities_by_date.setdefault(d, []).append({
                 "name": act.get("activityName") or activity_type,
                 "kcal": round(act.get("calories") or 0),
@@ -474,6 +477,13 @@ def main():
                 "duration_minutes": round(duration_s / 60, 1) if duration_s else 0,
                 "type": SPORT_TYPE_MAP.get(activity_type, activity_type),
                 "avg_heartrate": act.get("averageHR"),
+                "max_heartrate": act.get("maxHR"),
+                "elevation_gain_m": act.get("elevationGain"),
+                "avg_cadence": act.get("averageRunningCadenceInStepsPerMinute") or act.get("averageBikingCadenceInRevPerMinute"),
+                "training_effect_aerobic": act.get("aerobicTrainingEffect"),
+                "training_effect_anaerobic": act.get("anaerobicTrainingEffect"),
+                "vo2max_estimate": act.get("vO2MaxValue"),
+                "raw": act,
             })
 
     if not activities_by_date:
@@ -493,6 +503,13 @@ def main():
             "duration_minutes": a["duration_minutes"],
             "activity_type": a["type"],
             "avg_heartrate": a["avg_heartrate"],
+            "max_heartrate": a["max_heartrate"],
+            "elevation_gain_m": a["elevation_gain_m"],
+            "avg_cadence": a["avg_cadence"],
+            "training_effect_aerobic": a["training_effect_aerobic"],
+            "training_effect_anaerobic": a["training_effect_anaerobic"],
+            "vo2max_estimate": a["vo2max_estimate"],
+            "raw": a["raw"],
             "rest_kcal": rest_kcal,
             "total_kcal": total_kcal,
         } for a in acts]
