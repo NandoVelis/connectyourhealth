@@ -880,6 +880,16 @@ function renderTransferSuggestions(){
 
   const ownedIds = new Set(MY_TEAM.picks.map(p => p.element));
   const byId = Object.fromEntries(ROWS.map(r => [r.id, r]));
+  // ESPN Fantasy staat max. 3 spelers per club toe in je team -- bijgehouden
+  // zodat suggesties en combinaties nooit een 4e speler van dezelfde club
+  // voorstellen.
+  const MAX_PER_TEAM = 3;
+  const ownedTeamCounts = {};
+  for(const p of MY_TEAM.picks){
+    const pl = byId[p.element];
+    if(!pl) continue;
+    ownedTeamCounts[pl.team_id] = (ownedTeamCounts[pl.team_id]||0) + 1;
+  }
   // Mijn eigen spelers (met hun eigen verwachte punten over hetzelfde
   // venster), gegroepeerd per positie -- gebruikt om per suggestie de
   // zwakste eigen speler in diezelfde positie aan te wijzen als
@@ -920,7 +930,7 @@ function renderTransferSuggestions(){
   // gedeeld budget, de beste combinatie vervangers.
   const allMine = Object.values(myByPos).flat().sort((a,b) => combinedScore(a) - combinedScore(b));
   const combo = transfers >= 2
-    ? bestCombo(allMine.slice(0, Math.min(allMine.length, transfers + 3)), transfers, bank, counts, combinedScore, ownedIds)
+    ? bestCombo(allMine.slice(0, Math.min(allMine.length, transfers + 3)), transfers, bank, counts, combinedScore, ownedIds, ownedTeamCounts, MAX_PER_TEAM)
     : null;
   renderCombo(combo, transfers, startEvent, endEvent);
 
@@ -929,6 +939,15 @@ function renderTransferSuggestions(){
     .filter(r => r.status === 'a')
     .filter(r => !posFilter || String(r.element_type) === posFilter)
     .filter(r => r.now_cost <= budgetForPos(r.element_type))
+    .filter(r => {
+      // Max. 3 spelers per club: telt mee tenzij de aanbevolen wissel
+      // toevallig al een speler van dezelfde club is (dan blijft het aantal
+      // gelijk i.p.v. te stijgen).
+      const weakest = (myByPos[r.element_type] || [])[0];
+      const removesSameClub = weakest && weakest.team_id === r.team_id;
+      const projected = (ownedTeamCounts[r.team_id] || 0) + (removesSameClub ? 0 : 1);
+      return projected <= MAX_PER_TEAM;
+    })
     .map(r => ({ ...r, fixtureCount: counts[r.team_id] || 0 }))
     .sort((a,b) => combinedScore(b) - combinedScore(a))
     .slice(0, 20);
@@ -965,7 +984,7 @@ function kCombinations(arr, k){
 // je daarvoor terug, zodat de totale verwachte-puntenwinst over het
 // venster maximaal is binnen budget. Backtracking over een beperkte pool
 // (top 8 kandidaten per positie) houdt dit rekenkundig licht.
-function bestCombo(outPool, n, bank, counts, combinedScore, ownedIds){
+function bestCombo(outPool, n, bank, counts, combinedScore, ownedIds, ownedTeamCounts, maxPerTeam){
   if(outPool.length < n) return null;
   const poolsByPos = {};
   const candidatePool = elementType => poolsByPos[elementType] || (poolsByPos[elementType] = ROWS
@@ -980,6 +999,13 @@ function bestCombo(outPool, n, bank, counts, combinedScore, ownedIds){
     const usedIds = new Set();
     (function rec(i, spent, gain, picks){
       if(i === outs.length){
+        // Max. 3 spelers per club na deze wissels samen -- niet alleen per
+        // losse wissel checken, want meerdere aankopen bij dezelfde club
+        // in één combinatie kunnen samen alsnog de grens overschrijden.
+        const projected = { ...ownedTeamCounts };
+        for(const o of outs) projected[o.team_id] = (projected[o.team_id]||0) - 1;
+        for(const p of picks) projected[p.team_id] = (projected[p.team_id]||0) + 1;
+        if(Object.values(projected).some(c => c > maxPerTeam)) return;
         if(!best || gain > best.gain) best = { outs, picks: [...picks], gain, spent, budget };
         return;
       }
