@@ -1080,13 +1080,18 @@ function daysUntilLabel(etaAt){
 }
 // Compact stijg/daal-label (percentage + geschatte dagen tot wijziging) voor
 // bij een speler in de teamselectie -- groen bij stijgen, rood bij dalen.
+// Toont altijd een percentage (ook bij "wacht op meting", dan de geschatte
+// ~-waarde), niet alleen bij spelers die al dicht bij een wijziging staan.
 function priceTrendMini(pl){
-  const v = pl && pl.verwachting;
-  if (!v || v === 'stabiel' || v === 'onbekend' || pl.progress == null) return '';
-  const isUp = v === 'stijgt' || v === 'stijgt bijna';
-  const pct = Math.round(Math.min(1, pl.progress) * 100);
-  const dLabel = daysUntilLabel(pl.eta_at);
-  return ` &middot; <span style="color:var(--${isUp?'up':'down'});font-weight:600;">${isUp?'&#9650;':'&#9660;'} ${pct}%${dLabel?' &middot; '+dLabel:''}</span>`;
+  if (!pl) return '';
+  const approx = pl.progress == null;
+  const p = approx ? pl.approx_progress : pl.progress;
+  if (p == null) return '';
+  const net = approx ? pl.approx_net : pl.net_since_change;
+  const isUp = net != null ? net >= 0 : (pl.verwachting === 'stijgt' || pl.verwachting === 'stijgt bijna');
+  const pctVal = Math.round(Math.min(1, p) * 100);
+  const dLabel = !approx ? daysUntilLabel(pl.eta_at) : null;
+  return ` &middot; <span style="color:var(--${isUp?'up':'down'});font-weight:600;">${approx?'~':''}${isUp?'&#9650;':'&#9660;'} ${pctVal}%${dLabel?' &middot; '+dLabel:''}</span>`;
 }
 // Bijstelling op verwachte punten o.b.v. de prijstrend: een speler die
 // binnenkort duurder wordt is aantrekkelijker om NU te kopen (later duurder
