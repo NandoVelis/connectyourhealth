@@ -239,6 +239,21 @@
       </table>
     </div>
     <p class="note" id="modelNote"></p>
+
+    <div class="card" style="margin-top:16px">
+      <h3>Onderliggende cijfers (xG)</h3>
+      <p class="hint" id="xgSnapshotHint">Eenmalige, handmatig aangeleverde momentopname (top 100 op doelpunten, bron: gettingbluefingers.com) -- wordt niet automatisch bijgewerkt.</p>
+      <div class="tablewrap">
+        <table id="xgSnapshotTbl">
+          <thead><tr>
+            <th>Speler</th><th>Club</th><th class="num">Min</th><th class="num">Goals (np)</th>
+            <th class="num">xG (npxG)</th><th class="num">xG/90</th><th class="num">Assists</th>
+            <th class="num">xG assisted</th><th class="num">xThreat</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
   </section>
 
   <!-- ---------- MIJN TEAM ---------- -->
@@ -611,7 +626,7 @@ let FIXTURES = [], TEAMS = {}, MY_TEAM = null;
 
 async function load(){
   try{
-    const [game, board, events, logs, myTeam, fixtures, teams, knownManagers, knownTransfers] = await Promise.all([
+    const [game, board, events, logs, myTeam, fixtures, teams, knownManagers, knownTransfers, xgSnapshot] = await Promise.all([
       api('espn_game?id=eq.1&select=*'),
       api('espn_price_board?select=*&limit=1000'),
       api('espn_price_events?select=*&order=detected_at.desc&limit=60'),
@@ -620,7 +635,8 @@ async function load(){
       api('espn_fixtures?select=*&finished=eq.false&order=event.asc&limit=200'),
       api('espn_teams?select=*'),
       api('espn_known_managers?select=*&active=eq.true'),
-      api('espn_known_manager_transfers_seen?select=*&order=occurred_at.desc&limit=30')
+      api('espn_known_manager_transfers_seen?select=*&order=occurred_at.desc&limit=30'),
+      api('espn_xg_snapshot?select=*&order=xg.desc')
     ]);
     GAME = game[0] || {};
     ROWS = board.map(r => {
@@ -652,6 +668,7 @@ async function load(){
     renderMyTeam(MY_TEAM);
     renderTransferSuggestions();
     renderKnownManagers(knownManagers, knownTransfers);
+    renderXgSnapshot(xgSnapshot);
   }catch(e){
     $('#tiles').innerHTML = '<div class="tile"><div class="label">Fout</div><div class="sub">' + e.message + '</div></div>';
   }
@@ -1138,6 +1155,52 @@ $$('#tbl thead th').forEach(th => th.addEventListener('click', () => {
   renderTable();
 }));
 ['#q','#fPos','#fOwn','#fDir'].forEach(s => $(s).addEventListener('input', renderTable));
+
+/* ---------- xG-snapshot (eenmalig, handmatig aangeleverd) ---------- */
+// Matcht op naam tegen ROWS (espn_price_board) voor de clubkolom -- de
+// snapshot heeft zelf geen ESPN-speler-ID, dus dit is best-effort
+// (voor-/achternaam, dan alleen achternaam, dan web_name), diakritisch
+// genormaliseerd zodat bv. "Sørensen" ook zonder accenttekens matcht.
+function normalizeName(s){
+  return (s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().trim();
+}
+function renderXgSnapshot(rows){
+  const tbody = $('#xgSnapshotTbl tbody');
+  if(!tbody) return;
+  if(!rows || !rows.length){
+    tbody.innerHTML = '<tr><td colspan="9" class="empty">Nog geen snapshot.</td></tr>';
+    return;
+  }
+  const byFullName = {}, bySecondName = {}, byWebName = {};
+  for(const r of ROWS){
+    byFullName[normalizeName(`${r.first_name} ${r.second_name}`)] = r;
+    bySecondName[normalizeName(r.second_name)] = r;
+    byWebName[normalizeName(r.web_name)] = r;
+  }
+  const snapshotDate = rows[0]?.snapshot_date;
+  const hintEl = $('#xgSnapshotHint');
+  if(hintEl && snapshotDate){
+    const dateLabel = new Date(snapshotDate).toLocaleDateString('nl-NL', {day:'2-digit', month:'short', year:'numeric'});
+    hintEl.textContent = `Eenmalige, handmatig aangeleverde momentopname van ${dateLabel} (top 100 op doelpunten, bron: gettingbluefingers.com) -- wordt niet automatisch bijgewerkt.`;
+  }
+  const fmt2 = v => v!=null ? Number(v).toFixed(2) : '—';
+  tbody.innerHTML = rows.map(r => {
+    const key = normalizeName(r.player_name);
+    const match = byFullName[key] || bySecondName[key] || byWebName[key];
+    const team = match ? match.team_short : '—';
+    return `<tr>
+      <td>${r.player_name}</td>
+      <td>${team}</td>
+      <td class="num">${r.minutes ?? '—'}</td>
+      <td class="num">${r.goals ?? 0} (${r.np_goals ?? 0})</td>
+      <td class="num">${fmt2(r.xg)} (${fmt2(r.npxg)})</td>
+      <td class="num">${fmt2(r.xg_per90)}</td>
+      <td class="num">${r.assists ?? 0}</td>
+      <td class="num">${fmt2(r.xg_assisted)}</td>
+      <td class="num">${fmt2(r.xthreat)}</td>
+    </tr>`;
+  }).join('');
+}
 
 /* ---------- transfers ---------- */
 // Compact label voor de eerstvolgende tegenstander(s) van een team, voor
