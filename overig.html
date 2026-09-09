@@ -255,7 +255,7 @@
         <select id="pitchStat">
           <option value="points">Punten</option>
           <option value="ownership">Bezit%</option>
-          <option value="price">Prijswijziging</option>
+          <option value="price" selected>Prijswijziging</option>
           <option value="form">Vorm</option>
           <option value="fixture">Komende 3 wedstrijden</option>
         </select>
@@ -580,7 +580,7 @@ $$('nav.tabs button').forEach(b => b.addEventListener('click', () => {
 let ROWS = [], GAME = {}, SORT = { key:'progress_signed', dir:-1 };
 let MY_ENTRY_ID = null;
 let CURRENT_EMAIL = null;
-let PITCH_STAT = 'points';
+let PITCH_STAT = 'price';
 
 async function start(who){
   $('#gate').hidden = true;
