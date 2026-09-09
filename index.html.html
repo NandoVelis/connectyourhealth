@@ -353,11 +353,6 @@
           <span class="stat-label">&#9878;&#65039; Gewicht</span>
           <span class="stat-val" id="vitalWeight">&mdash;</span>
           <span class="meal-meta" id="vitalWeightWeek">week gem. &mdash;</span>
-          <div style="display:flex;gap:6px;margin-top:6px;">
-            <input type="number" step="0.1" min="0" id="vitalWeightInput" placeholder="kg" style="width:70px;padding:6px 8px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--ink);">
-            <button class="btn-secondary" id="vitalWeightSaveBtn" style="padding:6px 10px;">Opslaan</button>
-          </div>
-          <span class="status-msg" id="vitalWeightStatus" style="margin-top:0;"></span>
         </div>
         <div class="stat-row" style="border-bottom:none;flex-direction:column;align-items:flex-start;">
           <span class="stat-label">&#129749; VO2max</span>
@@ -2795,16 +2790,6 @@ async function renderDashboard(){
 
   const weightEntryForInput = await loadWeight(dateStr);
   document.getElementById('vitalWeight').textContent = weightEntryForInput ? weightEntryForInput.kg+' kg' : '\u2014';
-  // Handmatig invulbaar zolang Tredict (402) en Garmin geen gewicht
-  // aanleveren voor deze dag -- direct opgeslagen in dezelfde 'weight'-tabel,
-  // dus de macro-/kcal-berekeningen (die op loadWeight/loadMostRecentWeight
-  // leunen) blijven werken zodra dit is ingevuld.
-  const vitalWeightInputEl = document.getElementById('vitalWeightInput');
-  if(vitalWeightInputEl && document.activeElement !== vitalWeightInputEl){
-    vitalWeightInputEl.value = weightEntryForInput ? weightEntryForInput.kg : '';
-  }
-  const vitalWeightStatusEl = document.getElementById('vitalWeightStatus');
-  if(vitalWeightStatusEl) vitalWeightStatusEl.textContent = '';
 
   const weekWeights = await Promise.all(weekDays.map(d=>loadWeight(fmtDate(d))));
   const prevWeekWeights = await Promise.all(prevWeekDaysForVitals.map(d=>loadWeight(fmtDate(d))));
@@ -5136,26 +5121,6 @@ document.getElementById('trainingGoalSaveBtn')?.addEventListener('click', async 
     return;
   }
   if(statusEl) statusEl.textContent = 'Doel opgeslagen.';
-  await renderDashboard();
-});
-
-document.getElementById('vitalWeightSaveBtn')?.addEventListener('click', async (e)=>{
-  const input = document.getElementById('vitalWeightInput');
-  const statusEl = document.getElementById('vitalWeightStatus');
-  const btn = e.target;
-  const kg = parseFloat((input?.value || '').replace(',', '.'));
-  if(!kg || kg <= 0){
-    if(statusEl) statusEl.innerHTML = '<span class="status-err">Vul een geldig gewicht in.</span>';
-    return;
-  }
-  btn.disabled = true;
-  const ok = await saveWeight(fmtDate(state.currentDate), kg);
-  btn.disabled = false;
-  if(!ok){
-    if(statusEl) statusEl.innerHTML = '<span class="status-err">Opslaan mislukt.</span>';
-    return;
-  }
-  if(statusEl) statusEl.textContent = 'Gewicht opgeslagen.';
   await renderDashboard();
 });
 
