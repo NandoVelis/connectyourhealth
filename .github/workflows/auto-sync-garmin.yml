@@ -1,7 +1,10 @@
-name: Auto-sync Garmin (test)
+name: Auto-sync Garmin
 
-# TEST-koppeling naast Tredict, zie scripts/sync_garmin.py voor uitleg waarom
-# dit als Python GitHub Action draait i.p.v. als Supabase edge function.
+# Synct vitals, trainingsactiviteiten en gewicht -- nu Tredict's API
+# betaalde toegang vereist (402) is dit de belangrijkste bron geworden,
+# niet meer alleen een test-aanvulling. Zie scripts/sync_garmin.py voor
+# uitleg waarom dit als Python GitHub Action draait i.p.v. als Supabase
+# edge function.
 #
 # Vereiste repo-secrets (Settings -> Secrets and variables -> Actions):
 #   GARMIN_EMAIL_NANDO, GARMIN_PASSWORD_NANDO  (je gewone Garmin Connect-login)

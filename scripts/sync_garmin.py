@@ -1,6 +1,11 @@
 #!/usr/bin/env python3
 """Synchroniseert Garmin Connect-metrics (VO2max, HRV, rust-hartslag, slaap,
-trainingsstatus) naar Supabase, als test-alternatief voor Tredict.
+trainingsstatus), trainingsactiviteiten en gewicht naar Supabase.
+
+Nu Tredict's API betaalde toegang vereist (status 402) en Runalyze's
+activiteiten/lichaamsmetingen-endpoints een Supporter/Premium-abonnement
+vereisen (403), is dit de enige nog werkende, gratis bron voor training +
+gewicht -- niet meer alleen een aanvulling op de vitals-fallback.
 
 Draait als GitHub Actions-workflow (.github/workflows/auto-sync-garmin.yml),
 niet als Supabase edge function -- de onofficiele garminconnect-library
@@ -22,6 +27,26 @@ from datetime import date, datetime, timedelta, timezone
 
 from garminconnect import Garmin, GarminConnectAuthenticationError
 import requests
+
+# Zelfde sportnaam-mapping als de (nu grotendeels buiten werking) Tredict-sync
+# (supabase/functions/sync-tredict/index.ts), zodat activity_type-waarden in
+# de "training"-tabel niet plots anders heten afhankelijk van de bron.
+SPORT_TYPE_MAP = {
+    "running": "hardlopen",
+    "track_running": "hardlopen",
+    "trail_running": "hardlopen",
+    "treadmill_running": "hardlopen",
+    "cycling": "fietsen",
+    "road_biking": "fietsen",
+    "indoor_cycling": "fietsen",
+    "mountain_biking": "fietsen",
+    "swimming": "zwemmen",
+    "lap_swimming": "zwemmen",
+    "open_water_swimming": "zwemmen",
+    "strength_training": "sportschool",
+    "fitness_equipment": "sportschool",
+    "indoor_cardio": "sportschool",
+}
 
 # Dezelfde publieke "publishable" sleutel die al in index.html.html en de
 # Tredict-sync-workflow staat -- geen geheim, RLS op de garmin_*-tabellen is
@@ -74,6 +99,100 @@ def upsert_metrics(owner, rows):
     )
     if not resp.ok:
         raise RuntimeError(f"Opslaan garmin_metrics mislukt ({resp.status_code}): {resp.text[:500]}")
+
+
+def load_profile(owner):
+    resp = requests.get(
+        f"{SUPABASE_URL}/rest/v1/profiles",
+        headers=supabase_headers(),
+        params={"owner": f"eq.{owner}", "select": "birth_date,height_cm"},
+        timeout=15,
+    )
+    resp.raise_for_status()
+    rows = resp.json()
+    return rows[0] if rows else {}
+
+
+def load_overridden_dates(owner):
+    # Dagen die handmatig gecorrigeerd zijn (bv. een fout gesynchroniseerde
+    # activiteit) mogen niet stilzwijgend weer overschreven worden -- zelfde
+    # regel als de Tredict-sync.
+    resp = requests.get(
+        f"{SUPABASE_URL}/rest/v1/training",
+        headers=supabase_headers(),
+        params={"owner": f"eq.{owner}", "manual_override": "eq.true", "select": "training_date"},
+        timeout=15,
+    )
+    resp.raise_for_status()
+    return {r["training_date"] for r in resp.json()}
+
+
+def latest_weight_before(owner, date_str):
+    resp = requests.get(
+        f"{SUPABASE_URL}/rest/v1/weight",
+        headers=supabase_headers(),
+        params={
+            "owner": f"eq.{owner}",
+            "weight_date": f"lte.{date_str}",
+            "select": "kg",
+            "order": "weight_date.desc",
+            "limit": "1",
+        },
+        timeout=15,
+    )
+    resp.raise_for_status()
+    rows = resp.json()
+    return rows[0]["kg"] if rows else 63
+
+
+def upsert_weight(owner, rows):
+    if not rows:
+        return
+    resp = requests.post(
+        f"{SUPABASE_URL}/rest/v1/weight",
+        headers={**supabase_headers(), "Prefer": "resolution=merge-duplicates"},
+        json=rows,
+        timeout=30,
+    )
+    if not resp.ok:
+        raise RuntimeError(f"Opslaan gewicht mislukt ({resp.status_code}): {resp.text[:500]}")
+
+
+def replace_training_for_date(owner, date_str, rows):
+    resp = requests.delete(
+        f"{SUPABASE_URL}/rest/v1/training",
+        headers=supabase_headers(),
+        params={"owner": f"eq.{owner}", "training_date": f"eq.{date_str}"},
+        timeout=15,
+    )
+    if not resp.ok:
+        raise RuntimeError(f"Verwijderen training mislukt ({resp.status_code}): {resp.text[:500]}")
+    if not rows:
+        return
+    resp = requests.post(
+        f"{SUPABASE_URL}/rest/v1/training",
+        headers=supabase_headers(),
+        json=rows,
+        timeout=30,
+    )
+    if not resp.ok:
+        raise RuntimeError(f"Opslaan training mislukt ({resp.status_code}): {resp.text[:500]}")
+
+
+def calculate_age(birth_date, at_date):
+    age = at_date.year - birth_date.year
+    if (at_date.month, at_date.day) < (birth_date.month, birth_date.day):
+        age -= 1
+    return age
+
+
+# Zelfde Mifflin-St Jeor-formule als de Tredict-sync (calculateBMR), x1.2 voor
+# een puur sedentaire rustverbranding -- losse stappen tellen apart mee via
+# extraKcalFromSteps in index.html.html.
+def calculate_rest_kcal(weight_kg, height_cm, birth_date, at_date):
+    age = calculate_age(birth_date, at_date)
+    bmr = 10 * weight_kg + 6.25 * height_cm - 5 * age + 5
+    return round(bmr * 1.2)
 
 
 def login(owner, email, password, mfa_code):
@@ -286,6 +405,79 @@ def main():
     rows = list(per_date.values())
     print(f"{len(rows)} dag(en) met metrics gevonden, opslaan in Supabase...")
     upsert_metrics(owner, rows)
+
+    # ---- GEWICHT ----
+    print("Gewicht ophalen...")
+    body_comp = safe(garmin.get_body_composition, week_start.isoformat(), today.isoformat())
+    weight_rows = []
+    if isinstance(body_comp, dict):
+        for entry in body_comp.get("dateWeightList") or []:
+            ts = entry.get("date")
+            grams = entry.get("weight")
+            if not ts or not grams:
+                continue
+            d = datetime.fromtimestamp(ts / 1000, tz=timezone.utc).date().isoformat()
+            weight_rows.append({"owner": owner, "weight_date": d, "kg": round(grams / 1000, 1)})
+    if weight_rows:
+        print(f"  {len(weight_rows)} gewichtmeting(en) gevonden, opslaan...")
+        upsert_weight(owner, weight_rows)
+    else:
+        print("  geen gewichtmetingen gevonden (geen gekoppelde weegschaal, of niets nieuws deze week).")
+
+    # ---- TRAINING (activiteiten) ----
+    print("Trainingsactiviteiten ophalen...")
+    profile = safe(load_profile, owner) or {}
+    env_suffix = owner.upper()
+    birth_date_str = profile.get("birth_date") or os.environ.get(f"BIRTHDATE_{env_suffix}") or "1990-01-01"
+    height_cm = float(profile.get("height_cm") or os.environ.get(f"HEIGHT_CM_{env_suffix}") or 175)
+    birth_date = datetime.strptime(birth_date_str, "%Y-%m-%d").date()
+    overridden_dates = safe(load_overridden_dates, owner) or set()
+
+    activities = safe(garmin.get_activities_by_date, week_start.isoformat(), today.isoformat())
+    activities_by_date = {}
+    if isinstance(activities, list):
+        for act in activities:
+            start_local = act.get("startTimeLocal") or act.get("startTimeGMT")
+            if not start_local:
+                continue
+            d = start_local[:10]
+            if d in overridden_dates:
+                continue
+            activity_type = ((act.get("activityType") or {}).get("typeKey")) or "misc"
+            distance_m = act.get("distance") or 0
+            duration_s = act.get("duration") or 0
+            activities_by_date.setdefault(d, []).append({
+                "name": act.get("activityName") or activity_type,
+                "kcal": round(act.get("calories") or 0),
+                "km": round(distance_m / 1000, 2) if distance_m else 0,
+                "duration_minutes": round(duration_s / 60, 1) if duration_s else 0,
+                "type": SPORT_TYPE_MAP.get(activity_type, activity_type),
+                "avg_heartrate": act.get("averageHR"),
+            })
+
+    if not activities_by_date:
+        print("  geen activiteiten gevonden in dit venster.")
+    for d, acts in activities_by_date.items():
+        activity_kcal_sum = sum(a["kcal"] for a in acts)
+        weight_kg = safe(latest_weight_before, owner, d) or 63
+        at_date = datetime.strptime(d, "%Y-%m-%d").date()
+        rest_kcal = calculate_rest_kcal(weight_kg, height_cm, birth_date, at_date)
+        total_kcal = rest_kcal + activity_kcal_sum
+        training_rows = [{
+            "owner": owner,
+            "training_date": d,
+            "activity_name": a["name"],
+            "kcal": a["kcal"],
+            "km": a["km"],
+            "duration_minutes": a["duration_minutes"],
+            "activity_type": a["type"],
+            "avg_heartrate": a["avg_heartrate"],
+            "rest_kcal": rest_kcal,
+            "total_kcal": total_kcal,
+        } for a in acts]
+        replace_training_for_date(owner, d, training_rows)
+        print(f"  {d}: {len(training_rows)} activiteit(en) weggeschreven ({activity_kcal_sum} kcal training, {total_kcal} kcal totaal)")
+
     print("Klaar.")
 
 
