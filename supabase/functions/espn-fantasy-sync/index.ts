@@ -103,124 +103,8 @@ async function sendPush(alertEmail: string, title: string, body: string, url = "
   }
 }
 
-// ---- EENMALIGE TEST MET TERUGWERKENDE KRACHT (?backfill=1) ----
-// Herhaalt de "daadwerkelijke prijswijziging"-meldingen hierboven, maar dan
-// voor prijswijzigingen die al eerder gedetecteerd zijn (bv. vannacht) en
-// dus niet meer als "changedPlayerIds" in een normale sync-run voorkomen.
-// Uitsluitend handmatig aan te roepen met ?backfill=1 -- pg_cron roept de
-// functie nooit met die query-param aan, dus dit draait nooit vanzelf mee.
-// Bedoeld als eenmalige test na het toevoegen van de melding hierboven,
-// niet als permanent onderdeel van de reguliere sync.
-async function runBackfillTest(sinceIso: string): Promise<Response> {
-  const events: any[] = await sbGet(
-    `espn_price_events?select=*&detected_at=gte.${encodeURIComponent(sinceIso)}&order=detected_at.asc`,
-  );
-  if (!events.length) {
-    return new Response(JSON.stringify({ ok: true, message: `Geen prijswijzigingen sinds ${sinceIso}.` }), {
-      headers: { ...CORS, "Content-Type": "application/json" },
-    });
-  }
-  const playerIds = [...new Set(events.map((e) => e.player_id))];
-  const players: any[] = await sbGet(`espn_players?select=id,web_name,team_short&id=in.(${playerIds.join(",")})`);
-  const playerById = new Map(players.map((p) => [p.id, p]));
-  const eventByPlayerId = new Map(events.map((e) => [e.player_id, e]));
-  const line = (id: number) => {
-    const pl = playerById.get(id)!;
-    const ev = eventByPlayerId.get(id)!;
-    return `- ${pl.web_name} (${pl.team_short}): €${(ev.old_cost / 10).toFixed(1)} -> €${(ev.new_cost / 10).toFixed(1)}`;
-  };
-  const resendKey = Deno.env.get("RESEND_API_KEY");
-  const alertedTo = new Set<string>();
-  const summary: Record<string, number> = {};
-
-  for (const { entryId, alertEmails } of MY_TEAMS) {
-    try {
-      const entryRes = await fetch(`https://fantasy.espngoal.nl/api/entry/${entryId}/`);
-      if (!entryRes.ok) continue;
-      const entry = await entryRes.json();
-      const currentEvent: number | null = entry.current_event ?? null;
-      if (!currentEvent) continue;
-      const picksRes = await fetch(`https://fantasy.espngoal.nl/api/entry/${entryId}/event/${currentEvent}/picks/`);
-      if (!picksRes.ok) continue;
-      const picks = await picksRes.json();
-      const ownedChangedIds: number[] = (picks?.picks ?? [])
-        .map((p: any) => p.element)
-        .filter((id: number) => playerById.has(id));
-      if (!ownedChangedIds.length) continue;
-      const lines = ownedChangedIds.map(line).join("\n");
-      for (const alertEmail of alertEmails) {
-        if (resendKey) {
-          const mailRes = await fetch("https://api.resend.com/emails", {
-            method: "POST",
-            headers: { Authorization: `Bearer ${resendKey}`, "Content-Type": "application/json" },
-            body: JSON.stringify({
-              from: "ConnectYourHealth <onboarding@resend.dev>",
-              to: [alertEmail],
-              subject: `ESPN Fantasy (test, terugwerkend): prijs gewijzigd voor ${ownedChangedIds.length} speler(s) in dit team`,
-              text: `Eenmalige test met terugwerkende kracht sinds ${sinceIso}:\n\n${lines}\n\nBekijk het overzicht: https://connectyourhealth.vercel.app/overig`,
-            }),
-          });
-          if (!mailRes.ok) console.warn(`Backfill-mail (${alertEmail}) mislukt: ${mailRes.status} ${await mailRes.text()}`);
-        }
-        await sendPush(
-          alertEmail,
-          `(test) ${ownedChangedIds.length} speler(s) in dit team van prijs veranderd`,
-          ownedChangedIds.map((id) => playerById.get(id)!.web_name).join(", "),
-        );
-        ownedChangedIds.forEach((id) => alertedTo.add(`${alertEmail}:${id}`));
-        summary[alertEmail] = (summary[alertEmail] ?? 0) + ownedChangedIds.length;
-      }
-    } catch (e) {
-      console.warn(`Backfill-team ${entryId} mislukt: ${String(e)}`);
-    }
-  }
-
-  const globalIds = playerIds.filter((id) => !alertedTo.has(`${GLOBAL_WATCH_EMAIL}:${id}`));
-  if (globalIds.length) {
-    const lines = globalIds.map(line).join("\n");
-    if (resendKey) {
-      const mailRes = await fetch("https://api.resend.com/emails", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${resendKey}`, "Content-Type": "application/json" },
-        body: JSON.stringify({
-          from: "ConnectYourHealth <onboarding@resend.dev>",
-          to: [GLOBAL_WATCH_EMAIL],
-          subject: `ESPN Fantasy (test, terugwerkend): ${globalIds.length} speler(s) van prijs veranderd`,
-          text: `Eenmalige test met terugwerkende kracht sinds ${sinceIso}:\n\n${lines}\n\nBekijk het overzicht: https://connectyourhealth.vercel.app/overig`,
-        }),
-      });
-      if (!mailRes.ok) console.warn(`Backfill-mail (globaal) mislukt: ${mailRes.status} ${await mailRes.text()}`);
-    }
-    await sendPush(
-      GLOBAL_WATCH_EMAIL,
-      `(test) ${globalIds.length} speler(s) van prijs veranderd`,
-      globalIds.map((id) => playerById.get(id)!.web_name).join(", "),
-    );
-    summary[GLOBAL_WATCH_EMAIL] = (summary[GLOBAL_WATCH_EMAIL] ?? 0) + globalIds.length;
-  }
-
-  return new Response(
-    JSON.stringify({ ok: true, since: sinceIso, events_found: events.length, sent_per_email: summary }),
-    { headers: { ...CORS, "Content-Type": "application/json" } },
-  );
-}
-
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
-
-  const url = new URL(req.url);
-  if (url.searchParams.get("backfill") === "1") {
-    const since = url.searchParams.get("since") || new Date(Date.now() - 12 * 3600 * 1000).toISOString();
-    try {
-      return await runBackfillTest(since);
-    } catch (err) {
-      const msg = String(err instanceof Error ? err.message : err).slice(0, 900);
-      return new Response(JSON.stringify({ ok: false, error: msg }), {
-        status: 500,
-        headers: { ...CORS, "Content-Type": "application/json" },
-      });
-    }
-  }
 
   const t0 = Date.now();
   let seen = 0, snaps = 0, changes = 0;
@@ -365,16 +249,13 @@ Deno.serve(async (req: Request) => {
     await sbPost("espn_price_events", eventRows);
     snaps = snapRows.length;
 
-    // Lookup-tabellen voor de "daadwerkelijke wijziging"-meldingen hieronder
+    // Lookup-tabellen voor de "daadwerkelijke wijziging"-melding hieronder
     // (los van de "dreigt te wijzigen"-waarschuwing, die alleen de fase
     // vóór de wijziging dekt -- een wijziging die tussen twee syncs door
     // "in één keer" gebeurt, sloeg die fase soms over zonder ooit gemeld
-    // te zijn). alertedActualChange voorkomt een dubbele melding aan
-    // hetzelfde e-mailadres (bv. Nando krijgt 'm al via zijn eigen team,
-    // dan hoeft de algemene melding hieronder niet nogmaals).
+    // te zijn). Alleen voor eigen team, niet voor alle spelers.
     const changedById = new Map(playerRows.filter((r) => changedPlayerIds.includes(r.id)).map((r) => [r.id, r]));
     const eventByPlayerId = new Map(eventRows.map((e) => [e.player_id, e]));
-    const alertedActualChange = new Set<string>();
 
     // Een speler die daadwerkelijk van prijs veranderd is, start weer op 0 --
     // eerder verstuurde waarschuwingen voor die speler mogen dus weer
@@ -510,7 +391,6 @@ Deno.serve(async (req: Request) => {
                 `${ownedChangedIds.length} speler(s) in dit team van prijs veranderd`,
                 ownedChangedIds.map((id) => changedById.get(id)!.web_name).join(", "),
               );
-              ownedChangedIds.forEach((id) => alertedActualChange.add(`${alertEmail}:${id}`));
             }
           }
         }
@@ -668,56 +548,6 @@ Deno.serve(async (req: Request) => {
         }
       } catch (e) {
         console.warn(`Algemene 90%-waarschuwing mislukt: ${String(e)}`);
-      }
-    }
-
-    // ---- ALGEMENE DAADWERKELIJKE PRIJSWIJZIGING (los van eigen team) ----
-    // Net als de 90%-waarschuwing hierboven, maar dan voor de wijziging
-    // zelf i.p.v. het naderen ervan -- dekt ook spelers die je niet bezit
-    // (bv. Edvardsen, geen speler in een van de gevolgde teams). Spelers
-    // die al via hun eigen team aan hetzelfde e-mailadres gemeld zijn
-    // (alertedActualChange hierboven) worden hier overgeslagen, anders
-    // krijgt Nando (die ook GLOBAL_WATCH_EMAIL is) 'm dubbel.
-    if (changedPlayerIds.length) {
-      try {
-        const toReport = changedPlayerIds.filter((id) =>
-          !alertedActualChange.has(`${GLOBAL_WATCH_EMAIL}:${id}`)
-        );
-        if (toReport.length) {
-          const lines = toReport.map((id) => {
-            const pl = changedById.get(id)!;
-            const ev = eventByPlayerId.get(id)!;
-            return `- ${pl.web_name} (${pl.team_short}): €${(ev.old_cost / 10).toFixed(1)} -> €${
-              (ev.new_cost / 10).toFixed(1)
-            }`;
-          }).join("\n");
-          if (resendKey) {
-            const mailRes = await fetch("https://api.resend.com/emails", {
-              method: "POST",
-              headers: {
-                Authorization: `Bearer ${resendKey}`,
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify({
-                from: "ConnectYourHealth <onboarding@resend.dev>",
-                to: [GLOBAL_WATCH_EMAIL],
-                subject: `ESPN Fantasy: ${toReport.length} speler(s) van prijs veranderd`,
-                text:
-                  `Deze spelers zijn zojuist van prijs veranderd (ongeacht of ze in een van jullie teams zitten):\n\n${lines}\n\nBekijk het overzicht: https://connectyourhealth.vercel.app/overig`,
-              }),
-            });
-            if (!mailRes.ok) {
-              console.warn(`Algemene prijswijziging-mail mislukt: ${mailRes.status} ${await mailRes.text()}`);
-            }
-          }
-          await sendPush(
-            GLOBAL_WATCH_EMAIL,
-            `${toReport.length} speler(s) van prijs veranderd`,
-            toReport.map((id) => changedById.get(id)!.web_name).join(", "),
-          );
-        }
-      } catch (e) {
-        console.warn(`Algemene prijswijziging-melding mislukt: ${String(e)}`);
       }
     }
 
