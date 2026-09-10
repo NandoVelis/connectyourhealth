@@ -1332,18 +1332,22 @@ async function loadGarminStepsForDate(owner, dateStr){
 }
 // Vult Tredict-vitals (het bestaande "Herstel"-blok) aan met Garmin-
 // testdata voor dezelfde dag -- nu Tredict binnenkort stopt, blijft het
-// Herstel-blok zo bruikbaar i.p.v. dat het terugvalt op "—". Rusthartslag/
-// HRV: Tredict heeft voorrang waar aanwezig, Garmin vult alleen de gaten.
-// Slaap komt bewust uitsluitend uit Garmin (betrouwbaardere data + een
-// slaapscore, die Tredict niet had), dus geen Tredict-fallback daar.
-// De ruwe Garmin-rij (o.a. sleep_score/vo2max/training_load_ratio) wordt
-// meegegeven als .garmin, voor de extra weergavevelden in de kaart.
+// Herstel-blok zo bruikbaar i.p.v. dat het terugvalt op "—". Rusthartslag:
+// Garmin heeft voorrang (Tredict's 402-storing laat oude, inmiddels
+// vastgelopen waardes achter die anders altijd voorrang zouden krijgen
+// boven verse Garmin-data), Tredict vult alleen de gaten waar Garmin niets
+// heeft. HRV behoudt nog wel Tredict-voorrang. Slaap komt bewust
+// uitsluitend uit Garmin (betrouwbaardere data + een slaapscore, die
+// Tredict niet had), dus geen Tredict-fallback daar. De ruwe Garmin-rij
+// (o.a. sleep_score/vo2max/training_load_ratio) wordt meegegeven als
+// .garmin, voor de extra weergavevelden in de kaart.
 async function loadVitalsWithGarminFallback(owner, dateStr){
   const vitals = await loadVitals(dateStr);
   const garmin = await loadGarminVitalsForDate(owner, dateStr);
   const pick = (tredictVal, garminVal) => tredictVal!=null ? tredictVal : (garminVal!=null ? Math.round(garminVal) : null);
+  const pickGarminFirst = (tredictVal, garminVal) => garminVal!=null ? Math.round(garminVal) : (tredictVal!=null ? tredictVal : null);
   return {
-    hrRest: pick(vitals?.hrRest, garmin?.resting_hr),
+    hrRest: pickGarminFirst(vitals?.hrRest, garmin?.resting_hr),
     hrv: pick(vitals?.hrv, garmin?.hrv),
     sleepMinutes: garmin?.sleep_minutes!=null ? Math.round(garmin.sleep_minutes) : null,
     garmin,
@@ -2797,6 +2801,7 @@ async function renderDashboard(){
   const hrRestWeekAvg = avgOfField(weekVitals, 'hrRest');
   const hrvWeekAvg = avgOfField(weekVitals, 'hrv');
   const sleepWeekAvg = avgOfField(weekVitals, 'sleepMinutes');
+  const sleepScoreWeekAvg = wAvg(weekVitals.filter(v=>v && v.garmin && v.garmin.sleep_score!=null).map(v=>Math.round(v.garmin.sleep_score)));
   const hrRestPrevWeekAvg = avgOfField(prevWeekVitals, 'hrRest');
   const hrvPrevWeekAvg = avgOfField(prevWeekVitals, 'hrv');
   const sleepPrevWeekAvg = avgOfField(prevWeekVitals, 'sleepMinutes');
@@ -2807,7 +2812,7 @@ async function renderDashboard(){
 
   document.getElementById('vitalHrRestWeek').innerHTML = 'week gem. ' + (hrRestWeekAvg!=null ? hrRestWeekAvg+' bpm' : '\u2014') + deltaBadgeInverted(hrRestDelta);
   document.getElementById('vitalHrvWeek').innerHTML = 'week gem. ' + (hrvWeekAvg!=null ? hrvWeekAvg+' ms' : '\u2014') + deltaBadge(hrvDelta);
-  document.getElementById('vitalSleepWeek').innerHTML = 'week gem. ' + (sleepWeekAvg!=null ? (Math.floor(sleepWeekAvg/60)+'u'+String(sleepWeekAvg%60).padStart(2,'0')+'m') : '\u2014') + deltaBadge(sleepDelta);
+  document.getElementById('vitalSleepWeek').innerHTML = 'week gem. ' + (sleepWeekAvg!=null ? (Math.floor(sleepWeekAvg/60)+'u'+String(sleepWeekAvg%60).padStart(2,'0')+'m') : '\u2014') + (sleepScoreWeekAvg!=null ? ` (${sleepScoreWeekAvg})` : '') + deltaBadge(sleepDelta);
 
   const weightEntryForInput = await loadWeight(dateStr);
   document.getElementById('vitalWeight').textContent = weightEntryForInput ? weightEntryForInput.kg+' kg' : '\u2014';
