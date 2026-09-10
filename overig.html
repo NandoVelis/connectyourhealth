@@ -244,6 +244,7 @@
           <th data-sort="now_cost">Prijs</th>
           <th data-sort="cost_change_start">Seizoen</th>
           <th data-sort="selected_by_percent">Bezit</th>
+          <th data-sort="value_score">Pt/€M</th>
           <th data-sort="net_since_change">Netto sinds wijziging</th>
           <th data-sort="threshold">Drempel</th>
           <th data-sort="progress_signed">Voortgang</th>
@@ -308,7 +309,7 @@
 
     <div class="card" style="margin-top:16px">
       <h3>Transfersuggesties</h3>
-      <p class="hint" id="tsHint">Gesorteerd op verwachte punten over het gekozen venster (ESPN's eigen ep_next x aantal wedstrijden, dubbele speelronde telt dubbel) plus een kleine bijstelling voor de prijstrend: een speler die binnenkort duurder wordt scoort iets hoger, een speler die binnenkort goedkoper wordt iets lager. Per suggestie staat de zwakste eigen speler in dezelfde positie als aanbevolen wissel.</p>
+      <p class="hint" id="tsHint">Gesorteerd op verwachte punten over het gekozen venster (ESPN's eigen ep_next x aantal wedstrijden, dubbele speelronde telt dubbel, thuis telt iets zwaarder dan uit) plus een kleine bijstelling voor de prijstrend: een speler die binnenkort duurder wordt scoort iets hoger, een speler die binnenkort goedkoper wordt iets lager. Pt/€M (totaalpunten per miljoen huidige prijs) staat er los naast als extra waarde-indicatie -- telt nog niet mee in de sortering. Per suggestie staat de zwakste eigen speler in dezelfde positie als aanbevolen wissel.</p>
       <div class="filters">
         <label style="font-size:13px;color:var(--muted);">Aantal wissels
           <select id="tsTransfers">
@@ -341,7 +342,7 @@
       <div class="tablewrap">
         <table id="tsTbl">
           <thead><tr>
-            <th>Speler</th><th>Club</th><th>Positie</th><th>Prijs</th><th>Wedstrijden</th><th>Verwacht (venster)</th><th>Aanbevolen wissel</th>
+            <th>Speler</th><th>Club</th><th>Positie</th><th>Prijs</th><th>Pt/€M</th><th>Wedstrijden</th><th>Verwacht (venster)</th><th>Aanbevolen wissel</th>
           </tr></thead>
           <tbody></tbody>
         </table>
@@ -989,11 +990,12 @@ function renderTransferSuggestions(){
     <td>${r.team_short}</td>
     <td>${POS_SHORT[r.element_type]||''}</td>
     <td class="num">${eur(r.now_cost)}</td>
+    <td class="num">${r.value_score!=null?Number(r.value_score).toFixed(2):'—'}</td>
     <td class="num">${r.fixtureCount>=2?`<span class="pill up">${r.fixtureCount}x</span>`:r.fixtureCount}</td>
     <td class="num">${expWindowPts(r).toFixed(1)}</td>
     <td>i.p.v. ${swapText}</td>
   </tr>`;
-  }).join('') : '<tr><td colspan="7" class="empty">Geen spelers gevonden binnen dit budget/filter.</td></tr>';
+  }).join('') : '<tr><td colspan="8" class="empty">Geen spelers gevonden binnen dit budget/filter.</td></tr>';
 }
 // Alle combinaties van precies k elementen uit arr (voor kleine arr/k
 // probleemloos, hier gebruikt met arr.length <= transfers+3 en k <= 3).
@@ -1197,6 +1199,7 @@ function renderTable(){
       <td class="num">${eur(r.now_cost)}</td>
       <td class="num" style="color:${r.cost_change_start>0?'var(--up)':r.cost_change_start<0?'var(--down)':'inherit'}">${r.cost_change_start===0?'—':signed(r.cost_change_start/10)}</td>
       <td class="num">${r.selected_by_percent}%</td>
+      <td class="num">${r.value_score!=null?Number(r.value_score).toFixed(2):'—'}</td>
       <td class="num">${r.net_since_change!==null?signed(r.net_since_change):(r.approx_net===null?'—':`<span style="color:var(--lavender)" title="Netto transfers deze speelronde (geen meting sinds vorige wijziging)">~${signed(r.approx_net)}</span>`)}</td>
       <td class="num">${r.threshold!==null?(r.net_since_change<0?'-':'')+nf.format(r.threshold):(r.approx_threshold===null?'—':`<span style="color:var(--lavender)">~${(r.approx_net<0?'-':'')+nf.format(r.approx_threshold)}</span>`)}</td>
       <td class="num">${r.progress!==null?(r.net_since_change<0?'-':'')+pct(r.progress):(r.approx_progress===null?'—':`<span style="color:var(--lavender)">~${(r.approx_net<0?'-':'')+pct(r.approx_progress)}</span>`)}</td>
@@ -1204,8 +1207,8 @@ function renderTable(){
       <td>${verwachtingPill(r.verwachting)}</td>
     </tr>`).join('');
   $('#modelNote').innerHTML =
-    'Model: een <b>stijging</b> vraagt ongeveer 3,5% van alle managers aan netto instroom (' +
-    nf.format(Math.round((GAME.total_players||0)*0.035)) + ' transfers), een <b>daling</b> ongeveer de helft van de eigenaren netto eruit. ' +
+    'Model: zowel een <b>stijging</b> als een <b>daling</b> vraagt het hoogste van een basisdrempel op de totale spelerspool en een drempel op het eigen bezit (~3,5% resp. ~2,6% van alle managers als basis, plus bezit-schaling) — gebaseerd op reverse-engineering van FPL’s eigen algoritme, nog niet herijkt op onze eigen metingen (die zijn zolang elke speler nog maar 1 wijziging heeft gehad sinds tracking, onvolledig). ' +
+    'Pt/€M is totaalpunten per miljoen huidige prijs, als ruwe waarde-indicatie voor transfers. ' +
     'Rijen met “wacht op meting” hadden deze speelronde al een prijswijziging vóór de tracker meekeek — die krijgen een echte meting zodra hun volgende wijziging langskomt. De paarse “~”-cijfers bij die rijen zijn een grove schatting op basis van de netto transfers van déze speelronde, niet sinds de vorige wijziging. ' +
     '“Geschat” betekent dat de teller is gevuld met de netto transfers van deze speelronde; “gemeten” betekent dat de tracker de vorige wijziging zelf heeft gezien.';
 }
