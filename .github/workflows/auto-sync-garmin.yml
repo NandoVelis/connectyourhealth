@@ -16,16 +16,18 @@ name: Auto-sync Garmin
 
 on:
   schedule:
-    # Elke 15 min -- vaker dan het eerdere hele uur, op verzoek (o.a. om
-    # sync-timing-vertraging na een training/weging sneller te laten
-    # bijtrekken). Let op: GitHub Actions' scheduled workflows op publieke/
-    # gratis repo's lopen zelf regelmatig 1-3 uur achter op de ingestelde
-    # cron (bekende platformbeperking, niet iets wat deze instelling kan
-    # oplossen) -- vaker plannen verkleint de kans op een grote vertraging,
-    # maar garandeert geen realtime sync. Nog steeds niet elke paar
-    # minuten, om het risico op rate-limiting bij Garmin's onofficiele
-    # login te beperken.
-    - cron: '*/15 * * * *'
+    # Elk uur, behalve tussen 12:00-14:00 (lokale lunchpauze) waar elke
+    # 15 min gesynct wordt -- op verzoek, i.p.v. de hele dag elke 15 min.
+    # Cron draait in UTC; 10-11 UTC = 12:00-13:59 lokale tijd tijdens
+    # zomertijd (UTC+2). Let op: bij terugschakelen naar wintertijd
+    # (eind okt, UTC+1) schuift dit venster een uur op naar 13:00-14:59
+    # lokale tijd -- dan moet dit handmatig aangepast worden naar 11-12 UTC.
+    # Let ook op: GitHub Actions' scheduled workflows op publieke/gratis
+    # repo's lopen zelf regelmatig 1-3 uur achter op de ingestelde cron
+    # (bekende platformbeperking, niet iets wat deze instelling kan
+    # oplossen).
+    - cron: '0 * * * *'
+    - cron: '*/15 10-11 * * *'
   workflow_dispatch:
     inputs:
       mfa_code:
