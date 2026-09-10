@@ -141,6 +141,19 @@
   .pill.est{background:rgba(141,133,255,.16);color:var(--lavender)}
   .note{font-size:12px;color:var(--muted);line-height:1.6;margin-top:14px}
   .loading{color:var(--muted);padding:30px 0;text-align:center}
+  /* In-app popup voor spelers uit je eigen team die dicht bij een
+     prijswijziging staan -- onafhankelijk van e-mail/push (die vereisen
+     server-secrets), dus werkt altijd zodra de pagina open is. */
+  #priceAlertPopup{position:fixed;top:16px;left:50%;transform:translateX(-50%);
+    z-index:50;max-width:420px;width:calc(100% - 32px);background:var(--navy-2);
+    border:1px solid var(--line);border-radius:14px;padding:16px 18px;
+    box-shadow:0 12px 32px rgba(0,0,0,.4)}
+  #priceAlertPopup h4{margin:0 0 8px;font-size:14px}
+  #priceAlertPopup .row{display:flex;justify-content:space-between;align-items:center;
+    padding:6px 0;border-top:1px solid var(--line)}
+  #priceAlertPopup .row:first-of-type{border-top:none}
+  #priceAlertPopup button{position:absolute;top:10px;right:12px;background:none;border:none;
+    color:var(--muted);font-size:18px;cursor:pointer;line-height:1;padding:4px}
 </style>
 </head>
 <body>
@@ -161,6 +174,8 @@
   </div>
   <div class="err" id="gateErr" hidden></div>
 </div>
+
+<div id="priceAlertPopup" hidden></div>
 
 <!-- ======================= APP ======================= -->
 <div id="app" class="wrap" hidden>
@@ -671,6 +686,7 @@ async function load(){
     renderTransferSuggestions();
     renderKnownManagers(knownManagers, knownTransfers);
     renderXgSnapshot(xgSnapshot);
+    checkOwnedPriceAlerts();
   }catch(e){
     $('#tiles').innerHTML = '<div class="tile"><div class="label">Fout</div><div class="sub">' + e.message + '</div></div>';
   }
@@ -1226,6 +1242,46 @@ function attachXgToPlayers(xgSnapshot){
     const match = byFullName[key] || bySecondName[key] || byWebName[key];
     if (match) match.xg_snap = snap;
   }
+}
+// In-app popup voor spelers uit je eigen team die dicht bij een
+// prijswijziging staan -- werkt onafhankelijk van de e-mail/push-
+// waarschuwingen (die vereisen server-side secrets zoals RESEND_API_KEY),
+// dus laat het altijd zien zodra je de pagina open hebt, ook als die
+// secrets (nog) niet zijn ingesteld. Per e-mailadres in localStorage
+// bijgehouden welke speler+status-combinatie al getoond is, zodat je niet
+// elke keer dat je de pagina opent dezelfde melding opnieuw krijgt --
+// wel weer zodra de status verandert (bv. van "stijgt bijna" naar
+// "stijgt", of na een echte wijziging weer "daalt bijna" wordt).
+function checkOwnedPriceAlerts(){
+  if (!MY_TEAM || !MY_TEAM.picks || !MY_TEAM.picks.length || !CURRENT_EMAIL) return;
+  const byId = Object.fromEntries(ROWS.map(r => [r.id, r]));
+  const threatened = MY_TEAM.picks
+    .map(p => byId[p.element])
+    .filter(pl => pl && pl.verwachting && pl.verwachting !== 'stabiel' && pl.verwachting !== 'onbekend');
+  if (!threatened.length) return;
+  const seenKey = `priceAlertsSeen:${CURRENT_EMAIL}`;
+  let seen = {};
+  try { seen = JSON.parse(localStorage.getItem(seenKey) || '{}'); } catch(e){}
+  const fresh = threatened.filter(pl => seen[pl.id] !== pl.verwachting);
+  if (!fresh.length) return;
+  fresh.forEach(pl => { seen[pl.id] = pl.verwachting; });
+  try { localStorage.setItem(seenKey, JSON.stringify(seen)); } catch(e){}
+  showPriceAlertPopup(fresh);
+}
+function showPriceAlertPopup(players){
+  const el = $('#priceAlertPopup');
+  if (!el) return;
+  const rows = players.map(pl => {
+    const isUp = pl.verwachting === 'stijgt' || pl.verwachting === 'stijgt bijna';
+    const color = isUp ? 'var(--up)' : 'var(--down)';
+    const arrow = isUp ? '&#9650;' : '&#9660;';
+    return `<div class="row"><span>${pl.web_name} <span class="meta">(${pl.team_short})</span></span>
+      <span style="color:${color}">${arrow} ${pct(pl.progress ?? 0)}</span></div>`;
+  }).join('');
+  el.innerHTML = `<button aria-label="Sluiten" type="button">&times;</button>
+    <h4>Prijswijziging op komst in jouw team</h4>${rows}`;
+  el.hidden = false;
+  el.querySelector('button').addEventListener('click', () => { el.hidden = true; });
 }
 function renderXgSnapshot(rows){
   const tbody = $('#xgSnapshotTbl tbody');
