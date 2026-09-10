@@ -29,6 +29,9 @@
     --clay-soft:#F3DCE4;
     --radius:14px;
   }
+  summary.h3-summary::-webkit-details-marker{display:none;}
+  summary.h3-summary::after{content:'▸';float:right;color:var(--ink-soft);}
+  details[open] summary.h3-summary::after{content:'▾';}
   html.dark{
     --paper:#000725;
     --card:#10152E;
@@ -399,8 +402,10 @@
     </div>
 
     <div class="card" style="margin-bottom:16px;">
-      <h3>&#128200; Trainingsvoortgang per type</h3>
-      <div id="trainingProgressTable"></div>
+      <details>
+        <summary style="cursor:pointer;list-style:none;" class="h3-summary"><h3 style="display:inline;">&#128200; Trainingsvoortgang per type</h3></summary>
+        <div id="trainingProgressTable" style="margin-top:10px;"></div>
+      </details>
     </div>
 
     <div class="card" style="margin-bottom:16px;background:linear-gradient(115deg,#7A0A66 0%,#4B1F6B 40%,#1A1240 100%);border:none;">
