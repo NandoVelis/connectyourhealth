@@ -15,7 +15,10 @@ self.addEventListener('push', (event) => {
   const options = {
     body: data.body || '',
     icon: '/icon-overig-192.png',
-    badge: '/icon-overig-192.png',
+    // Geen custom badge: Android zet de badge altijd om naar een wit
+    // silhouet op basis van het alfakanaal -- ons icoon heeft geen
+    // transparantie, dus werd de hele melding een lege witte vlek.
+    // Zonder badge valt Android terug op het normale Chrome-icoontje.
     data: { url: data.url || '/overig' },
   };
   event.waitUntil(self.registration.showNotification(title, options));
