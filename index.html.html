@@ -1188,8 +1188,24 @@ async function saveMeals(dateStr, meals){
     }));
     const { error: insErr } = await supabaseClient.from('meals').insert(rows);
     if(insErr){ console.error('saveMeals insert error', insErr); return false; }
+    triggerGarminSyncIfDue();
     return true;
   }catch(e){ console.error('saveMeals exception', e); return false; }
+}
+// Na het eten (vaak vlak na het hardlopen) een verse Garmin-sync triggeren
+// i.p.v. te wachten op de eerstvolgende geplande run -- zie
+// supabase/functions/trigger-garmin-sync. Best-effort en stil bij falen
+// (bv. geen GITHUB_TOKEN-secret gezet): het opslaan van de maaltijd zelf
+// mag hier nooit door blokkeren. Met een korte afkoeltijd in localStorage
+// zodat meerdere maaltijden kort na elkaar niet steeds opnieuw triggeren.
+function triggerGarminSyncIfDue(){
+  try{
+    const key = 'lastGarminSyncTrigger';
+    const last = Number(localStorage.getItem(key) || 0);
+    if(Date.now() - last < 10 * 60 * 1000) return;
+    localStorage.setItem(key, String(Date.now()));
+  }catch(e){ /* localStorage kan falen (privémodus e.d.), dan gewoon altijd triggeren */ }
+  supabaseClient.functions.invoke('trigger-garmin-sync', { method: 'POST' }).catch(()=>{});
 }
 async function loadTraining(dateStr){
 console.log("LOAD TRAINING", dateStr);
