@@ -154,6 +154,19 @@
   #priceAlertPopup .row:first-of-type{border-top:none}
   #priceAlertPopup button{position:absolute;top:10px;right:12px;background:none;border:none;
     color:var(--muted);font-size:18px;cursor:pointer;line-height:1;padding:4px}
+  /* Wekelijkse samenvatting-popup (elke vrijdag 19:00) -- toont zodra er
+     een nieuwere digest is dan de laatst geziene (per e-mailadres). */
+  #weeklyDigestPopup{position:fixed;top:16px;left:50%;transform:translateX(-50%);
+    z-index:50;max-width:480px;width:calc(100% - 32px);max-height:calc(100vh - 32px);
+    overflow-y:auto;background:var(--navy-2);border:1px solid var(--line);
+    border-radius:14px;padding:16px 18px;box-shadow:0 12px 32px rgba(0,0,0,.4)}
+  #weeklyDigestPopup h4{margin:16px 0 8px;font-size:14px}
+  #weeklyDigestPopup h4:first-of-type{margin-top:0}
+  #weeklyDigestPopup .row{display:flex;justify-content:space-between;align-items:center;
+    padding:6px 0;border-top:1px solid var(--line)}
+  #weeklyDigestPopup .row:first-of-type{border-top:none}
+  #weeklyDigestPopup button.close{position:absolute;top:10px;right:12px;background:none;border:none;
+    color:var(--muted);font-size:18px;cursor:pointer;line-height:1;padding:4px}
 </style>
 </head>
 <body>
@@ -176,6 +189,7 @@
 </div>
 
 <div id="priceAlertPopup" hidden></div>
+<div id="weeklyDigestPopup" hidden></div>
 
 <!-- ======================= APP ======================= -->
 <div id="app" class="wrap" hidden>
@@ -655,7 +669,7 @@ let FIXTURES = [], TEAMS = {}, MY_TEAM = null, MOMENTUM = [];
 
 async function load(){
   try{
-    const [game, board, events, logs, myTeam, fixtures, teams, knownManagers, knownTransfers, xgSnapshot, momentum] = await Promise.all([
+    const [game, board, events, logs, myTeam, fixtures, teams, knownManagers, knownTransfers, xgSnapshot, momentum, weeklyDigest] = await Promise.all([
       api('espn_game?id=eq.1&select=*'),
       api('espn_price_board?select=*&limit=1000'),
       api('espn_price_events?select=*&order=detected_at.desc&limit=60'),
@@ -666,7 +680,8 @@ async function load(){
       api('espn_known_managers?select=*&active=eq.true'),
       api('espn_known_manager_transfers_seen?select=*&order=occurred_at.desc&limit=30'),
       api('espn_xg_snapshot?select=*&order=xg.desc'),
-      api('espn_transfer_momentum?select=*&limit=1000')
+      api('espn_transfer_momentum?select=*&limit=1000'),
+      api('espn_weekly_digest?select=*&order=generated_at.desc&limit=1')
     ]);
     GAME = game[0] || {};
     ROWS = board.map(r => {
@@ -703,6 +718,7 @@ async function load(){
     renderKnownManagers(knownManagers, knownTransfers);
     renderXgSnapshot(xgSnapshot);
     checkOwnedPriceAlerts();
+    checkWeeklyDigest(weeklyDigest[0] || null);
   }catch(e){
     $('#tiles').innerHTML = '<div class="tile"><div class="label">Fout</div><div class="sub">' + e.message + '</div></div>';
   }
@@ -1300,6 +1316,42 @@ function showPriceAlertPopup(players){
     <h4>Prijswijziging op komst in jouw team</h4>${rows}`;
   el.hidden = false;
   el.querySelector('button').addEventListener('click', () => { el.hidden = true; });
+}
+// Wekelijkse samenvatting-popup -- de digest zelf wordt elke vrijdag 19:00
+// server-side berekend (espn-weekly-digest, via pg_cron) en hier alleen
+// getoond zodra generated_at nieuwer is dan wat dit e-mailadres al zag
+// (bijgehouden in localStorage, net als de prijswaarschuwing hierboven).
+function digestRow(r, fmt){
+  return `<div class="row"><span>${r.web_name} <span class="meta">(${r.team_short})</span></span>
+    <span>${fmt(r.value)}</span></div>`;
+}
+function showWeeklyDigestPopup(payload){
+  const el = $('#weeklyDigestPopup');
+  if (!el) return;
+  const asNet = v => signed(v);
+  const asPct = v => pct(v ?? 0);
+  const list = (rows, fmt) => (rows||[]).slice(0,5).map(r => digestRow(r,fmt)).join('') || '<div class="empty">Geen data.</div>';
+  const mostTransferred = list(payload.most_transferred_24h, asNet);
+  const risers = list(payload.fastest_risers, asPct);
+  const teamData = MY_ENTRY_ID ? payload.teams?.[String(MY_ENTRY_ID)] : null;
+  const teamBlock = teamData ? `
+    <h4>Jouw team: Top 5</h4>${list(teamData.top5, asNet)}
+    <h4>Jouw team: Flop 5</h4>${list(teamData.flop5, asNet)}` : '';
+  el.innerHTML = `<button class="close" aria-label="Sluiten" type="button">&times;</button>
+    <h4>Meeste transfers · laatste 24u</h4>${mostTransferred}
+    <h4>Snelste stijgers</h4>${risers}
+    ${teamBlock}`;
+  el.hidden = false;
+  el.querySelector('button.close').addEventListener('click', () => { el.hidden = true; });
+}
+function checkWeeklyDigest(row){
+  if (!row || !CURRENT_EMAIL) return;
+  const seenKey = `weeklyDigestSeen:${CURRENT_EMAIL}`;
+  let lastSeen = null;
+  try { lastSeen = localStorage.getItem(seenKey); } catch(e){}
+  if (lastSeen === row.generated_at) return;
+  try { localStorage.setItem(seenKey, row.generated_at); } catch(e){}
+  showWeeklyDigestPopup(row.payload);
 }
 function renderXgSnapshot(rows){
   const tbody = $('#xgSnapshotTbl tbody');
