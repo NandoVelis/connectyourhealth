@@ -565,6 +565,76 @@ Deno.serve(async (req: Request) => {
       }
     }
 
+    // ---- GROTE TRANSFERBEWEGING LAATSTE UUR ----
+    // Los van de prijsdrempel: mailt/pusht zodra een speler in het afgelopen
+    // uur opvallend veel netto transfers heeft (in of uit), ongeacht of hij
+    // dicht bij een echte prijswijziging staat. Max 1x per kalenderuur (niet
+    // elke 15 min opnieuw) via espn_momentum_alerts_sent.
+    const MOMENTUM_THRESHOLD = 150;
+    try {
+      const momentumRes = await fetch(
+        `${SB_URL}/rest/v1/espn_transfer_momentum?select=id,web_name,team_short,now_cost,net_1h&net_1h=not.is.null`,
+        { headers: sbHeaders() },
+      );
+      if (momentumRes.ok) {
+        const momentum: any[] = await momentumRes.json();
+        const movers = momentum
+          .filter((r) => Math.abs(r.net_1h) >= MOMENTUM_THRESHOLD)
+          .sort((a, b) => Math.abs(b.net_1h) - Math.abs(a.net_1h))
+          .slice(0, 5);
+        if (movers.length) {
+          const hourBucket = new Date(capturedAt);
+          hourBucket.setUTCMinutes(0, 0, 0);
+          const hourBucketIso = hourBucket.toISOString();
+          const lines = movers.map((m) =>
+            `- ${m.web_name} (${m.team_short}): ${m.net_1h > 0 ? "+" : ""}${m.net_1h} netto transfers, huidige prijs €${
+              (m.now_cost / 10).toFixed(1)
+            }`
+          ).join("\n");
+          const allEmails = new Set<string>([GLOBAL_WATCH_EMAIL]);
+          for (const { alertEmails } of MY_TEAMS) for (const e of alertEmails) allEmails.add(e);
+          for (const alertEmail of allEmails) {
+            const alreadyRes = await fetch(
+              `${SB_URL}/rest/v1/espn_momentum_alerts_sent?select=alert_email&alert_email=eq.${
+                encodeURIComponent(alertEmail)
+              }&hour_bucket=eq.${encodeURIComponent(hourBucketIso)}`,
+              { headers: sbHeaders() },
+            );
+            const already: any[] = alreadyRes.ok ? await alreadyRes.json() : [];
+            if (already.length) continue;
+            if (resendKey) {
+              const mailRes = await fetch("https://api.resend.com/emails", {
+                method: "POST",
+                headers: { Authorization: `Bearer ${resendKey}`, "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  from: "ConnectYourHealth <onboarding@resend.dev>",
+                  to: [alertEmail],
+                  subject: `ESPN Fantasy: grote transferbeweging in het afgelopen uur`,
+                  text:
+                    `Deze spelers hebben in het afgelopen uur opvallend veel transfers gehad:\n\n${lines}\n\nBekijk het overzicht: https://connectyourhealth.vercel.app/overig`,
+                }),
+              });
+              if (!mailRes.ok) {
+                console.warn(`Momentum-mail (${alertEmail}) mislukt: ${mailRes.status} ${await mailRes.text()}`);
+              }
+            }
+            await sendPush(
+              alertEmail,
+              `Grote transferbeweging in het afgelopen uur`,
+              movers.map((m) => `${m.web_name}: ${m.net_1h > 0 ? "+" : ""}${m.net_1h}`).join(", "),
+            );
+            await sbPost(
+              "espn_momentum_alerts_sent",
+              [{ alert_email: alertEmail, hour_bucket: hourBucketIso, sent_at: capturedAt }],
+              "return=minimal,resolution=merge-duplicates",
+            );
+          }
+        }
+      }
+    } catch (e) {
+      console.warn(`Momentum-waarschuwing mislukt: ${String(e)}`);
+    }
+
     // ---- BEKENDE MANAGERS (mogelijke inside info) ----
     // Volgt transfers van handmatig toegevoegde bekende personen (bv.
     // oud-profs) -- een onverwachte aan-/verkoop kan wijzen op kennis over

@@ -227,6 +227,12 @@
       </div>
     </div>
 
+    <div class="card" style="margin-top:16px">
+      <h3>Meeste transfers · laatste uur</h3>
+      <p class="hint">Los van de prijsdrempel: wie is er nu in beweging. Volledige lijst (ook laatste 24u) staat op de Transfers-tab.</p>
+      <div id="momentum1hPrijzen"><div class="empty">Laden…</div></div>
+    </div>
+
     <div class="filters">
       <input type="search" id="q" placeholder="Zoek speler of club…">
       <select id="fPos">
@@ -1437,6 +1443,7 @@ function renderMomentumInto(elId, field){
 function renderMomentum(){
   renderMomentumInto('#momentum1h', 'net_1h');
   renderMomentumInto('#momentum24h', 'net_24h');
+  renderMomentumInto('#momentum1hPrijzen', 'net_1h');
 }
 // Groepeert spelers die dicht bij een prijswijziging staan (voortgang
 // >=80%) per verwachte dag (eta_at), met hun eerstvolgende tegenstander --
