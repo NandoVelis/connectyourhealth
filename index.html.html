@@ -1146,7 +1146,13 @@ supabaseClient.auth.onAuthStateChange(()=>{ updateOverigLinkVisibility(); });
 
 function dayKey(dateStr){ return 'day-'+dateStr; }
 
-async function loadMeals(dateStr){
+// strict=true laat een mislukte fetch (bv. een Supabase-timeout) een error
+// gooien i.p.v. stil [] teruggeven -- essentieel vóór een saveMeals()-call,
+// want saveMeals overschrijft de hele dag met precies deze lijst. Zonder
+// strict mode kon een tijdelijke netwerkhapering hier een lege lijst
+// opleveren die vervolgens de rest van die dag zijn maaltijden wegveegde
+// (bv. het ontbijt verdween toen alleen een snack werd toegevoegd).
+async function loadMeals(dateStr, strict){
 const owner = currentOwner();
 if(!owner) return [];
 const { data, error } = await supabaseClient
@@ -1156,6 +1162,7 @@ const { data, error } = await supabaseClient
 .eq('owner', owner);
 console.log("MEALS", dateStr, data, error);
 if(error || !data){
+if(strict) throw new Error('Maaltijden ophalen mislukt, probeer het opnieuw.');
 return [];
 }
 return data.map(item => ({
@@ -2983,19 +2990,23 @@ async function renderDashboard(){
     listEl.querySelectorAll('.mealTypeSelect').forEach(sel=>{
       sel.addEventListener('change', async (e)=>{
         const idx = Number(e.target.dataset.idx);
-        const current = await loadMeals(dateStr);
-        current[idx].mealType = e.target.value;
-        await saveMeals(dateStr, current);
-        renderDashboard();
+        try{
+          const current = await loadMeals(dateStr, true);
+          current[idx].mealType = e.target.value;
+          await saveMeals(dateStr, current);
+          renderDashboard();
+        }catch(err){ alert('Wijziging mislukt (netwerkfout), probeer het opnieuw.'); }
       });
     });
     listEl.querySelectorAll('.meal-del').forEach(btn=>{
       btn.addEventListener('click', async (e)=>{
         const idx = Number(e.target.dataset.idx);
-        const current = await loadMeals(dateStr);
-        current.splice(idx,1);
-        await saveMeals(dateStr, current);
-        renderDashboard();
+        try{
+          const current = await loadMeals(dateStr, true);
+          current.splice(idx,1);
+          await saveMeals(dateStr, current);
+          renderDashboard();
+        }catch(err){ alert('Verwijderen mislukt (netwerkfout), probeer het opnieuw.'); }
       });
     });
   }
@@ -4149,10 +4160,12 @@ document.getElementById('saveMeal').addEventListener('click', async ()=>{
     const d = new Date(baseDate);
     d.setDate(d.getDate()+i);
     const dStr = fmtDate(d);
-    const dMeals = await loadMeals(dStr);
-    dMeals.push(meal);
-    const ok = await saveMeals(dStr, dMeals);
-    if(ok) savedCount++;
+    try{
+      const dMeals = await loadMeals(dStr, true);
+      dMeals.push(meal);
+      const ok = await saveMeals(dStr, dMeals);
+      if(ok) savedCount++;
+    }catch(err){ /* dag overslaan i.p.v. per ongeluk leegvegen, telt niet mee in savedCount */ }
   }
 
   if(savedCount === targetDaysCount){
@@ -4183,14 +4196,18 @@ async function quickAdd(meal, statusEl, btn){
   }
   btn.disabled = true;
   const dateStr = fmtDate(state.currentDate);
-  const meals = await loadMeals(dateStr);
-  meals.push(meal);
-  const ok = await saveMeals(dateStr, meals);
-  if(ok){
-    statusEl.innerHTML = meal.desc + ' toegevoegd bij ' + fmtDateLabel(state.currentDate) + '.';
-    statusEl.classList.remove('status-err');
-  } else {
-    statusEl.innerHTML = '<span class="status-err">Opslaan mislukt (mogelijk tijdelijke serverdruk) — probeer het nog eens.</span>';
+  try{
+    const meals = await loadMeals(dateStr, true);
+    meals.push(meal);
+    const ok = await saveMeals(dateStr, meals);
+    if(ok){
+      statusEl.innerHTML = meal.desc + ' toegevoegd bij ' + fmtDateLabel(state.currentDate) + '.';
+      statusEl.classList.remove('status-err');
+    } else {
+      statusEl.innerHTML = '<span class="status-err">Opslaan mislukt (mogelijk tijdelijke serverdruk) — probeer het nog eens.</span>';
+    }
+  }catch(err){
+    statusEl.innerHTML = '<span class="status-err">Ophalen van bestaande maaltijden mislukt (netwerkfout) — niets opgeslagen, probeer het nog eens.</span>';
   }
   btn.disabled = false;
   renderDashboard();
@@ -4958,7 +4975,7 @@ photoInput.addEventListener('change', async (e)=>{
         time: uploadTime
       };
       const dateStr = fmtDate(state.currentDate);
-      const meals = await loadMeals(dateStr);
+      const meals = await loadMeals(dateStr, true);
       const savedIdx = meals.length;
       meals.push(meal);
       const ok = await saveMeals(dateStr, meals);
@@ -5018,12 +5035,16 @@ document.getElementById('photoAmountApply').addEventListener('click', async ()=>
   document.getElementById('fFat').value = scaledFat;
 
   const { dateStr, mealIdx } = lastPhotoAnalysis;
-  const meals = await loadMeals(dateStr);
-  if(meals[mealIdx]){
-    meals[mealIdx] = { ...meals[mealIdx], kcal: scaledKcal, protein: scaledProtein, carbs: scaledCarbs, fat: scaledFat };
-    await saveMeals(dateStr, meals);
-    if(dateStr === fmtDate(state.currentDate)) renderDashboard();
-    document.getElementById('photoStatus').innerHTML = `<span class="status-msg">Herberekend naar ${newAmount}${lastPhotoAnalysis.unit}: ${scaledKcal} kcal.</span>`;
+  try{
+    const meals = await loadMeals(dateStr, true);
+    if(meals[mealIdx]){
+      meals[mealIdx] = { ...meals[mealIdx], kcal: scaledKcal, protein: scaledProtein, carbs: scaledCarbs, fat: scaledFat };
+      await saveMeals(dateStr, meals);
+      if(dateStr === fmtDate(state.currentDate)) renderDashboard();
+      document.getElementById('photoStatus').innerHTML = `<span class="status-msg">Herberekend naar ${newAmount}${lastPhotoAnalysis.unit}: ${scaledKcal} kcal.</span>`;
+    }
+  }catch(err){
+    document.getElementById('photoStatus').innerHTML = '<span class="status-msg status-err">Herberekenen mislukt (netwerkfout), probeer het opnieuw.</span>';
   }
 });
 
