@@ -364,6 +364,18 @@
         <div id="tOut"><div class="empty">Laden…</div></div>
       </div>
     </div>
+    <div class="cols" style="margin-top:16px">
+      <div class="card">
+        <h3>Grootste stijgers/dalers · laatste uur</h3>
+        <p class="hint">Netto transfers in het afgelopen uur -- wie is er nu in beweging.</p>
+        <div id="momentum1h"><div class="empty">Laden…</div></div>
+      </div>
+      <div class="card">
+        <h3>Grootste stijgers/dalers · laatste 24 uur</h3>
+        <p class="hint">Netto transfers in de afgelopen 24 uur.</p>
+        <div id="momentum24h"><div class="empty">Laden…</div></div>
+      </div>
+    </div>
     <div class="card" style="margin-top:16px">
       <h3>Verwachte prijswijzigingen per dag</h3>
       <p class="hint">Spelers die dicht bij een wijziging staan (80%+ van de drempel), gegroepeerd op de dag waarop het model een wijziging verwacht, met hun eerstvolgende tegenstander.</p>
@@ -639,11 +651,11 @@ async function api(path){
   return r.json();
 }
 
-let FIXTURES = [], TEAMS = {}, MY_TEAM = null;
+let FIXTURES = [], TEAMS = {}, MY_TEAM = null, MOMENTUM = [];
 
 async function load(){
   try{
-    const [game, board, events, logs, myTeam, fixtures, teams, knownManagers, knownTransfers, xgSnapshot] = await Promise.all([
+    const [game, board, events, logs, myTeam, fixtures, teams, knownManagers, knownTransfers, xgSnapshot, momentum] = await Promise.all([
       api('espn_game?id=eq.1&select=*'),
       api('espn_price_board?select=*&limit=1000'),
       api('espn_price_events?select=*&order=detected_at.desc&limit=60'),
@@ -653,7 +665,8 @@ async function load(){
       api('espn_teams?select=*'),
       api('espn_known_managers?select=*&active=eq.true'),
       api('espn_known_manager_transfers_seen?select=*&order=occurred_at.desc&limit=30'),
-      api('espn_xg_snapshot?select=*&order=xg.desc')
+      api('espn_xg_snapshot?select=*&order=xg.desc'),
+      api('espn_transfer_momentum?select=*&limit=1000')
     ]);
     GAME = game[0] || {};
     ROWS = board.map(r => {
@@ -680,9 +693,11 @@ async function load(){
     FIXTURES = fixtures;
     TEAMS = Object.fromEntries(teams.map(t => [t.id, t]));
     MY_TEAM = myTeam[0] || null;
+    MOMENTUM = momentum;
     attachXgToPlayers(xgSnapshot);
     renderTiles(); renderWatch(); renderTable();
     renderTransfers(); renderEvents(events); renderLogs(logs);
+    renderMomentum();
     renderMyTeam(MY_TEAM);
     renderTransferSuggestions();
     renderKnownManagers(knownManagers, knownTransfers);
@@ -1344,6 +1359,32 @@ function renderTransfers(){
   $('#tIn').innerHTML  = ins.map(r => tRow(r,'up')).join('');
   $('#tOut').innerHTML = outs.map(r => tRow(r,'down')).join('');
   renderDailyPriceOutlook();
+}
+function momentumRow(r, dir, field, maxAbs){
+  const val = r[field];
+  const own = ROWS.find(x => x.id === r.id);
+  return `<div class="row">
+    <div>
+      <div class="name">${r.web_name} <span class="meta">${r.team_short} · ${POS_SHORT[r.element_type]||''}</span></div>
+      <div class="meta">${eur(r.now_cost)}${own ? ` · ${own.selected_by_percent}% bezit` : ''}</div>
+    </div>
+    <div class="pct" style="color:var(--${dir})">${signed(val)}</div>
+    <div class="bar"><i class="${dir}" style="width:${Math.min(Math.abs(val)/maxAbs*100,100)}%"></i></div>
+  </div>`;
+}
+function renderMomentumInto(elId, field){
+  const sorted = [...MOMENTUM].filter(r => r[field] !== 0).sort((a,b) => b[field] - a[field]);
+  const ups = sorted.filter(r => r[field] > 0).slice(0,6);
+  const downs = sorted.filter(r => r[field] < 0).slice(-6).reverse();
+  const maxAbs = Math.max(1, Math.abs(ups[0]?.[field]||0), Math.abs(downs[0]?.[field]||0));
+  const el = $(elId);
+  if(!ups.length && !downs.length){ el.innerHTML = '<div class="empty">Nog geen beweging gemeten.</div>'; return; }
+  el.innerHTML = ups.map(r => momentumRow(r,'up',field,maxAbs)).join('')
+    + downs.map(r => momentumRow(r,'down',field,maxAbs)).join('');
+}
+function renderMomentum(){
+  renderMomentumInto('#momentum1h', 'net_1h');
+  renderMomentumInto('#momentum24h', 'net_24h');
 }
 // Groepeert spelers die dicht bij een prijswijziging staan (voortgang
 // >=80%) per verwachte dag (eta_at), met hun eerstvolgende tegenstander --
