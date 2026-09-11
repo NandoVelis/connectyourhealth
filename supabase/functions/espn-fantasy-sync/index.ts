@@ -35,8 +35,22 @@ function sbHeaders(extra: Record<string, string> = {}) {
   };
 }
 
+// Supabase's gateway geeft af en toe een transiente 502/503/504 terug
+// (geen structureel probleem, gewoon een korte hapering) -- zonder retry
+// gooide dat meteen de hele sync-run weg, inclusief alle prijswaarschuwingen
+// die verderop in dezelfde run verstuurd zouden worden. 2 pogingen met een
+// korte pauze lost verreweg de meeste van die gevallen zelf op.
+const RETRYABLE_STATUS = new Set([502, 503, 504]);
+async function fetchWithRetry(url: string, init: RequestInit, retries = 2, delayMs = 800) {
+  for (let attempt = 0; ; attempt++) {
+    const r = await fetch(url, init);
+    if (r.ok || attempt >= retries || !RETRYABLE_STATUS.has(r.status)) return r;
+    await new Promise((res) => setTimeout(res, delayMs * (attempt + 1)));
+  }
+}
+
 async function sbGet(path: string) {
-  const r = await fetch(`${SB_URL}/rest/v1/${path}`, { headers: sbHeaders() });
+  const r = await fetchWithRetry(`${SB_URL}/rest/v1/${path}`, { headers: sbHeaders() });
   if (!r.ok) throw new Error(`GET ${path} -> ${r.status} ${await r.text()}`);
   return await r.json();
 }
@@ -46,7 +60,7 @@ async function sbPost(path: string, rows: unknown[], prefer = "return=minimal") 
   // in blokken van 500 om payloadlimieten te vermijden
   for (let i = 0; i < rows.length; i += 500) {
     const chunk = rows.slice(i, i + 500);
-    const r = await fetch(`${SB_URL}/rest/v1/${path}`, {
+    const r = await fetchWithRetry(`${SB_URL}/rest/v1/${path}`, {
       method: "POST",
       headers: sbHeaders({ Prefer: prefer }),
       body: JSON.stringify(chunk),
