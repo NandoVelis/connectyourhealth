@@ -293,11 +293,11 @@
 
   <header class="top">
     <button
-      id="syncTredictBtn"
+      id="syncGarminBtn"
       class="btn-primary"
       style="background:#96007A;color:#FFFFFF;"
     >
-      🔄 Synchroniseer Tredict
+      🔄 Synchroniseer Garmin
     </button>
     <div class="datenav">
       <button id="darkModeToggle" title="Donkere modus aan/uit">&#9789;</button>
@@ -5238,10 +5238,10 @@ async function checkTredictSyncStatus(){
 }
 
 document
-  .getElementById("syncTredictBtn")
+  .getElementById("syncGarminBtn")
   ?.addEventListener("click", async () => {
 
-    const btn = document.getElementById("syncTredictBtn");
+    const btn = document.getElementById("syncGarminBtn");
     const owner = currentOwner();
     if(!owner){
       alert("Vul eerst je naam in bij het tabblad Team.");
@@ -5251,28 +5251,21 @@ document
     btn.disabled = true;
     btn.innerText = "Synchroniseren...";
 
+    // trigger-garmin-sync start alleen de GitHub Action (auto-sync-garmin.yml)
+    // en geeft meteen antwoord -- het is dus geen synchrone sync zoals
+    // sync-tredict was. De Action zelf duurt doorgaans ~20-30 sec, dus we
+    // wachten dat even af voor we het dashboard verversen.
     try {
-
-      const response = await fetch(
-        "https://mhvduufxeqyxgkkvwimx.supabase.co/functions/v1/sync-tredict?full=1&owner=" + encodeURIComponent(owner),
-        {
-          headers: {
-            "apikey": SUPABASE_KEY,
-            "Authorization": "Bearer " + SUPABASE_KEY
-          }
-        }
-      );
-      const data = await response.json();
-      _lastTredictSyncResult = data;
-      renderTredictStatusBanner();
-
-      if(!data.success){
-        alert(data.error || "Synchronisatie mislukt");
-      } else {
-        await renderDashboard();
-        alert("Tredict synchronisatie voltooid");
+      const { data, error } = await supabaseClient.functions.invoke('trigger-garmin-sync', { method: 'POST' });
+      if(error || (data && data.ok === false)){
+        const reason = (data && data.reason) || (data && data.error) || (error && error.message) || 'onbekende fout';
+        alert("Garmin-synchronisatie starten mislukt: " + reason);
+        return;
       }
-
+      btn.innerText = "Bezig bij Garmin...";
+      await new Promise(resolve => setTimeout(resolve, 25000));
+      await renderDashboard();
+      alert("Garmin-synchronisatie voltooid (of nog bezig -- ververs zo nodig nogmaals).");
     } catch (err) {
 
       console.error(err);
@@ -5281,7 +5274,7 @@ document
     } finally {
 
       btn.disabled = false;
-      btn.innerText = "🔄 Synchroniseer Tredict";
+      btn.innerText = "🔄 Synchroniseer Garmin";
 
     }
 
