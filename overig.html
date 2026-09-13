@@ -1176,27 +1176,35 @@ function verwachtingPill(v){
   return `<span class="pill flat">stabiel</span>`;
 }
 // Geschatte datum van de eerstvolgende prijswijziging (eta_at uit
-// espn_price_board, geschat via de recente netto-transfersnelheid van die
-// speler). Al over de drempel: "binnenkort" (eerstvolgende sync). Geen
-// bruikbare trend: "—".
+// espn_price_board -- server-side alleen gevuld als de eigen regressie-
+// snelheid de drempel realistisch binnen een week zou bereiken, zie
+// migratie extend_eta_at_beyond_80pct_progress). Al over de drempel:
+// "binnenkort" (eerstvolgende sync). Geen bruikbare trend binnen die
+// week: "—". Daglabel in FPL-stijl (Vandaag/Morgen/weekdag) i.p.v. een
+// kale datum, want de horizon is toch al tot uiterlijk een week vooruit.
 function formatEta(etaAt, progress){
   if (!etaAt) return '—';
   const d = new Date(etaAt);
   const diffH = (d - Date.now()) / 36e5;
   if (diffH <= 0.5) return 'binnenkort';
   if (progress !== null && progress >= 1) return 'binnenkort';
-  const opts = diffH < 24
-    ? {hour:'2-digit',minute:'2-digit'}
-    : {day:'2-digit',month:'short'};
-  return d.toLocaleString('nl-NL', diffH < 24 ? {...opts, weekday:'short'} : opts);
+  const today = new Date(); today.setHours(0,0,0,0);
+  const dayStart = new Date(d); dayStart.setHours(0,0,0,0);
+  const dayDiff = Math.round((dayStart - today) / 864e5);
+  const timeLabel = d.toLocaleTimeString('nl-NL', {hour:'2-digit', minute:'2-digit'});
+  const dayLabel = dayDiff === 0 ? 'Vandaag' : dayDiff === 1 ? 'Morgen' : d.toLocaleDateString('nl-NL', {weekday:'long'});
+  return `${dayLabel} ${timeLabel}`;
 }
 // Kort "~Nd" tot de geschatte prijswijziging, voor compacte weergave (bijv.
 // in de teamselectie) i.p.v. de volledige datum/tijd van formatEta().
 function daysUntilLabel(etaAt){
   if (!etaAt) return null;
-  const diffH = (new Date(etaAt) - Date.now()) / 36e5;
-  if (diffH <= 12) return 'vandaag';
-  return `~${Math.round(diffH/24)}d`;
+  const today = new Date(); today.setHours(0,0,0,0);
+  const dayStart = new Date(etaAt); dayStart.setHours(0,0,0,0);
+  const dayDiff = Math.round((dayStart - today) / 864e5);
+  if (dayDiff <= 0) return 'vandaag';
+  if (dayDiff === 1) return 'morgen';
+  return `~${dayDiff}d`;
 }
 // Compact stijg/daal-label (percentage + geschatte dagen tot wijziging) voor
 // bij een speler in de teamselectie -- groen bij stijgen, rood bij dalen.
