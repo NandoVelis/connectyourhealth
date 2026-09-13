@@ -2411,8 +2411,9 @@ function lastNDays(n){
 // voorheen tot wel 120 sequentiële databasevragen bij 30 dagen.
 async function loadTrendDay(d){
   const dateStr = fmtDate(d);
+  const owner = currentOwner();
   const [w, meals, training, vitals] = await Promise.all([
-    loadWeight(dateStr), loadMeals(dateStr), loadTraining(dateStr), loadVitals(dateStr)
+    loadWeight(dateStr), loadMeals(dateStr), loadTraining(dateStr), loadVitalsWithGarminFallback(owner, dateStr)
   ]);
   const macros = macroKcal(meals);
   const burned = training ? (training.totalKcal||0) : null;
@@ -3048,7 +3049,7 @@ async function syncDateToTeamBoard(dateStr, preloadedTraining, preloadedVitals){
   const training = preloadedTraining !== undefined ? preloadedTraining : await loadTraining(dateStr);
   const byType = trainingDistanceByType(training);
   const byTypeMin = trainingDurationByType(training);
-  const vitals = preloadedVitals !== undefined ? preloadedVitals : await loadVitals(dateStr);
+  const vitals = preloadedVitals !== undefined ? preloadedVitals : await loadVitalsWithGarminFallback(currentOwner(), dateStr);
   const {score: dagscoreVal} = computeDagscore(totals.kcal, training, vitals);
 
   await syncTeamEntry(dateStr, {
@@ -3894,7 +3895,7 @@ document.getElementById('teamResyncBtn').addEventListener('click', async ()=>{
   for(const d of days){
     const dateStr = fmtDate(d);
     statusEl.textContent = `Bezig: ${dateStr} (${synced+skippedEmpty+skippedRateLimit+1}/${days.length})...`;
-    const [meals, training, vitals] = await Promise.all([loadMeals(dateStr), loadTraining(dateStr), loadVitals(dateStr)]);
+    const [meals, training, vitals] = await Promise.all([loadMeals(dateStr), loadTraining(dateStr), loadVitalsWithGarminFallback(currentOwner(), dateStr)]);
     const hasData = (meals && meals.length>0) || training || (vitals && (vitals.hrRest!=null||vitals.hrv!=null||vitals.sleepMinutes));
     if(!hasData){ skippedEmpty++; continue; }
     try{
