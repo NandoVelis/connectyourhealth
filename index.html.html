@@ -3923,7 +3923,10 @@ async function renderPersonalPeriod(days, labelElId, bodyElId, label){
   for(const d of days){
     const dateStr = fmtDate(d);
     const w = await loadWeight(dateStr);
-    const c = (await loadVitals(dateStr)) || {};
+    // Garmin-voorrang voor rusthartslag (net als het dagoverzicht) --
+    // anders bleef dit "—" op vrijwel elke dag sinds Tredict's 402-storing,
+    // ook al staat de waarde allang klaar in garmin_metrics.
+    const c = (await loadVitalsWithGarminFallback(owner, dateStr)) || {};
     const meals = await loadMeals(dateStr);
     const macros = macroKcal(meals);
     const training = await loadTraining(dateStr);
