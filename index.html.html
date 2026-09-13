@@ -362,11 +362,6 @@
           <span class="meal-meta" id="vitalBodyBatteryHint">Garmin (test)</span>
         </div>
         <div class="stat-row" style="border-bottom:none;flex-direction:column;align-items:flex-start;">
-          <span class="stat-label">&#127939; Trainingsstatus</span>
-          <span class="stat-val" id="vitalTrainingStatus">&mdash;</span>
-          <span class="meal-meta" id="vitalTrainingStatusHint">Garmin (test)</span>
-        </div>
-        <div class="stat-row" style="border-bottom:none;flex-direction:column;align-items:flex-start;">
           <span class="stat-label">&#9878;&#65039; Trainingsbelasting</span>
           <span class="stat-val" id="vitalTrainingLoad">&mdash;</span>
           <span class="meal-meta" id="vitalTrainingLoadHint">Garmin (test)</span>
@@ -2836,23 +2831,6 @@ async function renderDashboard(){
     bbHintEl.textContent = 'Garmin (test)';
   }
 
-  // Trainingsstatus: de rauwe training_status-kolom bevat sinds de sync
-  // een niet-geparste Garmin-respons (een numerieke code zonder
-  // betrouwbare label-mapping, soms zelfs de hele ruwe dict als string) --
-  // training_feedback (trainingStatusFeedbackPhrase, bv. "PRODUCTIVE_2")
-  // is wel altijd een schoon, correct label en wordt daarom als hoofdwaarde
-  // getoond i.p.v. training_status.
-  const statusEl = document.getElementById('vitalTrainingStatus');
-  const statusHintEl = document.getElementById('vitalTrainingStatusHint');
-  if(gToday && gToday.training_feedback){
-    statusEl.textContent = humanizeGarminLabel(gToday.training_feedback);
-    const balance = gToday.training_balance_feedback ? humanizeGarminLabel(gToday.training_balance_feedback) : null;
-    statusHintEl.textContent = balance || 'Garmin (test)';
-  } else {
-    statusEl.textContent = '\u2014';
-    statusHintEl.textContent = 'Garmin (test)';
-  }
-
   // Trainingsbelasting-ratio: >1,3 duidt op een hogere acute t.o.v.
   // chronische belasting (rust kan verstandig zijn), <0,8 op ruimte voor
   // meer trainingsprikkel, ertussenin een gebalanceerde opbouw. De ratio
@@ -4386,7 +4364,7 @@ async function updateCustomQuickAddMealType(desc, newMealType){
 // vooraan zodat bijv. "kipfilet" niet per ongeluk op een generieke term matcht.
 const FOOD_EMOJI_KEYWORDS = [
   ['zalm', '\u{1F41F}'], ['tonijn', '\u{1F41F}'], ['makreel', '\u{1F41F}'], ['vis', '\u{1F41F}'],
-  ['kip', '\u{1F357}'], ['kalkoen', '\u{1F357}'],
+  ['kipfilet', '\u{1F357}'], ['kip', '\u{1F357}'], ['kalkoen', '\u{1F357}'],
   ['shake', '\u{1F964}'], ['smoothie', '\u{1F964}'],
   ['aardbei', '\u{1F353}'],
   ['blauwe bes', '\u{1FAD0}'], ['bosbes', '\u{1FAD0}'],
@@ -4440,13 +4418,18 @@ const FOOD_EMOJI_KEYWORDS = [
   ['chocolade', '\u{1F36B}'],
   ['winegum', '\u{1F36C}'], ['snoep', '\u{1F36C}'], ['drop', '\u{1F36C}'],
 ];
+// Trefwoorden die ook als los woord moeten matchen ondanks hun lengte --
+// "gebak" (taart/koek) zit anders als losse tekst binnen "gebakken"/
+// "gebakt" (de werkwoordsvorm van bakken/braden, bv. "kipfilet gebakken"),
+// waardoor gebakken kip per ongeluk het taart-icoontje kreeg.
+const FOOD_EMOJI_WHOLE_WORD_ONLY = new Set(['gebak']);
 function getSingleFoodEmoji(text){
   const lower = (text||'').toLowerCase();
   for(const [keyword, emoji] of FOOD_EMOJI_KEYWORDS){
     // Korte trefwoorden (zoals "ei" of "sla") mogen alleen als los woord
     // matchen, anders herkent bijv. "onbereid" of "slagroom" ze per ongeluk
     // als ei/sla en krijgt het verkeerde icoontje.
-    if(keyword.length <= 3){
+    if(keyword.length <= 3 || FOOD_EMOJI_WHOLE_WORD_ONLY.has(keyword)){
       if(new RegExp(`\\b${keyword}\\b`).test(lower)) return emoji;
     } else if(lower.includes(keyword)) return emoji;
   }
