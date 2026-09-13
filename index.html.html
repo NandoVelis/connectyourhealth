@@ -357,7 +357,7 @@
           <span class="meal-meta" id="vitalWeightWeek">week gem. &mdash;</span>
         </div>
         <div class="stat-row" style="border-bottom:none;flex-direction:column;align-items:flex-start;">
-          <span class="stat-label">&#128267; Body Battery</span>
+          <span class="stat-label">&#128267; Body Battery herstel</span>
           <span class="stat-val" id="vitalBodyBattery">&mdash;</span>
           <span class="meal-meta" id="vitalBodyBatteryHint">Garmin (test)</span>
         </div>
@@ -2819,34 +2819,35 @@ async function renderDashboard(){
     ? (Math.floor(vitals.sleepMinutes/60)+'u'+String(vitals.sleepMinutes%60).padStart(2,'0')+'m') + (gToday && gToday.sleep_score!=null ? ` (${Math.round(gToday.sleep_score)})` : '')
     : '\u2014';
 
-  // Body Battery: huidige stand (max van vandaag) + hersteld/verbruikt
-  // vannacht -- een dagelijks wisselende directe herstelmeting, i.t.t.
-  // VO2max dat over weken nauwelijks verandert en dus weinig zegt over
-  // "moet ik vandaag rust houden".
+  // Body Battery: de sync vult vooralsnog alleen "hersteld/verbruikt
+  // vannacht" (body_battery_change, uit de slaapdata) -- een echte
+  // max-van-vandaag-waarde (body_battery_max) wordt momenteel niet
+  // opgehaald door sync_garmin.py, dus die kolom staat altijd leeg. Toon
+  // daarom de nachtelijke verandering zelf als hoofdgetal i.p.v. een
+  // permanent "\u2014" met de eigenlijke info alleen in de subtekst.
   const bbEl = document.getElementById('vitalBodyBattery');
   const bbHintEl = document.getElementById('vitalBodyBatteryHint');
-  if(gToday && (gToday.body_battery_max!=null || gToday.body_battery_change!=null)){
-    bbEl.textContent = gToday.body_battery_max!=null ? gToday.body_battery_max : '\u2014';
-    const change = gToday.body_battery_change;
-    bbHintEl.textContent = change!=null
-      ? (change>=0 ? `+${Math.round(change)} hersteld vannacht` : `${Math.round(change)} vannacht (weinig herstel)`)
-      : 'Garmin (test)';
+  if(gToday && gToday.body_battery_change!=null){
+    const change = Math.round(gToday.body_battery_change);
+    bbEl.textContent = (change>=0?'+':'') + change;
+    bbHintEl.textContent = change>=0 ? 'hersteld vannacht' : 'verbruikt vannacht (weinig herstel)';
   } else {
     bbEl.textContent = '\u2014';
     bbHintEl.textContent = 'Garmin (test)';
   }
 
-  // Trainingsstatus: Garmin's eigen totaaloordeel (PRODUCTIVE/PEAKING/
-  // OVERREACHING/UNPRODUCTIVE/MAINTAINING/DETRAINING/RECOVERY) -- weegt
-  // meerdere weken trainingshistorie + HRV mee, dus vaak een betrouwbaardere
-  // "moet ik rusten"-indicatie dan de kale ACWR-ratio hieronder alleen.
+  // Trainingsstatus: de rauwe training_status-kolom bevat sinds de sync
+  // een niet-geparste Garmin-respons (een numerieke code zonder
+  // betrouwbare label-mapping, soms zelfs de hele ruwe dict als string) --
+  // training_feedback (trainingStatusFeedbackPhrase, bv. "PRODUCTIVE_2")
+  // is wel altijd een schoon, correct label en wordt daarom als hoofdwaarde
+  // getoond i.p.v. training_status.
   const statusEl = document.getElementById('vitalTrainingStatus');
   const statusHintEl = document.getElementById('vitalTrainingStatusHint');
-  if(gToday && gToday.training_status){
-    statusEl.textContent = humanizeGarminLabel(gToday.training_status);
-    const feedback = gToday.training_feedback ? humanizeGarminLabel(gToday.training_feedback) : null;
+  if(gToday && gToday.training_feedback){
+    statusEl.textContent = humanizeGarminLabel(gToday.training_feedback);
     const balance = gToday.training_balance_feedback ? humanizeGarminLabel(gToday.training_balance_feedback) : null;
-    statusHintEl.textContent = [feedback, balance].filter(Boolean).join(' \u00b7 ') || 'Garmin (test)';
+    statusHintEl.textContent = balance || 'Garmin (test)';
   } else {
     statusEl.textContent = '\u2014';
     statusHintEl.textContent = 'Garmin (test)';
