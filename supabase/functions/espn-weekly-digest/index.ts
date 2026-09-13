@@ -5,9 +5,10 @@
 //  - per gevolgd team (MY_TEAMS): top 5 en flop 5 op basis van netto
 //    transfers laatste 24u, alleen onder de eigen selectie
 //  - de meest in-/uitgekochte spelers van de afgelopen 7 dagen ONDER DE
-//    LANDELIJKE TOP 100 managers (league 165 "Nederland", de enige league
-//    die alle ~65k spelers bevat -- dus top 100 daarvan = de landelijke
-//    top 100), als signaal voor wat de beste managers aan het doen zijn
+//    LANDELIJKE TOP-MANAGERS (aantal instelbaar via TOP_N_MANAGERS, league
+//    165 "Nederland" -- de enige league die alle ~65k spelers bevat, dus
+//    top N daarvan = de landelijke top N), als signaal voor wat de beste
+//    managers aan het doen zijn
 // Slaat het resultaat op in espn_weekly_digest (die overig.html als popup
 // toont zodra er een nieuwere generated_at is dan wat de gebruiker al
 // gezien heeft) en stuurt daarnaast een korte pushmelding + mail als
@@ -20,8 +21,8 @@ const MY_TEAMS = [
   { entryId: 2640, alertEmails: ["duncanvelis@ziggo.nl", "nandovelis@gmail.com"] },
 ];
 const FANTASY_API = "https://fantasy.espngoal.nl/api";
-const OVERALL_LEAGUE_ID = 165; // "Nederland" -- alle ~65k spelers, dus top 100 hiervan is de landelijke top 100
-const TOP_N_MANAGERS = 100;
+const OVERALL_LEAGUE_ID = 165; // "Nederland" -- alle ~65k spelers, dus top N hiervan is de landelijke top N
+const TOP_N_MANAGERS = 1000;
 const SB_URL = Deno.env.get("SUPABASE_URL")!;
 const SB_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
@@ -108,9 +109,9 @@ const slim = (r: any, field: string) => ({
   value: r[field],
 });
 
-// Landelijke top 100 (league 165 "Nederland", 50 resultaten per pagina) --
-// stopt zodra er 100 managers verzameld zijn of de league geen volgende
-// pagina meer heeft.
+// Landelijke top N (league 165 "Nederland", 50 resultaten per pagina) --
+// stopt zodra er TOP_N_MANAGERS managers verzameld zijn of de league geen
+// volgende pagina meer heeft.
 async function fetchTop100Managers(): Promise<{ entry: number; name: string }[]> {
   const managers: { entry: number; name: string }[] = [];
   for (let page = 1; managers.length < TOP_N_MANAGERS; page++) {
@@ -139,12 +140,13 @@ async function fetchManagerTransfers(entry: number): Promise<any[]> {
   }
 }
 
-// In blokken van 10 tegelijk ophalen i.p.v. alle 100 managers tegelijk (te
-// agressief richting de API) of één voor één (te traag) -- 10 blijkt in de
-// praktijk een goede middenweg voor deze wekelijkse, niet-tijdkritische taak.
+// In blokken van 20 tegelijk ophalen i.p.v. alle managers tegelijk (te
+// agressief richting de API) of één voor één (bij 1000 managers veel te
+// traag) -- 20 blijkt in de praktijk een goede middenweg voor deze
+// wekelijkse, niet-tijdkritische taak.
 async function fetchAllManagerTransfers(managers: { entry: number; name: string }[]) {
   const byEntry = new Map<number, any[]>();
-  const CHUNK = 10;
+  const CHUNK = 20;
   for (let i = 0; i < managers.length; i += CHUNK) {
     const slice = managers.slice(i, i + CHUNK);
     const results = await Promise.all(slice.map((m) => fetchManagerTransfers(m.entry)));

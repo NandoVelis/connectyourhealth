@@ -1347,16 +1347,21 @@ function showWeeklyDigestPopup(payload){
   const teamBlock = teamData ? `
     <h4>Jouw team: Top 5</h4>${list(teamData.top5, asNet)}
     <h4>Jouw team: Flop 5</h4>${list(teamData.flop5, asNet)}` : '';
-  // Landelijke top 100 (league "Nederland", ~65k spelers) -- wat de beste
-  // managers deze week aan transfers deden, apart van de eigen team-blokken
-  // hierboven (die alleen naar de EIGEN selectie kijken).
+  // Landelijke top-managers (league "Nederland", ~65k spelers) -- wat de
+  // beste managers deze week aan transfers deden, apart van de eigen
+  // team-blokken hierboven (die alleen naar de EIGEN selectie kijken).
+  // Aantal managers staat in managers_count i.p.v. hardcoded in de titel,
+  // zodat dit label niet meer uit de pas kan lopen als TOP_N_MANAGERS
+  // server-side ooit verandert.
   const top100 = payload.top100_transfers;
   const top100Block = top100 ? `
-    <h4>Top 100 managers · meest ingekocht (${top100.window_days}d)</h4>
+    <h4>Top ${top100.managers_count} managers · meest ingekocht (${top100.window_days}d)</h4>
     ${(top100.top_in||[]).slice(0,5).map(top100Row).join('') || '<div class="empty">Geen data.</div>'}
-    <h4>Top 100 managers · meest verkocht (${top100.window_days}d)</h4>
+    <h4>Top ${top100.managers_count} managers · meest verkocht (${top100.window_days}d)</h4>
     ${(top100.top_out||[]).slice(0,5).map(top100Row).join('') || '<div class="empty">Geen data.</div>'}` : '';
+  const generatedLabel = payload.generated_at ? dt(payload.generated_at) : null;
   el.innerHTML = `<button class="close" aria-label="Sluiten" type="button">&times;</button>
+    ${generatedLabel ? `<div class="meta" style="margin-bottom:8px;">Momentopname van ${generatedLabel} -- transfers erna staan er nog niet in</div>` : ''}
     <h4>Meeste transfers · laatste 24u</h4>${mostTransferred}
     <h4>Snelste stijgers</h4>${risers}
     ${teamBlock}
