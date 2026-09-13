@@ -4,6 +4,10 @@
 //  - de snelst stijgende spelers (hoogste voortgang richting een stijging)
 //  - per gevolgd team (MY_TEAMS): top 5 en flop 5 op basis van netto
 //    transfers laatste 24u, alleen onder de eigen selectie
+//  - de meest in-/uitgekochte spelers van de afgelopen 7 dagen ONDER DE
+//    LANDELIJKE TOP 100 managers (league 165 "Nederland", de enige league
+//    die alle ~65k spelers bevat -- dus top 100 daarvan = de landelijke
+//    top 100), als signaal voor wat de beste managers aan het doen zijn
 // Slaat het resultaat op in espn_weekly_digest (die overig.html als popup
 // toont zodra er een nieuwere generated_at is dan wat de gebruiker al
 // gezien heeft) en stuurt daarnaast een korte pushmelding + mail als
@@ -15,6 +19,9 @@ const MY_TEAMS = [
   { entryId: 28264, alertEmails: ["nandovelis@gmail.com"] },
   { entryId: 2640, alertEmails: ["duncanvelis@ziggo.nl", "nandovelis@gmail.com"] },
 ];
+const FANTASY_API = "https://fantasy.espngoal.nl/api";
+const OVERALL_LEAGUE_ID = 165; // "Nederland" -- alle ~65k spelers, dus top 100 hiervan is de landelijke top 100
+const TOP_N_MANAGERS = 100;
 const SB_URL = Deno.env.get("SUPABASE_URL")!;
 const SB_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
@@ -101,6 +108,93 @@ const slim = (r: any, field: string) => ({
   value: r[field],
 });
 
+// Landelijke top 100 (league 165 "Nederland", 50 resultaten per pagina) --
+// stopt zodra er 100 managers verzameld zijn of de league geen volgende
+// pagina meer heeft.
+async function fetchTop100Managers(): Promise<{ entry: number; name: string }[]> {
+  const managers: { entry: number; name: string }[] = [];
+  for (let page = 1; managers.length < TOP_N_MANAGERS; page++) {
+    const r = await fetchWithRetry(
+      `${FANTASY_API}/leagues-classic/${OVERALL_LEAGUE_ID}/standings/?page_standings=${page}`,
+      {},
+    );
+    if (!r.ok) break;
+    const data = await r.json();
+    const results: any[] = data?.standings?.results || [];
+    for (const row of results) {
+      managers.push({ entry: row.entry, name: row.player_manager_display_name || row.player_name });
+    }
+    if (!data?.standings?.has_next || results.length === 0) break;
+  }
+  return managers.slice(0, TOP_N_MANAGERS);
+}
+
+async function fetchManagerTransfers(entry: number): Promise<any[]> {
+  try {
+    const r = await fetchWithRetry(`${FANTASY_API}/entry/${entry}/transfers/`, {});
+    if (!r.ok) return [];
+    return await r.json();
+  } catch {
+    return [];
+  }
+}
+
+// In blokken van 10 tegelijk ophalen i.p.v. alle 100 managers tegelijk (te
+// agressief richting de API) of één voor één (te traag) -- 10 blijkt in de
+// praktijk een goede middenweg voor deze wekelijkse, niet-tijdkritische taak.
+async function fetchAllManagerTransfers(managers: { entry: number; name: string }[]) {
+  const byEntry = new Map<number, any[]>();
+  const CHUNK = 10;
+  for (let i = 0; i < managers.length; i += CHUNK) {
+    const slice = managers.slice(i, i + CHUNK);
+    const results = await Promise.all(slice.map((m) => fetchManagerTransfers(m.entry)));
+    slice.forEach((m, idx) => byEntry.set(m.entry, results[idx]));
+  }
+  return byEntry;
+}
+
+async function computeTop100Transfers() {
+  const windowDays = 7;
+  const managers = await fetchTop100Managers();
+  if (managers.length === 0) return null;
+  const transfersByEntry = await fetchAllManagerTransfers(managers);
+
+  const cutoff = Date.now() - windowDays * 24 * 60 * 60 * 1000;
+  const inCounts = new Map<number, number>();
+  const outCounts = new Map<number, number>();
+  for (const transfers of transfersByEntry.values()) {
+    for (const t of transfers) {
+      const ts = new Date(t.time).getTime();
+      if (!Number.isFinite(ts) || ts < cutoff) continue;
+      inCounts.set(t.element_in, (inCounts.get(t.element_in) || 0) + 1);
+      outCounts.set(t.element_out, (outCounts.get(t.element_out) || 0) + 1);
+    }
+  }
+
+  const playerIds = [...new Set([...inCounts.keys(), ...outCounts.keys()])];
+  let playersById = new Map<number, any>();
+  if (playerIds.length) {
+    const players: any[] = await sbGet(`espn_players?select=id,web_name,team_short,now_cost&id=in.(${playerIds.join(",")})`);
+    playersById = new Map(players.map((p) => [p.id, p]));
+  }
+
+  const topEntries = (counts: Map<number, number>, n: number) =>
+    [...counts.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, n)
+      .map(([id, count]) => {
+        const p = playersById.get(id);
+        return { id, web_name: p?.web_name || `#${id}`, team_short: p?.team_short || null, now_cost: p?.now_cost ?? null, count };
+      });
+
+  return {
+    window_days: windowDays,
+    managers_count: managers.length,
+    top_in: topEntries(inCounts, 10),
+    top_out: topEntries(outCounts, 10),
+  };
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
 
@@ -141,11 +235,19 @@ Deno.serve(async (req: Request) => {
       }
     }
 
+    let top100Transfers = null;
+    try {
+      top100Transfers = await computeTop100Transfers();
+    } catch (e) {
+      console.warn(`Top 100-managers-transfers mislukt: ${String(e)}`);
+    }
+
     const payload = {
       generated_at: new Date().toISOString(),
       most_transferred_24h: mostTransferred24h,
       fastest_risers: fastestRisers,
       teams,
+      top100_transfers: top100Transfers,
     };
     await sbPost("espn_weekly_digest", [{ payload }]);
 
