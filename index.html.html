@@ -523,7 +523,7 @@
             <div class="meal-meta">~78 kcal per ei</div>
           </div>
           <div style="display:flex;align-items:center;gap:6px;flex-wrap:nowrap;">
-            <input type="number" id="eggQty" value="2" min="1" style="width:44px;padding:6px 4px;flex-shrink:0;">
+            <input type="number" id="eggQty" value="3" min="1" style="width:44px;padding:6px 4px;flex-shrink:0;">
             <span style="font-size:11px;color:var(--ink-soft);flex-shrink:0;">stuks</span>
             <select class="qaGroupSelect" data-key="eggs" style="font-size:11px;padding:5px 2px;border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--ink-soft);width:76px;flex-shrink:0;">
               <option value="Ontbijt" selected>Ontbijt</option>
@@ -611,7 +611,7 @@
             <div class="meal-meta">~78 kcal per ei</div>
           </div>
           <div style="display:flex;align-items:center;gap:6px;flex-wrap:nowrap;">
-            <input type="number" id="eggQtyLunch" value="2" min="1" style="width:44px;padding:6px 4px;flex-shrink:0;">
+            <input type="number" id="eggQtyLunch" value="3" min="1" style="width:44px;padding:6px 4px;flex-shrink:0;">
             <span style="font-size:11px;color:var(--ink-soft);flex-shrink:0;">stuks</span>
             <select class="qaGroupSelect" data-key="eggs-lunch" style="font-size:11px;padding:5px 2px;border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--ink-soft);width:76px;flex-shrink:0;">
               <option value="Ontbijt">Ontbijt</option>
@@ -4793,7 +4793,7 @@ document.getElementById('quickAddKwark').addEventListener('click', (e)=>{
 });
 
 document.getElementById('quickAddEggs').addEventListener('click', (e)=>{
-  const qty = numOrDefault('eggQty', 2, 0);
+  const qty = numOrDefault('eggQty', 3, 0);
   quickAdd({
     desc: qty + 'x gekookt ei',
     mealType: 'Ontbijt', kcal: 78*qty, protein: 6*qty, carbs: 1*qty, fat: 5*qty, time: ''
@@ -4801,7 +4801,7 @@ document.getElementById('quickAddEggs').addEventListener('click', (e)=>{
 });
 
 document.getElementById('quickAddEggsLunch').addEventListener('click', (e)=>{
-  const qty = numOrDefault('eggQtyLunch', 2, 0);
+  const qty = numOrDefault('eggQtyLunch', 3, 0);
   quickAdd({
     desc: qty + 'x gekookt ei',
     mealType: 'Lunch', kcal: 78*qty, protein: 6*qty, carbs: 1*qty, fat: 5*qty, time: ''
