@@ -17,6 +17,15 @@ const MY_TEAMS = [
 // Los van een eigen team: mailt Nando zodra ÉÉN willekeurige speler (ook een
 // die hij niet bezit) de 90%-drempel van een prijswijziging nadert.
 const GLOBAL_WATCH_EMAIL = "nandovelis@gmail.com";
+// ESPN's "status"-veld: a=beschikbaar, d=twijfelachtig, i=geblesseerd,
+// s=geschorst, u=niet inzetbaar (bv. langdurig geblesseerd/vertrokken).
+const STATUS_LABELS: Record<string, string> = {
+  a: "beschikbaar",
+  d: "twijfelachtig",
+  i: "geblesseerd",
+  s: "geschorst",
+  u: "niet inzetbaar",
+};
 const SB_URL = Deno.env.get("SUPABASE_URL")!;
 const SB_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
@@ -435,7 +444,7 @@ Deno.serve(async (req: Request) => {
 
     // bestaande stand ophalen
     const prevRows: any[] = await sbGet(
-      "espn_players?select=id,now_cost,transfers_in,transfers_out,net_at_last_change,goals_scored,assists,bonus,clean_sheets&limit=2000",
+      "espn_players?select=id,now_cost,transfers_in,transfers_out,net_at_last_change,goals_scored,assists,bonus,clean_sheets,status&limit=2000",
     );
     const prev = new Map<number, any>(prevRows.map((r) => [r.id, r]));
 
@@ -445,6 +454,16 @@ Deno.serve(async (req: Request) => {
     const snapRows: any[] = [];
     const eventRows: any[] = [];
     const changedPlayerIds: number[] = [];
+    // Blessure-/schorsingsrisico: ESPN's "status" (a=beschikbaar,
+    // d=twijfelachtig, i=geblesseerd, s=geschorst, u=niet inzetbaar) i.c.m.
+    // chance_of_playing_next_round. newlyUnavailable = spelers die deze run
+    // van "beschikbaar" naar iets anders omslaan (ongeacht of ze in een
+    // gevolgd team zitten -- het team-filter gebeurt verderop bij het
+    // versturen). recovered = spelers die weer beschikbaar zijn -- hun
+    // eerder verstuurde waarschuwingen mogen dan weer opnieuw kunnen afgaan
+    // bij een volgende blessure, net als bij de prijswaarschuwingen.
+    const newlyUnavailable: { id: number; status: string }[] = [];
+    const recoveredIds: number[] = [];
 
     for (const e of elements) {
       const tin = Number(e.transfers_in ?? 0);
@@ -476,6 +495,13 @@ Deno.serve(async (req: Request) => {
         lastDir = dir;
         changes++;
         changedPlayerIds.push(e.id);
+      }
+
+      // Status-omslag (blessure/schorsing/twijfelachtig) detecteren.
+      if (p && p.status === "a" && e.status !== "a") {
+        newlyUnavailable.push({ id: e.id, status: e.status });
+      } else if (p && p.status !== "a" && e.status === "a") {
+        recoveredIds.push(e.id);
       }
 
       // Goals/assists/bonus/clean sheets meenemen in de wijzigingscheck (niet
@@ -524,6 +550,7 @@ Deno.serve(async (req: Request) => {
         team_short: teams[e.team] ?? null,
         element_type: e.element_type,
         status: e.status,
+        chance_of_playing_next_round: e.chance_of_playing_next_round ?? null,
         news: e.news ?? "",
         now_cost: e.now_cost,
         cost_change_start: e.cost_change_start ?? 0,
@@ -579,6 +606,7 @@ Deno.serve(async (req: Request) => {
     // te zijn). Alleen voor eigen team, niet voor alle spelers.
     const changedById = new Map(playerRows.filter((r) => changedPlayerIds.includes(r.id)).map((r) => [r.id, r]));
     const eventByPlayerId = new Map(eventRows.map((e) => [e.player_id, e]));
+    const playerById = new Map(playerRows.map((r) => [r.id, r]));
 
     // Een speler die daadwerkelijk van prijs veranderd is, start weer op 0 --
     // eerder verstuurde waarschuwingen voor die speler mogen dus weer
@@ -586,6 +614,18 @@ Deno.serve(async (req: Request) => {
     if (changedPlayerIds.length) {
       await fetch(
         `${SB_URL}/rest/v1/espn_price_alerts_sent?player_id=in.(${changedPlayerIds.join(",")})`,
+        { method: "DELETE", headers: sbHeaders() },
+      );
+    }
+
+    const unavailableById = new Map(newlyUnavailable.map((u) => [u.id, u]));
+
+    // Spelers die weer beschikbaar zijn: oude blessure-/schorsings-
+    // waarschuwingen wissen zodat een volgende blessure weer een nieuwe
+    // melding oplevert (zelfde patroon als de prijswaarschuwing hierboven).
+    if (recoveredIds.length) {
+      await fetch(
+        `${SB_URL}/rest/v1/espn_injury_alerts_sent?player_id=in.(${recoveredIds.join(",")})`,
         { method: "DELETE", headers: sbHeaders() },
       );
     }
@@ -730,6 +770,79 @@ Deno.serve(async (req: Request) => {
                 alertEmail,
                 `${ownedChangedIds.length} speler(s) in dit team van prijs veranderd`,
                 ownedChangedIds.map((id) => changedById.get(id)!.web_name).join(", "),
+              );
+            }
+          }
+        }
+
+        // ---- BLESSURE-/SCHORSINGSRISICO VOOR SPELERS IN DIT TEAM ----
+        // Zodra een speler in dit team van "beschikbaar" naar twijfelachtig/
+        // geblesseerd/geschorst/niet-inzetbaar omslaat: altijd een melding,
+        // net als de prijswijziging hierboven. Dedup per (e-mailadres,
+        // speler, status) via espn_injury_alerts_sent, opgeschoond zodra de
+        // speler weer beschikbaar is (zie eerder in dit bestand) -- zodat
+        // een volgende blessure gewoon weer een nieuwe melding oplevert.
+        if (newlyUnavailable.length && picks?.picks?.length) {
+          const ownedUnavailableIds: number[] = picks.picks
+            .map((p: any) => p.element)
+            .filter((id: number) => unavailableById.has(id));
+          if (ownedUnavailableIds.length) {
+            for (const alertEmail of alertEmails) {
+              const alreadyRes = await fetch(
+                `${SB_URL}/rest/v1/espn_injury_alerts_sent?select=player_id,status&alert_email=eq.${
+                  encodeURIComponent(alertEmail)
+                }&player_id=in.(${ownedUnavailableIds.join(",")})`,
+                { headers: sbHeaders() },
+              );
+              const already: any[] = alreadyRes.ok ? await alreadyRes.json() : [];
+              const alreadySet = new Set(already.map((a) => `${a.player_id}:${a.status}`));
+              const toAlert = ownedUnavailableIds.filter((id) =>
+                !alreadySet.has(`${id}:${unavailableById.get(id)!.status}`)
+              );
+              if (!toAlert.length) continue;
+              const lines = toAlert.map((id) => {
+                const pl = playerById.get(id)!;
+                const u = unavailableById.get(id)!;
+                const chance = pl.chance_of_playing_next_round;
+                return `- ${pl.web_name} (${pl.team_short}): ${STATUS_LABELS[u.status] ?? u.status}` +
+                  (chance != null ? ` (${chance}% kans om te spelen)` : "") +
+                  (pl.news ? ` -- ${pl.news}` : "");
+              }).join("\n");
+              if (resendKey) {
+                const mailRes = await fetch("https://api.resend.com/emails", {
+                  method: "POST",
+                  headers: {
+                    Authorization: `Bearer ${resendKey}`,
+                    "Content-Type": "application/json",
+                  },
+                  body: JSON.stringify({
+                    from: "ConnectYourHealth <onboarding@resend.dev>",
+                    to: [alertEmail],
+                    subject: `ESPN Fantasy: ${toAlert.length} speler(s) in dit team mogelijk niet inzetbaar`,
+                    text:
+                      `Deze spelers in het gevolgde team zijn zojuist als twijfelachtig/geblesseerd/geschorst gemarkeerd:\n\n${lines}\n\nBekijk het overzicht: https://connectyourhealth.vercel.app/overig`,
+                  }),
+                });
+                if (!mailRes.ok) {
+                  console.warn(`Blessurewaarschuwing-mail (${alertEmail}) mislukt: ${mailRes.status} ${await mailRes.text()}`);
+                }
+              }
+              await sendPush(
+                alertEmail,
+                `${toAlert.length} speler(s) in dit team mogelijk niet inzetbaar`,
+                toAlert.map((id) =>
+                  `${playerById.get(id)!.web_name}: ${STATUS_LABELS[unavailableById.get(id)!.status] ?? unavailableById.get(id)!.status}`
+                ).join(", "),
+              );
+              await sbPost(
+                "espn_injury_alerts_sent",
+                toAlert.map((id) => ({
+                  alert_email: alertEmail,
+                  player_id: id,
+                  status: unavailableById.get(id)!.status,
+                  sent_at: capturedAt,
+                })),
+                "return=minimal,resolution=merge-duplicates",
               );
             }
           }
