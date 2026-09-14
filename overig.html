@@ -1608,9 +1608,17 @@ function renderXgSnapshot(rows){
 /* ---------- transfers ---------- */
 // Compact label voor de eerstvolgende tegenstander(s) van een team, voor
 // bij een speler in een lijst -- '—' als er (nog) geen wedstrijdschema is.
+// Gekleurd op de echte FDR (Fixture Difficulty Rating), net als bij "Mijn
+// team" en Transfersuggesties.
 function opponentLabel(teamId){
   const fx = nextFixturesForTeam(teamId);
-  return fx.length ? fx.map(f => `${(TEAMS[f.opponentId]||{}).short_name || '?'} (${f.home?'T':'U'})`).join(', ') : '—';
+  if (!fx.length) return '—';
+  const startEvent = GAME.next_event || ((GAME.current_event||0)+1);
+  const fdr = fdrForTeamEvent(teamId, startEvent);
+  return fx.map(f => {
+    const label = `${(TEAMS[f.opponentId]||{}).short_name || '?'} (${f.home?'T':'U'})`;
+    return fdr!=null ? `<span style="color:${fdrColor(fdr)};font-weight:600;">${label}</span>` : label;
+  }).join(', ');
 }
 function tRow(r, dir){
   const n = Math.abs(r.net_event);
@@ -1638,7 +1646,7 @@ function momentumRow(r, dir, field, maxAbs){
   return `<div class="row">
     <div>
       <div class="name">${r.web_name} <span class="meta">${r.team_short} · ${POS_SHORT[r.element_type]||''}</span></div>
-      <div class="meta">${eur(r.now_cost)}${own ? ` · ${own.selected_by_percent}% bezit` : ''}</div>
+      <div class="meta">${eur(r.now_cost)}${own ? ` · ${own.selected_by_percent}% bezit` : ''}${own ? ` · eerstvolgend: ${opponentLabel(own.team_id)}` : ''}</div>
     </div>
     <div class="pct" style="color:var(--${dir})">${signed(val)}</div>
     <div class="bar"><i class="${dir}" style="width:${Math.min(Math.abs(val)/maxAbs*100,100)}%"></i></div>
