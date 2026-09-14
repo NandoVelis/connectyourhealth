@@ -910,18 +910,6 @@ $('#pitchStat').addEventListener('change', () => {
 // door het aantal wissels; dit houdt geen rekening met de verkoopwaarde
 // van een speler die je laat gaan (die data heeft de API niet openbaar),
 // dus is een ondergrens, geen exacte prijs.
-// Eerstvolgende wedstrijd(en) van een team, geankerd op GAME.next_event
-// (net als fixturesCountByTeam) i.p.v. simpelweg de eerstvolgende
-// niet-afgevinkte wedstrijd -- anders bleef de lopende speelronde nog
-// "volgende wedstrijd" tonen zolang niet alle wedstrijden ervan waren
-// afgerond. Meerdere resultaten bij een dubbele speelronde.
-function nextFixturesForTeam(teamId){
-  const startEvent = GAME.next_event || ((GAME.current_event||0)+1);
-  return FIXTURES.filter(f => (f.team_h===teamId || f.team_a===teamId) && f.event===startEvent).map(f => ({
-    opponentId: f.team_h===teamId ? f.team_a : f.team_h,
-    home: f.team_h===teamId,
-  }));
-}
 // Tegenstander(s) over de eerstkomende `windowSize` speelrondes, per ronde
 // gegroepeerd (dubbele speelronde = twee tegenstanders in dezelfde ronde,
 // met "+" ertussen), elk gekleurd op basis van de echte FDR (Fixture
@@ -1606,26 +1594,13 @@ function renderXgSnapshot(rows){
 }
 
 /* ---------- transfers ---------- */
-// Compact label voor de eerstvolgende tegenstander(s) van een team, voor
-// bij een speler in een lijst -- '—' als er (nog) geen wedstrijdschema is.
-// Gekleurd op de echte FDR (Fixture Difficulty Rating), net als bij "Mijn
-// team" en Transfersuggesties.
-function opponentLabel(teamId){
-  const fx = nextFixturesForTeam(teamId);
-  if (!fx.length) return '—';
-  const startEvent = GAME.next_event || ((GAME.current_event||0)+1);
-  const fdr = fdrForTeamEvent(teamId, startEvent);
-  return fx.map(f => {
-    const label = `${(TEAMS[f.opponentId]||{}).short_name || '?'} (${f.home?'T':'U'})`;
-    return fdr!=null ? `<span style="color:${fdrColor(fdr)};font-weight:600;">${label}</span>` : label;
-  }).join(', ');
-}
 function tRow(r, dir){
   const n = Math.abs(r.net_event);
   return `<div class="row">
     <div>
       <div class="name">${r.web_name} <span class="meta">${r.team_short} · ${POS_SHORT[r.element_type]||''}</span></div>
-      <div class="meta">${eur(r.now_cost)} · ${r.selected_by_percent}% bezit · eerstvolgend: ${opponentLabel(r.team_id)}</div>
+      <div class="meta">${eur(r.now_cost)} · ${r.selected_by_percent}% bezit · verw. punten: ${r.ep_next!=null?r.ep_next:'—'}</div>
+      <div class="meta">komende: ${upcomingFixturesLabel(r.team_id, 3)}</div>
     </div>
     <div class="pct" style="color:var(--${dir})">${signed(r.net_event)}</div>
     <div class="bar"><i class="${dir}" style="width:${Math.min(n/MAXNET*100,100)}%"></i></div>
@@ -1646,7 +1621,8 @@ function momentumRow(r, dir, field, maxAbs){
   return `<div class="row">
     <div>
       <div class="name">${r.web_name} <span class="meta">${r.team_short} · ${POS_SHORT[r.element_type]||''}</span></div>
-      <div class="meta">${eur(r.now_cost)}${own ? ` · ${own.selected_by_percent}% bezit` : ''}${own ? ` · eerstvolgend: ${opponentLabel(own.team_id)}` : ''}</div>
+      <div class="meta">${eur(r.now_cost)}${own ? ` · ${own.selected_by_percent}% bezit · verw. punten: ${own.ep_next!=null?own.ep_next:'—'}` : ''}</div>
+      ${own ? `<div class="meta">komende: ${upcomingFixturesLabel(own.team_id, 3)}</div>` : ''}
     </div>
     <div class="pct" style="color:var(--${dir})">${signed(val)}</div>
     <div class="bar"><i class="${dir}" style="width:${Math.min(Math.abs(val)/maxAbs*100,100)}%"></i></div>
@@ -1697,7 +1673,7 @@ function renderDailyPriceOutlook(){
       return `<div class="row">
         <div>
           <div class="name">${r.web_name} <span class="meta">${r.team_short} · ${POS_SHORT[r.element_type]||''}</span></div>
-          <div class="meta">${eur(r.now_cost)} · eerstvolgend: ${opponentLabel(r.team_id)}</div>
+          <div class="meta">${eur(r.now_cost)} · verw. punten: ${r.ep_next!=null?r.ep_next:'—'} · komende: ${upcomingFixturesLabel(r.team_id, 3)}</div>
         </div>
         <div class="pct" style="color:var(--${dir})">${dir==='down'?'-':''}${pct(r.progress)}</div>
       </div>`;
