@@ -681,10 +681,40 @@ async function api(path){
 }
 
 let FIXTURES = [], TEAMS = {}, MY_TEAM = null, MOMENTUM = [];
+// FDR (Fixture Difficulty Rating, 1=makkelijk .. 5=moeilijk) van
+// eredivisiepreview.com/fdr, 1x per dag gesynct door espn-fdr-sync.
+// Map: team_short -> Map(event -> {opponent_short, is_home, fdr}).
+let FDR_BY_TEAM = new Map();
+function buildFdrByTeam(rows){
+  const m = new Map();
+  for(const r of rows||[]){
+    if(!m.has(r.team_short)) m.set(r.team_short, new Map());
+    m.get(r.team_short).set(r.event, { opponent_short: r.opponent_short, is_home: r.is_home, fdr: r.fdr });
+  }
+  return m;
+}
+function fdrForTeamEvent(teamId, event){
+  const short = (TEAMS[teamId]||{}).short_name;
+  if(!short) return null;
+  const row = FDR_BY_TEAM.get(short)?.get(event);
+  return row ? row.fdr : null;
+}
+const FDR_COLORS = { 1:'#3a9d5d', 2:'#8fbf4d', 3:'#d4a72c', 4:'#d97a3a', 5:'#c0392b' };
+function fdrColor(fdr){ return FDR_COLORS[fdr] || 'var(--ink-soft)'; }
+// Gewicht per wedstrijd voor de verwachte-puntenberekening: makkelijker
+// geplande tegenstander (lage FDR) telt zwaarder mee dan een moeilijke
+// (hoge FDR), i.p.v. de eerdere blinde 10% thuis/uit-bijstelling zonder
+// teamsterkte-info. Valt terug op die oude thuis/uit-weging als er
+// (nog) geen FDR bekend is voor die combinatie team/speelronde.
+const FDR_WEIGHT = { 1: 1.4, 2: 1.2, 3: 1.0, 4: 0.8, 5: 0.6 };
+function fixtureWeight(fdr, isHome){
+  if(fdr!=null && FDR_WEIGHT[fdr]!=null) return FDR_WEIGHT[fdr];
+  return isHome ? HOME_WEIGHT : AWAY_WEIGHT;
+}
 
 async function load(){
   try{
-    const [game, board, events, logs, myTeam, fixtures, teams, knownManagers, knownTransfers, xgSnapshot, momentum, weeklyDigest, sundayReport, matchReports, preMatchReports] = await Promise.all([
+    const [game, board, events, logs, myTeam, fixtures, teams, knownManagers, knownTransfers, xgSnapshot, momentum, weeklyDigest, sundayReport, matchReports, preMatchReports, fdrRows] = await Promise.all([
       api('espn_game?id=eq.1&select=*'),
       api('espn_price_board?select=*&limit=1000'),
       api('espn_price_events?select=*&order=detected_at.desc&limit=60'),
@@ -699,7 +729,8 @@ async function load(){
       api('espn_weekly_digest?select=*&order=generated_at.desc&limit=1'),
       api('espn_sunday_report?select=*&order=generated_at.desc&limit=1'),
       api('espn_match_transfer_report?select=*&order=kickoff_time.desc&limit=5'),
-      api('espn_pre_match_transfer_report?select=*&order=kickoff_time.desc&limit=5')
+      api('espn_pre_match_transfer_report?select=*&order=kickoff_time.desc&limit=5'),
+      api('espn_fdr?select=team_short,event,opponent_short,is_home,fdr&limit=2000')
     ]);
     GAME = game[0] || {};
     ROWS = board.map(r => {
@@ -725,6 +756,7 @@ async function load(){
     });
     FIXTURES = fixtures;
     TEAMS = Object.fromEntries(teams.map(t => [t.id, t]));
+    FDR_BY_TEAM = buildFdrByTeam(fdrRows);
     MY_TEAM = myTeam[0] || null;
     MOMENTUM = momentum;
     attachXgToPlayers(xgSnapshot);
@@ -892,10 +924,11 @@ function nextFixturesForTeam(teamId){
 }
 // Tegenstander(s) over de eerstkomende `windowSize` speelrondes, per ronde
 // gegroepeerd (dubbele speelronde = twee tegenstanders in dezelfde ronde,
-// met "+" ertussen). Let op: de ESPN Eredivisie Fantasy-API levert (nog)
-// geen teamsterkte/stand-data, dus er is geen betrouwbare
-// moeilijkheidsgraad (FDR) te berekenen -- dit toont daarom alleen de
-// tegenstander(s), niet hoe zwaar de wedstrijd is.
+// met "+" ertussen), elk gekleurd op basis van de echte FDR (Fixture
+// Difficulty Rating, van eredivisiepreview.com/fdr, 1x per dag gesynct) --
+// groen = makkelijk, rood = moeilijk. Zonder bekende FDR voor die
+// combinatie (nog niet gesynct, of buiten het venster van de bron) blijft
+// het label ongekleurd.
 function upcomingFixturesLabel(teamId, windowSize){
   const startEvent = GAME.next_event || ((GAME.current_event||0)+1);
   const endEvent = startEvent + windowSize - 1;
@@ -907,7 +940,9 @@ function upcomingFixturesLabel(teamId, windowSize){
   for (const f of relevant) (byEvent[f.event] = byEvent[f.event] || []).push(f);
   return Object.keys(byEvent).sort((a,b)=>a-b).map(ev => byEvent[ev].map(f => {
     const oppId = f.team_h===teamId ? f.team_a : f.team_h;
-    return `${(TEAMS[oppId]||{}).short_name || '?'}${f.team_h===teamId ? '(T)' : '(U)'}`;
+    const fdr = fdrForTeamEvent(teamId, f.event);
+    const label = `${(TEAMS[oppId]||{}).short_name || '?'}${f.team_h===teamId ? '(T)' : '(U)'}`;
+    return fdr!=null ? `<span style="color:${fdrColor(fdr)};font-weight:600;">${label}</span>` : label;
   }).join('+')).join(' ');
 }
 // Thuis/uit-weging voor de verwachte-puntenberekening: zonder teamsterkte-
@@ -927,8 +962,9 @@ function fixturesCountByTeam(windowSize){
     if(f.event==null || f.event < startEvent || f.event > endEvent) continue;
     for(const teamId of [f.team_h, f.team_a]){
       if(teamId==null) continue;
+      const isHome = f.team_h===teamId;
       counts[teamId] = (counts[teamId]||0) + 1;
-      weighted[teamId] = (weighted[teamId]||0) + (f.team_h===teamId ? HOME_WEIGHT : AWAY_WEIGHT);
+      weighted[teamId] = (weighted[teamId]||0) + fixtureWeight(fdrForTeamEvent(teamId, f.event), isHome);
       (detail[teamId] = detail[teamId]||[]).push(f.event);
     }
   }
@@ -1043,7 +1079,7 @@ function renderTransferSuggestions(){
     <td>${POS_SHORT[r.element_type]||''}</td>
     <td class="num">${eur(r.now_cost)}</td>
     <td class="num">${r.value_score!=null?Number(r.value_score).toFixed(2):'—'}</td>
-    <td class="num">${r.fixtureCount>=2?`<span class="pill up">${r.fixtureCount}x</span>`:r.fixtureCount}</td>
+    <td class="num">${r.fixtureCount>=2?`<span class="pill up">${r.fixtureCount}x</span>`:r.fixtureCount}<div class="meta" style="font-weight:400;">${upcomingFixturesLabel(r.team_id, windowSize)}</div></td>
     <td class="num">${expWindowPts(r).toFixed(1)}</td>
     <td>i.p.v. ${swapText}</td>
   </tr>`;
