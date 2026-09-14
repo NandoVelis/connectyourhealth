@@ -135,6 +135,127 @@ async function recalibratePriceThresholdFactors() {
   }
 }
 
+// ---- KWARTIER-VOOR-KWARTIER TRANSFERRAPPORT PER WEDSTRIJD ----
+// Zodra een wedstrijd als "finished" binnenkomt (en nog geen rapport heeft),
+// wordt voor de spelers van BEIDE clubs berekend hoeveel netto transfers er
+// per kwartier bijkwamen, vanaf aftrap tot 3 uur erna (dekt de wedstrijd +
+// een post-wedstrijd-reactievenster). Gebruikt de bestaande 15-min
+// snapshots (net_transfers is cumulatief, dus het verschil tussen twee
+// opeenvolgende kwartier-standen is precies het aantal transfers dat er in
+// dat kwartier bijkwam).
+async function checkFinishedMatchesForTransferReport(fixtures: any[], teams: Record<number, string>) {
+  const recentFinished = fixtures.filter((f: any) =>
+    f.finished && f.kickoff_time && Date.now() - new Date(f.kickoff_time).getTime() < 24 * 3600 * 1000
+  );
+  if (!recentFinished.length) return;
+
+  const idsParam = recentFinished.map((f: any) => f.id).join(",");
+  const existing: any[] = await sbGet(`espn_match_transfer_report?select=fixture_id&fixture_id=in.(${idsParam})`);
+  const existingIds = new Set(existing.map((e: any) => e.fixture_id));
+  const toReport = recentFinished.filter((f: any) => !existingIds.has(f.id));
+
+  for (const f of toReport) {
+    try {
+      await buildAndStoreMatchTransferReport(f, teams);
+    } catch (e) {
+      console.warn(`Wedstrijd-transferrapport (fixture ${f.id}) mislukt: ${String(e)}`);
+    }
+  }
+}
+
+async function buildAndStoreMatchTransferReport(f: any, teams: Record<number, string>) {
+  const kickoff = new Date(f.kickoff_time);
+  const windowEnd = new Date(kickoff.getTime() + 180 * 60 * 1000);
+  const homeShort = teams[f.team_h] ?? null;
+  const awayShort = teams[f.team_a] ?? null;
+
+  const players: any[] = await sbGet(
+    `espn_players?select=id,web_name,team_id,team_short&team_id=in.(${f.team_h},${f.team_a})`,
+  );
+  const playerIds = players.map((p: any) => p.id);
+  if (!playerIds.length) return;
+  const homeIds = new Set(players.filter((p: any) => p.team_id === f.team_h).map((p: any) => p.id));
+  const playerById = new Map(players.map((p: any) => [p.id, p]));
+
+  // Laatst bekende stand vlak vóór aftrap, als startpunt voor de kwartieren.
+  const baseline: any[] = await sbGet(
+    `espn_snapshots?select=player_id,net_transfers,captured_at&player_id=in.(${playerIds.join(",")})` +
+      `&captured_at=lte.${encodeURIComponent(kickoff.toISOString())}&order=captured_at.asc&limit=10000`,
+  );
+  const baselineByPlayer = new Map<number, number>();
+  for (const s of baseline) baselineByPlayer.set(s.player_id, Number(s.net_transfers)); // laatste (asc) wint
+
+  const inWindow: any[] = await sbGet(
+    `espn_snapshots?select=player_id,net_transfers,captured_at&player_id=in.(${playerIds.join(",")})` +
+      `&captured_at=gt.${encodeURIComponent(kickoff.toISOString())}&captured_at=lte.${encodeURIComponent(windowEnd.toISOString())}` +
+      `&order=captured_at.asc&limit=10000`,
+  );
+
+  const current = new Map<number, number>(baselineByPlayer);
+  let idx = 0;
+  const cumulativeBuckets: { minute: number; home: number; away: number }[] = [];
+  for (let minute = 15; minute <= 180; minute += 15) {
+    const boundary = kickoff.getTime() + minute * 60 * 1000;
+    while (idx < inWindow.length && new Date(inWindow[idx].captured_at).getTime() <= boundary) {
+      current.set(inWindow[idx].player_id, Number(inWindow[idx].net_transfers));
+      idx++;
+    }
+    let home = 0, away = 0;
+    for (const [pid, val] of current) {
+      if (homeIds.has(pid)) home += val; else away += val;
+    }
+    cumulativeBuckets.push({ minute, home, away });
+  }
+
+  let prevHome = 0, prevAway = 0;
+  for (const [pid, val] of baselineByPlayer) {
+    if (homeIds.has(pid)) prevHome += val; else prevAway += val;
+  }
+  const quarters = cumulativeBuckets.map((b) => {
+    const d = { minute: b.minute, home_net: b.home - prevHome, away_net: b.away - prevAway, total_net: (b.home - prevHome) + (b.away - prevAway) };
+    prevHome = b.home;
+    prevAway = b.away;
+    return d;
+  });
+
+  const topMovers = [...current.entries()]
+    .map(([pid, val]) => ({ pid, delta: val - (baselineByPlayer.get(pid) ?? 0) }))
+    .filter((m) => m.delta !== 0)
+    .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta))
+    .slice(0, 5)
+    .map((m) => {
+      const p = playerById.get(m.pid);
+      return { id: m.pid, web_name: p?.web_name ?? `#${m.pid}`, team_short: p?.team_short ?? null, net: m.delta };
+    });
+
+  const payload = {
+    generated_at: new Date().toISOString(),
+    home_team: homeShort,
+    away_team: awayShort,
+    kickoff_time: f.kickoff_time,
+    quarters,
+    top_movers: topMovers,
+  };
+
+  await sbPost("espn_match_transfer_report", [{
+    fixture_id: f.id,
+    event: f.event ?? null,
+    team_h_short: homeShort,
+    team_a_short: awayShort,
+    kickoff_time: f.kickoff_time,
+    payload,
+  }], "return=minimal,resolution=merge-duplicates");
+
+  const bodyText = topMovers.length
+    ? `Meeste beweging: ${topMovers[0].web_name} (${topMovers[0].net > 0 ? "+" : ""}${topMovers[0].net})`
+    : "Bekijk de kwartier-voor-kwartier transfers in de app.";
+  const allEmails = new Set<string>([GLOBAL_WATCH_EMAIL]);
+  for (const { alertEmails } of MY_TEAMS) for (const e of alertEmails) allEmails.add(e);
+  for (const email of allEmails) {
+    await sendPush(email, `Transferupdate: ${homeShort} - ${awayShort} afgelopen`, bodyText);
+  }
+}
+
 // ---- PUSHMELDINGEN (Web Push) ----
 // Alleen actief als de VAPID-sleutels als Supabase-secrets gezet zijn
 // (Edge Functions -> Manage secrets: VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY,
@@ -402,6 +523,15 @@ Deno.serve(async (req: Request) => {
           updated_at: capturedAt,
         }));
         await sbPost("espn_fixtures", fixtureRows, "return=minimal,resolution=merge-duplicates");
+
+        // Zodra een wedstrijd deze run als "finished" binnenkomt: kwartier-
+        // voor-kwartier transferrapport voor de spelers van beide clubs
+        // (best-effort, faalt dit dan gaat de rest van de sync door).
+        try {
+          await checkFinishedMatchesForTransferReport(fixtureRows, teams);
+        } catch (e) {
+          console.warn(`Wedstrijd-transferrapporten mislukt: ${String(e)}`);
+        }
       } else {
         console.warn(`espn fixtures gaf status ${fixturesRes.status}, overgeslagen.`);
       }
