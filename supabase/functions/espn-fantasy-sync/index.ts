@@ -218,7 +218,7 @@ Deno.serve(async (req: Request) => {
 
     // bestaande stand ophalen
     const prevRows: any[] = await sbGet(
-      "espn_players?select=id,now_cost,transfers_in,transfers_out,net_at_last_change&limit=2000",
+      "espn_players?select=id,now_cost,transfers_in,transfers_out,net_at_last_change,goals_scored,assists,bonus,clean_sheets&limit=2000",
     );
     const prev = new Map<number, any>(prevRows.map((r) => [r.id, r]));
 
@@ -261,10 +261,23 @@ Deno.serve(async (req: Request) => {
         changedPlayerIds.push(e.id);
       }
 
+      // Goals/assists/bonus/clean sheets meenemen in de wijzigingscheck (niet
+      // alleen prijs/transfers) -- zonder dit zou een speler die net heeft
+      // gescoord maar toevallig geen transferbeweging heeft, geen snapshot
+      // krijgen op precies het moment dat voor de wedstrijd-correlatie-
+      // analyse relevant is.
+      const goals = Number(e.goals_scored ?? 0);
+      const assists = Number(e.assists ?? 0);
+      const bonus = Number(e.bonus ?? 0);
+      const cleanSheets = Number(e.clean_sheets ?? 0);
       const changedSincePrev = !p ||
         p.now_cost !== e.now_cost ||
         Number(p.transfers_in) !== tin ||
-        Number(p.transfers_out) !== tout;
+        Number(p.transfers_out) !== tout ||
+        Number(p.goals_scored ?? 0) !== goals ||
+        Number(p.assists ?? 0) !== assists ||
+        Number(p.bonus ?? 0) !== bonus ||
+        Number(p.clean_sheets ?? 0) !== cleanSheets;
 
       if (changedSincePrev) {
         snapRows.push({
@@ -276,6 +289,11 @@ Deno.serve(async (req: Request) => {
           net_transfers: net,
           net_since_change: net - netAtLastChange,
           selected_by_percent: num(e.selected_by_percent),
+          goals_scored: goals,
+          assists: assists,
+          bonus: bonus,
+          clean_sheets: cleanSheets,
+          event_points: e.event_points ?? null,
         });
       }
 
@@ -305,6 +323,10 @@ Deno.serve(async (req: Request) => {
         minutes: e.minutes ?? 0,
         ep_next: num(e.ep_next),
         net_at_last_change: netAtLastChange,
+        goals_scored: goals,
+        assists: assists,
+        bonus: bonus,
+        clean_sheets: cleanSheets,
         updated_at: capturedAt,
       };
       playerRows.push(row);
