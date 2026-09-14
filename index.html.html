@@ -365,6 +365,7 @@
           <span class="stat-label">&#9878;&#65039; Trainingsbelasting</span>
           <span class="stat-val" id="vitalTrainingLoad">&mdash;</span>
           <span class="meal-meta" id="vitalTrainingLoadHint">Garmin (test)</span>
+          <span class="meal-meta" id="vitalTrainingLoadSyncedAt"></span>
         </div>
       </div>
     </div>
@@ -1315,7 +1316,7 @@ async function loadGarminVitalsForDate(owner, dateStr){
   try{
     const { data, error } = await supabaseClient
       .from('garmin_metrics')
-      .select('resting_hr, hrv, sleep_minutes, sleep_score, vo2max, training_load_ratio, acwr_status, body_battery_max, body_battery_change, training_status, training_feedback, training_balance_feedback, hrv_status, respiration')
+      .select('resting_hr, hrv, sleep_minutes, sleep_score, vo2max, training_load_ratio, acwr_status, body_battery_max, body_battery_change, training_status, training_feedback, training_balance_feedback, hrv_status, respiration, updated_at')
       .eq('owner', owner)
       .eq('metric_date', dateStr)
       .maybeSingle();
@@ -2858,6 +2859,13 @@ async function renderDashboard(){
   } else {
     loadEl.textContent = '\u2014';
     loadHintEl.textContent = 'Garmin (test)';
+  }
+  const loadSyncedAtEl = document.getElementById('vitalTrainingLoadSyncedAt');
+  if(gToday && gToday.updated_at){
+    const syncedAt = new Date(gToday.updated_at);
+    loadSyncedAtEl.textContent = 'Laatste sync: ' + syncedAt.toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' });
+  } else {
+    loadSyncedAtEl.textContent = '';
   }
 
   const weekDays = weekDates(state.currentDate);
