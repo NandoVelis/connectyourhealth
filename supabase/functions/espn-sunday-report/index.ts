@@ -136,8 +136,9 @@ Deno.serve(async (req: Request) => {
     for (const s of baselineSnaps) baselineByPlayer.set(s.player_id, s); // laatste wint (asc-sortering)
 
     const players: any[] = await sbGet(
-      "espn_players?select=id,web_name,team_short,now_cost,goals_scored,assists,bonus,clean_sheets,element_type",
+      "espn_players?select=id,web_name,team_short,now_cost,goals_scored,assists,bonus,clean_sheets,element_type,transfers_in,transfers_out",
     );
+    const playersById = new Map(players.map((p) => [p.id, p]));
     const momentum: any[] = await sbGet("espn_transfer_momentum?select=id,net_1h,net_24h");
     const momentumById = new Map(momentum.map((m) => [m.id, m]));
 
@@ -183,6 +184,35 @@ Deno.serve(async (req: Request) => {
       others_avg_net_24h: avg(othersNet24h) != null ? Math.round(avg(othersNet24h)!) : null,
     };
 
+    // Blessures/schorsingen vs. transfers: voor elke statusomslag van de
+    // afgelopen 7 dagen (gelogd door espn-fantasy-sync in espn_injury_events)
+    // de daadwerkelijke netto-transferbeweging sinds dat moment -- zelfde
+    // soort correlatie als hierboven voor prestaties, maar dan voor "reageert
+    // de markt op een blessure/schorsing, en hoe snel/hard".
+    const injuryWindowStart = new Date(Date.now() - 7 * 24 * 3600 * 1000).toISOString();
+    const injuryEvents: any[] = await sbGet(
+      `espn_injury_events?select=player_id,status,detected_at,net_transfers_at_detection` +
+        `&detected_at=gte.${encodeURIComponent(injuryWindowStart)}&order=detected_at.desc&limit=200`,
+    );
+    const injuryReactions = injuryEvents
+      .map((ev) => {
+        const pl = playersById.get(ev.player_id);
+        if (!pl) return null;
+        const currentNet = Number(pl.transfers_in ?? 0) - Number(pl.transfers_out ?? 0);
+        const netSinceDetection = currentNet - Number(ev.net_transfers_at_detection ?? 0);
+        return {
+          id: ev.player_id,
+          web_name: pl.web_name,
+          team_short: pl.team_short,
+          status: ev.status,
+          detected_at: ev.detected_at,
+          net_transfers_since: netSinceDetection,
+        };
+      })
+      .filter((r): r is NonNullable<typeof r> => !!r)
+      .sort((a, b) => Math.abs(b.net_transfers_since) - Math.abs(a.net_transfers_since))
+      .slice(0, 10);
+
     const topPerformers = performers
       .sort((a, b) => b.score - a.score)
       .slice(0, 10)
@@ -201,6 +231,7 @@ Deno.serve(async (req: Request) => {
       gameweek_start: gameweekStart,
       top_performers: topPerformers,
       correlation,
+      injury_reactions: injuryReactions,
     };
     await sbPost("espn_sunday_report", [{ event_id: currentEvent, payload }]);
 

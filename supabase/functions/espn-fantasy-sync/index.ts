@@ -464,6 +464,12 @@ Deno.serve(async (req: Request) => {
     // bij een volgende blessure, net als bij de prijswaarschuwingen.
     const newlyUnavailable: { id: number; status: string }[] = [];
     const recoveredIds: number[] = [];
+    // Logt elke statusomslag (ongeacht gevolgd team) met de cumulatieve
+    // netto transfers op dat moment -- espn-sunday-report gebruikt dit om
+    // achteraf te berekenen hoeveel transferbeweging een blessure/schorsing
+    // daadwerkelijk teweegbracht (net als de bestaande doelpunten/assists-
+    // vs-transfers-correlatie daar).
+    const injuryEventRows: any[] = [];
 
     for (const e of elements) {
       const tin = Number(e.transfers_in ?? 0);
@@ -500,6 +506,12 @@ Deno.serve(async (req: Request) => {
       // Status-omslag (blessure/schorsing/twijfelachtig) detecteren.
       if (p && p.status === "a" && e.status !== "a") {
         newlyUnavailable.push({ id: e.id, status: e.status });
+        injuryEventRows.push({
+          player_id: e.id,
+          status: e.status,
+          detected_at: capturedAt,
+          net_transfers_at_detection: net,
+        });
       } else if (p && p.status !== "a" && e.status === "a") {
         recoveredIds.push(e.id);
       }
@@ -588,6 +600,7 @@ Deno.serve(async (req: Request) => {
     await sbPost("espn_players", changedRows, "return=minimal,resolution=merge-duplicates");
     await sbPost("espn_snapshots", snapRows);
     await sbPost("espn_price_events", eventRows);
+    await sbPost("espn_injury_events", injuryEventRows);
     snaps = snapRows.length;
 
     // Alleen herijken als er deze run ook echt iets te leren viel.
@@ -800,13 +813,28 @@ Deno.serve(async (req: Request) => {
                 !alreadySet.has(`${id}:${unavailableById.get(id)!.status}`)
               );
               if (!toAlert.length) continue;
+              // Live transferreactie erbij: laat direct zien of de markt al
+              // op de blessure/schorsing reageert (koppeling met de
+              // transfers-in/uit-analyse, zoals gevraagd) i.p.v. dat je
+              // apart naar de Transfers-tab moet om dat te zien.
+              const momentumRes = await fetch(
+                `${SB_URL}/rest/v1/espn_transfer_momentum?select=id,net_1h,net_24h&id=in.(${toAlert.join(",")})`,
+                { headers: sbHeaders() },
+              );
+              const momentumById = new Map(
+                (momentumRes.ok ? await momentumRes.json() : []).map((m: any) => [m.id, m]),
+              );
               const lines = toAlert.map((id) => {
                 const pl = playerById.get(id)!;
                 const u = unavailableById.get(id)!;
                 const chance = pl.chance_of_playing_next_round;
+                const m: any = momentumById.get(id);
+                const momentumText = m && m.net_24h != null
+                  ? ` -- transfers laatste 24u: ${m.net_24h > 0 ? "+" : ""}${m.net_24h}`
+                  : "";
                 return `- ${pl.web_name} (${pl.team_short}): ${STATUS_LABELS[u.status] ?? u.status}` +
                   (chance != null ? ` (${chance}% kans om te spelen)` : "") +
-                  (pl.news ? ` -- ${pl.news}` : "");
+                  (pl.news ? ` -- ${pl.news}` : "") + momentumText;
               }).join("\n");
               if (resendKey) {
                 const mailRes = await fetch("https://api.resend.com/emails", {
