@@ -240,6 +240,16 @@ Deno.serve(async (req: Request) => {
         net_24h: p.net_24h,
       }));
 
+    // Niets zinnigs om te tonen (bv. nog geen geldige baseline voor deze
+    // ronde, zoals bij ronde 6): dan geen leeg/verwarrend overzicht opslaan
+    // of pushen, gewoon stil overslaan tot er wel weer data is.
+    if (!topPerformers.length && !injuryReactions.length) {
+      return new Response(
+        JSON.stringify({ ok: true, skipped: true, reason: "Geen prestaties of blessurereacties om te tonen deze ronde" }),
+        { headers: { ...CORS, "Content-Type": "application/json" } },
+      );
+    }
+
     const payload = {
       generated_at: new Date().toISOString(),
       event_id: currentEvent,
