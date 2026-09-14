@@ -127,9 +127,16 @@ Deno.serve(async (req: Request) => {
     // aftrap van deze ronde (tot 7 dagen terug, ruim genoeg om altijd een
     // punt te vinden). Zonder baseline (nieuw gevolgde speler) telt 0.
     const baselineWindStart = new Date(new Date(gameweekStart).getTime() - 7 * 24 * 3600 * 1000).toISOString();
+    // goals_scored=not.is.null: snapshots van vóór de goal/assist-tracking-
+    // migratie hebben deze velden nog als NULL (kolom bestond simpelweg nog
+    // niet) i.p.v. een echte 0-stand. Zo'n NULL-rij zou zonder dit filter
+    // als "0" baseline meetellen, waardoor iemands hele seizoenstotaal (incl.
+    // eerdere speelrondes) als "deze ronde" leek -- precies de fout die
+    // Zechiël onterecht 5 goals/3 assists in één ronde liet lijken hebben.
     const baselineSnaps: any[] = await sbGet(
       `espn_snapshots?select=player_id,captured_at,goals_scored,assists,bonus,clean_sheets` +
         `&captured_at=gte.${encodeURIComponent(baselineWindStart)}&captured_at=lte.${encodeURIComponent(gameweekStart)}` +
+        `&goals_scored=not.is.null` +
         `&order=captured_at.asc&limit=10000`,
     );
     const baselineByPlayer = new Map<number, any>();
@@ -145,7 +152,15 @@ Deno.serve(async (req: Request) => {
     const performers: any[] = [];
     for (const p of players) {
       const base = baselineByPlayer.get(p.id);
-      const deltaGoals = Number(p.goals_scored ?? 0) - Number(base?.goals_scored ?? 0);
+      // Zonder een echte baseline vlak vóór de aftrap van deze ronde is er
+      // geen betrouwbaar verschil te berekenen -- zonder deze check zou het
+      // hele seizoenstotaal van een speler die toevallig geen snapshot in
+      // dat venster heeft (bv. omdat er lang niets aan zijn stand
+      // veranderde) als "deze ronde" meetellen, wat overduidelijk onjuist
+      // is (bv. Zechiël leek zo 5 goals/3 assists in één ronde te hebben
+      // gemaakt, terwijl dat zijn seizoenstotaal was).
+      if (!base) continue;
+      const deltaGoals = Number(p.goals_scored ?? 0) - Number(base.goals_scored ?? 0);
       const deltaAssists = Number(p.assists ?? 0) - Number(base?.assists ?? 0);
       const deltaBonus = Number(p.bonus ?? 0) - Number(base?.bonus ?? 0);
       const deltaCleanSheets = Number(p.clean_sheets ?? 0) - Number(base?.clean_sheets ?? 0);
