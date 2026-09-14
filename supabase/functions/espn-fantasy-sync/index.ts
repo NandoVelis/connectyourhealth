@@ -74,6 +74,67 @@ const num = (v: unknown) => {
   return Number.isFinite(n) ? n : null;
 };
 
+// ---- AUTOMATISCHE HERIJKING VAN DE PRIJSDREMPEL-FACTOREN ----
+// Draait alleen als er deze run daadwerkelijk een prijswijziging
+// gedetecteerd is (extra databasewerk anders overbodig). Herberekent
+// rise_owner_factor/fall_owner_factor als het 75e percentiel van
+// |net_since_prev|/owners_estimate over ALLE ooit waargenomen wijzigingen
+// (met een bekend ankermoment, dus first_change_since_tracking uitgesloten
+// -- die gebruiken een andere teller/basis en zijn niet vergelijkbaar). Het
+// 75e percentiel i.p.v. de mediaan, zodat de meeste toekomstige wijzigingen
+// nog wel door de "bijna"-waarschuwingszone gaan voordat ze omslaan, i.p.v.
+// dat de helft ervan de drempel al gepasseerd is voordat we 'm zien. Minimaal
+// 5 waarnemingen per richting nodig -- met minder is een percentiel te
+// grillig (één uitschieter zou de drempel te veel laten springen).
+const PRICE_THRESHOLD_MIN_SAMPLES = 5;
+function percentile(sorted: number[], p: number): number | null {
+  if (!sorted.length) return null;
+  const idx = p * (sorted.length - 1);
+  const lo = Math.floor(idx), hi = Math.ceil(idx);
+  if (lo === hi) return sorted[lo];
+  return sorted[lo] + (idx - lo) * (sorted[hi] - sorted[lo]);
+}
+async function recalibratePriceThresholdFactors() {
+  const events: any[] = await sbGet(
+    "espn_price_events?select=direction,net_since_prev,owners_estimate,first_change_since_tracking" +
+      "&first_change_since_tracking=is.null&owners_estimate=gt.0",
+  );
+  const ratiosFor = (dir: number) =>
+    events
+      .filter((e) => e.direction === dir)
+      .map((e) => Math.abs(e.net_since_prev) / e.owners_estimate)
+      .sort((a, b) => a - b);
+
+  const riseRatios = ratiosFor(1);
+  const fallRatios = ratiosFor(-1);
+  const nowIso = new Date().toISOString();
+  const updates: any[] = [];
+
+  if (riseRatios.length >= PRICE_THRESHOLD_MIN_SAMPLES) {
+    const factor = percentile(riseRatios, 0.75)!;
+    updates.push({
+      key: "rise_owner_factor",
+      value: factor.toFixed(4),
+      note:
+        `Automatisch herijkt op ${nowIso} o.b.v. ${riseRatios.length} waargenomen stijgingen ` +
+        `(75e percentiel van |net_since_prev|/owners_estimate).`,
+    });
+  }
+  if (fallRatios.length >= PRICE_THRESHOLD_MIN_SAMPLES) {
+    const factor = percentile(fallRatios, 0.75)!;
+    updates.push({
+      key: "fall_owner_factor",
+      value: factor.toFixed(4),
+      note:
+        `Automatisch herijkt op ${nowIso} o.b.v. ${fallRatios.length} waargenomen dalingen ` +
+        `(75e percentiel van |net_since_prev|/owners_estimate).`,
+    });
+  }
+  if (updates.length) {
+    await sbPost("espn_model_config", updates, "return=minimal,resolution=merge-duplicates");
+  }
+}
+
 // ---- PUSHMELDINGEN (Web Push) ----
 // Alleen actief als de VAPID-sleutels als Supabase-secrets gezet zijn
 // (Edge Functions -> Manage secrets: VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY,
@@ -262,6 +323,15 @@ Deno.serve(async (req: Request) => {
     await sbPost("espn_snapshots", snapRows);
     await sbPost("espn_price_events", eventRows);
     snaps = snapRows.length;
+
+    // Alleen herijken als er deze run ook echt iets te leren viel.
+    if (eventRows.length) {
+      try {
+        await recalibratePriceThresholdFactors();
+      } catch (e) {
+        console.warn(`Herijking prijsdrempel-factoren mislukt: ${String(e)}`);
+      }
+    }
 
     // Lookup-tabellen voor de "daadwerkelijke wijziging"-melding hieronder
     // (los van de "dreigt te wijzigen"-waarschuwing, die alleen de fase
