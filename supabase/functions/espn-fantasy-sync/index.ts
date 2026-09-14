@@ -135,14 +135,163 @@ async function recalibratePriceThresholdFactors() {
   }
 }
 
-// ---- KWARTIER-VOOR-KWARTIER TRANSFERRAPPORT PER WEDSTRIJD ----
+// ---- GEDEELDE KWARTIER-VOOR-KWARTIER TRANSFERBEREKENING ----
+// Gebruikt door zowel het pre-match-trendrapport (30 min vóór aftrap) als
+// het post-match-rapport (na afloop) -- alleen het tijdvenster verschilt.
+// net_transfers is cumulatief per speler, dus het verschil tussen twee
+// opeenvolgende kwartier-standen is precies het aantal transfers dat in
+// dat kwartier bijkwam.
+async function computeTransferQuarters(
+  playerIds: number[],
+  homeIds: Set<number>,
+  windowStart: Date,
+  windowEnd: Date,
+) {
+  const baseline: any[] = await sbGet(
+    `espn_snapshots?select=player_id,net_transfers,captured_at&player_id=in.(${playerIds.join(",")})` +
+      `&captured_at=lte.${encodeURIComponent(windowStart.toISOString())}&order=captured_at.asc&limit=10000`,
+  );
+  const baselineByPlayer = new Map<number, number>();
+  for (const s of baseline) baselineByPlayer.set(s.player_id, Number(s.net_transfers)); // laatste (asc) wint
+
+  const inWindow: any[] = await sbGet(
+    `espn_snapshots?select=player_id,net_transfers,captured_at&player_id=in.(${playerIds.join(",")})` +
+      `&captured_at=gt.${encodeURIComponent(windowStart.toISOString())}&captured_at=lte.${encodeURIComponent(windowEnd.toISOString())}` +
+      `&order=captured_at.asc&limit=10000`,
+  );
+
+  const current = new Map<number, number>(baselineByPlayer);
+  let idx = 0;
+  const totalMinutes = Math.round((windowEnd.getTime() - windowStart.getTime()) / 60000);
+  const cumulativeBuckets: { minute: number; home: number; away: number }[] = [];
+  for (let minute = 15; minute <= totalMinutes; minute += 15) {
+    const boundary = windowStart.getTime() + minute * 60 * 1000;
+    while (idx < inWindow.length && new Date(inWindow[idx].captured_at).getTime() <= boundary) {
+      current.set(inWindow[idx].player_id, Number(inWindow[idx].net_transfers));
+      idx++;
+    }
+    let home = 0, away = 0;
+    for (const [pid, val] of current) {
+      if (homeIds.has(pid)) home += val; else away += val;
+    }
+    cumulativeBuckets.push({ minute, home, away });
+  }
+
+  let prevHome = 0, prevAway = 0;
+  for (const [pid, val] of baselineByPlayer) {
+    if (homeIds.has(pid)) prevHome += val; else prevAway += val;
+  }
+  const quarters = cumulativeBuckets.map((b) => {
+    const d = { minute: b.minute, home_net: b.home - prevHome, away_net: b.away - prevAway, total_net: (b.home - prevHome) + (b.away - prevAway) };
+    prevHome = b.home;
+    prevAway = b.away;
+    return d;
+  });
+
+  const topMovers = [...current.entries()]
+    .map(([pid, delta_val]) => ({ pid, delta: delta_val - (baselineByPlayer.get(pid) ?? 0) }))
+    .filter((m) => m.delta !== 0)
+    .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta))
+    .slice(0, 5);
+
+  return { quarters, topMovers };
+}
+
+async function loadMatchPlayers(f: any) {
+  const players: any[] = await sbGet(
+    `espn_players?select=id,web_name,team_id,team_short&team_id=in.(${f.team_h},${f.team_a})`,
+  );
+  const playerIds = players.map((p: any) => p.id);
+  const homeIds = new Set(players.filter((p: any) => p.team_id === f.team_h).map((p: any) => p.id));
+  const playerById = new Map(players.map((p: any) => [p.id, p]));
+  return { players, playerIds, homeIds, playerById };
+}
+
+function namedMovers(topMovers: { pid: number; delta: number }[], playerById: Map<number, any>) {
+  return topMovers.map((m) => {
+    const p = playerById.get(m.pid);
+    return { id: m.pid, web_name: p?.web_name ?? `#${m.pid}`, team_short: p?.team_short ?? null, net: m.delta };
+  });
+}
+
+// ---- PRE-MATCH TRANSFERTREND (30 MIN VOOR AFTRAP) ----
+// Zodra een fixture nog 15-45 min van aftrap verwijderd is (dat venster i.p.v.
+// precies 30 min, want de sync draait elke 15 min en moet dit venster
+// gegarandeerd één keer raken) en er nog geen pre-match-rapport voor is:
+// kwartierstrend van de laatste 3 uur vóór aftrap, om een eventuele
+// opstelling-gerelateerde transferbeweging vooraf te kunnen spotten.
+async function checkUpcomingMatchesForPreMatchTrend(fixtures: any[], teams: Record<number, string>) {
+  const upcoming = fixtures.filter((f: any) => {
+    if (f.finished || !f.kickoff_time) return false;
+    const minutesToKickoff = (new Date(f.kickoff_time).getTime() - Date.now()) / 60000;
+    return minutesToKickoff >= 15 && minutesToKickoff <= 45;
+  });
+  if (!upcoming.length) return;
+
+  const idsParam = upcoming.map((f: any) => f.id).join(",");
+  const existing: any[] = await sbGet(`espn_pre_match_transfer_report?select=fixture_id&fixture_id=in.(${idsParam})`);
+  const existingIds = new Set(existing.map((e: any) => e.fixture_id));
+  const toReport = upcoming.filter((f: any) => !existingIds.has(f.id));
+
+  for (const f of toReport) {
+    try {
+      await buildAndStorePreMatchTrendReport(f, teams);
+    } catch (e) {
+      console.warn(`Pre-match-transferrapport (fixture ${f.id}) mislukt: ${String(e)}`);
+    }
+  }
+}
+
+async function buildAndStorePreMatchTrendReport(f: any, teams: Record<number, string>) {
+  const kickoff = new Date(f.kickoff_time);
+  const windowStart = new Date(kickoff.getTime() - 180 * 60 * 1000);
+  const homeShort = teams[f.team_h] ?? null;
+  const awayShort = teams[f.team_a] ?? null;
+
+  const { playerIds, homeIds, playerById } = await loadMatchPlayers(f);
+  if (!playerIds.length) return;
+
+  const { quarters, topMovers } = await computeTransferQuarters(playerIds, homeIds, windowStart, kickoff);
+  // Labels omzetten naar "minuten vóór aftrap" (aflopend naar 0) i.p.v.
+  // "minuten sinds windowStart", zodat de weergave logisch aanvoelt als
+  // een aftelling richting de aftrap.
+  const totalMinutes = Math.round((kickoff.getTime() - windowStart.getTime()) / 60000);
+  const quartersBeforeKickoff = quarters.map((q) => ({ ...q, minutes_before_kickoff: totalMinutes - q.minute }));
+
+  const payload = {
+    generated_at: new Date().toISOString(),
+    home_team: homeShort,
+    away_team: awayShort,
+    kickoff_time: f.kickoff_time,
+    quarters: quartersBeforeKickoff,
+    top_movers: namedMovers(topMovers, playerById),
+  };
+
+  await sbPost("espn_pre_match_transfer_report", [{
+    fixture_id: f.id,
+    event: f.event ?? null,
+    team_h_short: homeShort,
+    team_a_short: awayShort,
+    kickoff_time: f.kickoff_time,
+    payload,
+  }], "return=minimal,resolution=merge-duplicates");
+
+  const namedTop = payload.top_movers;
+  const bodyText = namedTop.length
+    ? `Meeste beweging vooraf: ${namedTop[0].web_name} (${namedTop[0].net > 0 ? "+" : ""}${namedTop[0].net})`
+    : "Bekijk de transfertrend voor de wedstrijd in de app.";
+  const allEmails = new Set<string>([GLOBAL_WATCH_EMAIL]);
+  for (const { alertEmails } of MY_TEAMS) for (const e of alertEmails) allEmails.add(e);
+  for (const email of allEmails) {
+    await sendPush(email, `Trend vóór ${homeShort} - ${awayShort} (begint over ~30 min)`, bodyText);
+  }
+}
+
+// ---- KWARTIER-VOOR-KWARTIER TRANSFERRAPPORT PER WEDSTRIJD (NA AFLOOP) ----
 // Zodra een wedstrijd als "finished" binnenkomt (en nog geen rapport heeft),
 // wordt voor de spelers van BEIDE clubs berekend hoeveel netto transfers er
 // per kwartier bijkwamen, vanaf aftrap tot 3 uur erna (dekt de wedstrijd +
-// een post-wedstrijd-reactievenster). Gebruikt de bestaande 15-min
-// snapshots (net_transfers is cumulatief, dus het verschil tussen twee
-// opeenvolgende kwartier-standen is precies het aantal transfers dat er in
-// dat kwartier bijkwam).
+// een post-wedstrijd-reactievenster).
 async function checkFinishedMatchesForTransferReport(fixtures: any[], teams: Record<number, string>) {
   const recentFinished = fixtures.filter((f: any) =>
     f.finished && f.kickoff_time && Date.now() - new Date(f.kickoff_time).getTime() < 24 * 3600 * 1000
@@ -169,64 +318,11 @@ async function buildAndStoreMatchTransferReport(f: any, teams: Record<number, st
   const homeShort = teams[f.team_h] ?? null;
   const awayShort = teams[f.team_a] ?? null;
 
-  const players: any[] = await sbGet(
-    `espn_players?select=id,web_name,team_id,team_short&team_id=in.(${f.team_h},${f.team_a})`,
-  );
-  const playerIds = players.map((p: any) => p.id);
+  const { playerIds, homeIds, playerById } = await loadMatchPlayers(f);
   if (!playerIds.length) return;
-  const homeIds = new Set(players.filter((p: any) => p.team_id === f.team_h).map((p: any) => p.id));
-  const playerById = new Map(players.map((p: any) => [p.id, p]));
 
-  // Laatst bekende stand vlak vóór aftrap, als startpunt voor de kwartieren.
-  const baseline: any[] = await sbGet(
-    `espn_snapshots?select=player_id,net_transfers,captured_at&player_id=in.(${playerIds.join(",")})` +
-      `&captured_at=lte.${encodeURIComponent(kickoff.toISOString())}&order=captured_at.asc&limit=10000`,
-  );
-  const baselineByPlayer = new Map<number, number>();
-  for (const s of baseline) baselineByPlayer.set(s.player_id, Number(s.net_transfers)); // laatste (asc) wint
-
-  const inWindow: any[] = await sbGet(
-    `espn_snapshots?select=player_id,net_transfers,captured_at&player_id=in.(${playerIds.join(",")})` +
-      `&captured_at=gt.${encodeURIComponent(kickoff.toISOString())}&captured_at=lte.${encodeURIComponent(windowEnd.toISOString())}` +
-      `&order=captured_at.asc&limit=10000`,
-  );
-
-  const current = new Map<number, number>(baselineByPlayer);
-  let idx = 0;
-  const cumulativeBuckets: { minute: number; home: number; away: number }[] = [];
-  for (let minute = 15; minute <= 180; minute += 15) {
-    const boundary = kickoff.getTime() + minute * 60 * 1000;
-    while (idx < inWindow.length && new Date(inWindow[idx].captured_at).getTime() <= boundary) {
-      current.set(inWindow[idx].player_id, Number(inWindow[idx].net_transfers));
-      idx++;
-    }
-    let home = 0, away = 0;
-    for (const [pid, val] of current) {
-      if (homeIds.has(pid)) home += val; else away += val;
-    }
-    cumulativeBuckets.push({ minute, home, away });
-  }
-
-  let prevHome = 0, prevAway = 0;
-  for (const [pid, val] of baselineByPlayer) {
-    if (homeIds.has(pid)) prevHome += val; else prevAway += val;
-  }
-  const quarters = cumulativeBuckets.map((b) => {
-    const d = { minute: b.minute, home_net: b.home - prevHome, away_net: b.away - prevAway, total_net: (b.home - prevHome) + (b.away - prevAway) };
-    prevHome = b.home;
-    prevAway = b.away;
-    return d;
-  });
-
-  const topMovers = [...current.entries()]
-    .map(([pid, val]) => ({ pid, delta: val - (baselineByPlayer.get(pid) ?? 0) }))
-    .filter((m) => m.delta !== 0)
-    .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta))
-    .slice(0, 5)
-    .map((m) => {
-      const p = playerById.get(m.pid);
-      return { id: m.pid, web_name: p?.web_name ?? `#${m.pid}`, team_short: p?.team_short ?? null, net: m.delta };
-    });
+  const { quarters, topMovers } = await computeTransferQuarters(playerIds, homeIds, kickoff, windowEnd);
+  const namedTop = namedMovers(topMovers, playerById);
 
   const payload = {
     generated_at: new Date().toISOString(),
@@ -234,7 +330,7 @@ async function buildAndStoreMatchTransferReport(f: any, teams: Record<number, st
     away_team: awayShort,
     kickoff_time: f.kickoff_time,
     quarters,
-    top_movers: topMovers,
+    top_movers: namedTop,
   };
 
   await sbPost("espn_match_transfer_report", [{
@@ -246,8 +342,8 @@ async function buildAndStoreMatchTransferReport(f: any, teams: Record<number, st
     payload,
   }], "return=minimal,resolution=merge-duplicates");
 
-  const bodyText = topMovers.length
-    ? `Meeste beweging: ${topMovers[0].web_name} (${topMovers[0].net > 0 ? "+" : ""}${topMovers[0].net})`
+  const bodyText = namedTop.length
+    ? `Meeste beweging: ${namedTop[0].web_name} (${namedTop[0].net > 0 ? "+" : ""}${namedTop[0].net})`
     : "Bekijk de kwartier-voor-kwartier transfers in de app.";
   const allEmails = new Set<string>([GLOBAL_WATCH_EMAIL]);
   for (const { alertEmails } of MY_TEAMS) for (const e of alertEmails) allEmails.add(e);
@@ -523,6 +619,14 @@ Deno.serve(async (req: Request) => {
           updated_at: capturedAt,
         }));
         await sbPost("espn_fixtures", fixtureRows, "return=minimal,resolution=merge-duplicates");
+
+        // Ong. 30 min vóór aftrap: transfertrend van de laatste 3 uur, om een
+        // eventuele opstelling-gerelateerde beweging vooraf te kunnen spotten.
+        try {
+          await checkUpcomingMatchesForPreMatchTrend(fixtureRows, teams);
+        } catch (e) {
+          console.warn(`Pre-match-transferrapporten mislukt: ${String(e)}`);
+        }
 
         // Zodra een wedstrijd deze run als "finished" binnenkomt: kwartier-
         // voor-kwartier transferrapport voor de spelers van beide clubs

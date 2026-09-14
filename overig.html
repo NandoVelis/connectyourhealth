@@ -157,22 +157,22 @@
   /* Wekelijkse samenvatting-popup (elke vrijdag 19:00) -- toont zodra er
      een nieuwere digest is dan de laatst geziene (per e-mailadres). Ook
      hergebruikt door #sundayReportPopup (elke zondag 19:30). */
-  #weeklyDigestPopup, #sundayReportPopup, #matchReportPopup{position:fixed;top:16px;left:50%;transform:translateX(-50%);
+  #weeklyDigestPopup, #sundayReportPopup, #matchReportPopup, #preMatchReportPopup{position:fixed;top:16px;left:50%;transform:translateX(-50%);
     z-index:50;max-width:480px;width:calc(100% - 32px);max-height:calc(100vh - 32px);
     overflow-y:auto;background:var(--navy-2);border:1px solid var(--line);
     border-radius:14px;padding:16px 18px;box-shadow:0 12px 32px rgba(0,0,0,.4)}
-  #weeklyDigestPopup h4, #sundayReportPopup h4, #matchReportPopup h4{margin:16px 0 8px;font-size:14px}
-  #weeklyDigestPopup h4:first-of-type, #sundayReportPopup h4:first-of-type, #matchReportPopup h4:first-of-type{margin-top:0}
-  #weeklyDigestPopup .row, #sundayReportPopup .row, #matchReportPopup .row{display:flex;justify-content:space-between;align-items:center;
+  #weeklyDigestPopup h4, #sundayReportPopup h4, #matchReportPopup h4, #preMatchReportPopup h4{margin:16px 0 8px;font-size:14px}
+  #weeklyDigestPopup h4:first-of-type, #sundayReportPopup h4:first-of-type, #matchReportPopup h4:first-of-type, #preMatchReportPopup h4:first-of-type{margin-top:0}
+  #weeklyDigestPopup .row, #sundayReportPopup .row, #matchReportPopup .row, #preMatchReportPopup .row{display:flex;justify-content:space-between;align-items:center;
     padding:6px 0;border-top:1px solid var(--line)}
-  #weeklyDigestPopup .row:first-of-type, #sundayReportPopup .row:first-of-type, #matchReportPopup .row:first-of-type{border-top:none}
-  #weeklyDigestPopup button.close, #sundayReportPopup button.close, #matchReportPopup button.close{position:absolute;top:10px;right:12px;background:none;border:none;
+  #weeklyDigestPopup .row:first-of-type, #sundayReportPopup .row:first-of-type, #matchReportPopup .row:first-of-type, #preMatchReportPopup .row:first-of-type{border-top:none}
+  #weeklyDigestPopup button.close, #sundayReportPopup button.close, #matchReportPopup button.close, #preMatchReportPopup button.close{position:absolute;top:10px;right:12px;background:none;border:none;
     color:var(--muted);font-size:18px;cursor:pointer;line-height:1;padding:4px}
-  #matchReportPopup .quarter-bar{display:flex;align-items:center;gap:8px;padding:3px 0;font-size:12px}
-  #matchReportPopup .quarter-bar .label{width:38px;color:var(--muted);flex-shrink:0}
-  #matchReportPopup .quarter-bar .bar-track{flex:1;height:10px;background:var(--card);border-radius:5px;overflow:hidden;position:relative}
-  #matchReportPopup .quarter-bar .bar-fill{position:absolute;top:0;bottom:0;background:var(--up)}
-  #matchReportPopup .quarter-bar .val{width:44px;text-align:right;flex-shrink:0}
+  #matchReportPopup .quarter-bar, #preMatchReportPopup .quarter-bar{display:flex;align-items:center;gap:8px;padding:3px 0;font-size:12px}
+  #matchReportPopup .quarter-bar .label, #preMatchReportPopup .quarter-bar .label{width:38px;color:var(--muted);flex-shrink:0}
+  #matchReportPopup .quarter-bar .bar-track, #preMatchReportPopup .quarter-bar .bar-track{flex:1;height:10px;background:var(--card);border-radius:5px;overflow:hidden;position:relative}
+  #matchReportPopup .quarter-bar .bar-fill, #preMatchReportPopup .quarter-bar .bar-fill{position:absolute;top:0;bottom:0;background:var(--up)}
+  #matchReportPopup .quarter-bar .val, #preMatchReportPopup .quarter-bar .val{width:44px;text-align:right;flex-shrink:0}
 </style>
 </head>
 <body>
@@ -198,6 +198,7 @@
 <div id="weeklyDigestPopup" hidden></div>
 <div id="sundayReportPopup" hidden></div>
 <div id="matchReportPopup" hidden></div>
+<div id="preMatchReportPopup" hidden></div>
 
 <!-- ======================= APP ======================= -->
 <div id="app" class="wrap" hidden>
@@ -683,7 +684,7 @@ let FIXTURES = [], TEAMS = {}, MY_TEAM = null, MOMENTUM = [];
 
 async function load(){
   try{
-    const [game, board, events, logs, myTeam, fixtures, teams, knownManagers, knownTransfers, xgSnapshot, momentum, weeklyDigest, sundayReport, matchReports] = await Promise.all([
+    const [game, board, events, logs, myTeam, fixtures, teams, knownManagers, knownTransfers, xgSnapshot, momentum, weeklyDigest, sundayReport, matchReports, preMatchReports] = await Promise.all([
       api('espn_game?id=eq.1&select=*'),
       api('espn_price_board?select=*&limit=1000'),
       api('espn_price_events?select=*&order=detected_at.desc&limit=60'),
@@ -697,7 +698,8 @@ async function load(){
       api('espn_transfer_momentum?select=*&limit=1000'),
       api('espn_weekly_digest?select=*&order=generated_at.desc&limit=1'),
       api('espn_sunday_report?select=*&order=generated_at.desc&limit=1'),
-      api('espn_match_transfer_report?select=*&order=kickoff_time.desc&limit=5')
+      api('espn_match_transfer_report?select=*&order=kickoff_time.desc&limit=5'),
+      api('espn_pre_match_transfer_report?select=*&order=kickoff_time.desc&limit=5')
     ]);
     GAME = game[0] || {};
     ROWS = board.map(r => {
@@ -737,6 +739,7 @@ async function load(){
     checkWeeklyDigest(weeklyDigest[0] || null);
     checkSundayReport(sundayReport[0] || null);
     checkMatchReports(matchReports);
+    checkPreMatchReports(preMatchReports);
   }catch(e){
     $('#tiles').innerHTML = '<div class="tile"><div class="label">Fout</div><div class="sub">' + e.message + '</div></div>';
   }
@@ -1486,6 +1489,53 @@ function checkMatchReports(rows){
   try { localStorage.setItem(seenKey, JSON.stringify(updatedSeen)); } catch(e){}
   MATCH_REPORT_QUEUE = unseen.slice(1).map(r=>r.payload);
   showMatchReportPopup(unseen[0].payload);
+}
+// Transfertrend vóór aftrap (ong. 30 min van tevoren) -- zelfde patroon als
+// het post-match-rapport hierboven, maar de kwartieren zijn hier gelabeld
+// als "minuten vóór aftrap" (aflopend naar 0) i.p.v. minuten sinds het begin
+// van het venster.
+function preMatchQuarterBar(q, maxAbs){
+  const pct = maxAbs>0 ? Math.min(100, Math.round(Math.abs(q.total_net)/maxAbs*100)) : 0;
+  const isUp = q.total_net >= 0;
+  return `<div class="quarter-bar">
+    <span class="label">-${q.minutes_before_kickoff}'</span>
+    <div class="bar-track"><div class="bar-fill" style="left:0;width:${pct}%;background:var(--${isUp?'up':'down'});"></div></div>
+    <span class="val">${signed(q.total_net)}</span>
+  </div>`;
+}
+let PRE_MATCH_REPORT_QUEUE = [];
+function showPreMatchReportPopup(payload){
+  const el = $('#preMatchReportPopup');
+  if (!el) return;
+  const maxAbs = Math.max(1, ...(payload.quarters||[]).map(q=>Math.abs(q.total_net)));
+  const bars = (payload.quarters||[]).map(q=>preMatchQuarterBar(q, maxAbs)).join('');
+  const moversList = (payload.top_movers||[]).slice(0,5).map(m =>
+    `<div class="row"><span>${m.web_name} <span class="meta">(${m.team_short})</span></span><span>${signed(m.net)}</span></div>`
+  ).join('') || '<div class="empty">Geen opvallende bewegingen.</div>';
+  el.innerHTML = `<button class="close" aria-label="Sluiten" type="button">&times;</button>
+    <h4>${payload.home_team} - ${payload.away_team}</h4>
+    <div class="meta" style="margin-bottom:8px;">Transfertrend vóór aftrap (${dt(payload.kickoff_time)})</div>
+    ${bars}
+    <h4>Meeste beweging vooraf</h4>${moversList}`;
+  el.hidden = false;
+  el.querySelector('button.close').addEventListener('click', () => {
+    el.hidden = true;
+    if (PRE_MATCH_REPORT_QUEUE.length) showPreMatchReportPopup(PRE_MATCH_REPORT_QUEUE.shift());
+  });
+}
+function checkPreMatchReports(rows){
+  if (!rows || !rows.length || !CURRENT_EMAIL) return;
+  const seenKey = `preMatchReportsSeen:${CURRENT_EMAIL}`;
+  let seen = [];
+  try { seen = JSON.parse(localStorage.getItem(seenKey) || '[]'); } catch(e){}
+  const seenSet = new Set(seen);
+  const unseen = rows.filter(r => !seenSet.has(r.fixture_id))
+    .sort((a,b) => new Date(a.kickoff_time) - new Date(b.kickoff_time));
+  if (!unseen.length) return;
+  const updatedSeen = [...seenSet, ...unseen.map(r=>r.fixture_id)].slice(-200);
+  try { localStorage.setItem(seenKey, JSON.stringify(updatedSeen)); } catch(e){}
+  PRE_MATCH_REPORT_QUEUE = unseen.slice(1).map(r=>r.payload);
+  showPreMatchReportPopup(unseen[0].payload);
 }
 function renderXgSnapshot(rows){
   const tbody = $('#xgSnapshotTbl tbody');
