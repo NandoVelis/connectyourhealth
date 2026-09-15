@@ -216,6 +216,7 @@
 
   <nav class="tabs" role="tablist">
     <button role="tab" aria-selected="true"  data-tab="prijzen">Prijzen</button>
+    <button role="tab" aria-selected="false" data-tab="punten">Punten</button>
     <button role="tab" aria-selected="false" data-tab="team">Mijn team</button>
     <button role="tab" aria-selected="false" data-tab="transfers">Transfers</button>
     <button role="tab" aria-selected="false" data-tab="competitie">Competitie</button>
@@ -287,6 +288,34 @@
       </table>
     </div>
     <p class="note" id="modelNote"></p>
+  </section>
+
+  <!-- ---------- PUNTEN ---------- -->
+  <section class="panel" id="panel-punten" hidden>
+    <div class="cols">
+      <div class="card">
+        <h3>Meeste punten dit seizoen</h3>
+        <p class="hint">Top 10 spelers op totaal aantal punten.</p>
+        <div id="topSeasonPts"><div class="empty">Laden…</div></div>
+      </div>
+      <div class="card">
+        <h3>Meeste punten afgelopen speelronde</h3>
+        <p class="hint">Top 10 spelers op punten in de laatst gespeelde ronde.</p>
+        <div id="topEventPts"><div class="empty">Laden…</div></div>
+      </div>
+    </div>
+    <div class="cols" style="margin-top:16px">
+      <div class="card">
+        <h3>Beste vorm</h3>
+        <p class="hint">ESPN's vorm-cijfer (gemiddelde punten laatste wedstrijden).</p>
+        <div id="topForm"><div class="empty">Laden…</div></div>
+      </div>
+      <div class="card">
+        <h3>Beste waarde (Pt/€M)</h3>
+        <p class="hint">Totaalpunten per miljoen huidige prijs -- wie levert het meest op per euro.</p>
+        <div id="topValue"><div class="empty">Laden…</div></div>
+      </div>
+    </div>
 
     <div class="card" style="margin-top:16px">
       <h3>Onderliggende cijfers (xG)</h3>
@@ -345,8 +374,11 @@
       </div>
       <div id="benchAnalysis" style="margin-top:14px"></div>
     </div>
+  </section>
 
-    <div class="card" style="margin-top:16px">
+  <!-- ---------- TRANSFERS ---------- -->
+  <section class="panel" id="panel-transfers" hidden>
+    <div class="card" style="margin-bottom:16px">
       <h3>Transfersuggesties</h3>
       <p class="hint" id="tsHint">Gesorteerd op verwachte punten over het gekozen venster (ESPN's eigen ep_next x aantal wedstrijden, dubbele speelronde telt dubbel, thuis telt iets zwaarder dan uit) plus een kleine bijstelling voor de prijstrend: een speler die binnenkort duurder wordt scoort iets hoger, een speler die binnenkort goedkoper wordt iets lager. Pt/€M (totaalpunten per miljoen huidige prijs) staat er los naast als extra waarde-indicatie -- telt nog niet mee in de sortering. Per suggestie staat de zwakste eigen speler in dezelfde positie als aanbevolen wissel.</p>
       <div class="filters">
@@ -387,10 +419,6 @@
         </table>
       </div>
     </div>
-  </section>
-
-  <!-- ---------- TRANSFERS ---------- -->
-  <section class="panel" id="panel-transfers" hidden>
     <div class="cols">
       <div class="card">
         <h3>Meest gekocht deze speelronde</h3>
@@ -803,7 +831,7 @@ async function load(){
     MY_TEAM = myTeam.find(t => t.entry_id === MY_ENTRY_ID) || null;
     MOMENTUM = momentum;
     attachXgToPlayers(xgSnapshot);
-    renderTiles(); renderWatch(); renderTable();
+    renderTiles(); renderWatch(); renderTable(); renderPointsStats();
     renderTransfers(); renderEvents(events); renderLogs(logs);
     renderMomentum();
     renderMyTeam(MY_TEAM);
@@ -1447,6 +1475,36 @@ function watchRow(r, dir){
     <div class="bar"><i class="${dir}" style="width:${Math.min(p*100,100)}%"></i></div>
   </div>`;
 }
+/* ---------- punten-statistieken ---------- */
+const ptsLeaderRow = (r, valueLabel) => `<div class="row">
+    <div>
+      <div class="name">${r.web_name} <span class="meta">${r.team_short} · ${POS_SHORT[r.element_type]||''}</span></div>
+      <div class="meta">${eur(r.now_cost)} · ${r.selected_by_percent}% bezit</div>
+    </div>
+    <div class="pct">${valueLabel}</div>
+  </div>`;
+function renderPointsStats(){
+  const bySeason = [...ROWS].filter(r => r.total_points != null).sort((a,b) => b.total_points - a.total_points).slice(0,10);
+  $('#topSeasonPts').innerHTML = bySeason.length
+    ? bySeason.map(r => ptsLeaderRow(r, nf.format(r.total_points) + ' pt')).join('')
+    : '<div class="empty">Nog geen data.</div>';
+
+  const byEvent = [...ROWS].filter(r => r.event_points != null).sort((a,b) => b.event_points - a.event_points).slice(0,10);
+  $('#topEventPts').innerHTML = byEvent.length
+    ? byEvent.map(r => ptsLeaderRow(r, nf.format(r.event_points) + ' pt')).join('')
+    : '<div class="empty">Nog geen data.</div>';
+
+  const byForm = [...ROWS].filter(r => r.form != null && Number(r.form) > 0).sort((a,b) => Number(b.form) - Number(a.form)).slice(0,10);
+  $('#topForm').innerHTML = byForm.length
+    ? byForm.map(r => ptsLeaderRow(r, r.form)).join('')
+    : '<div class="empty">Nog geen data.</div>';
+
+  const byValue = [...ROWS].filter(r => r.value_score != null && Number(r.value_score) > 0).sort((a,b) => Number(b.value_score) - Number(a.value_score)).slice(0,10);
+  $('#topValue').innerHTML = byValue.length
+    ? byValue.map(r => ptsLeaderRow(r, r.value_score)).join('')
+    : '<div class="empty">Nog geen data.</div>';
+}
+
 function renderWatch(){
   // Dalers onder 1,5% bezit weggefilterd -- bij zo weinig eigenaren zegt de
   // voortgangsbalk weinig en heb je 'm waarschijnlijk toch niet in je team.
