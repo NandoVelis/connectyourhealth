@@ -373,7 +373,7 @@
       <div class="tablewrap">
         <table id="tsTbl">
           <thead><tr>
-            <th>Speler</th><th>Club</th><th>Positie</th><th>Prijs</th><th>Pt/€M</th><th>Wedstrijden</th><th>Verwacht (venster)</th><th>Aanbevolen wissel</th>
+            <th>Speler</th><th>Club</th><th>Positie</th><th>Prijs</th><th>Pt/€M</th><th>Wedstrijden</th><th>Verwacht (venster)</th><th>xP (3R)</th><th>xP (5R)</th><th>Aanbevolen wissel</th>
           </tr></thead>
           <tbody></tbody>
         </table>
@@ -963,7 +963,7 @@ function fixturesCountByTeam(windowSize){
 function renderTransferSuggestions(){
   const tbody = $('#tsTbl tbody');
   if(!MY_TEAM || !MY_TEAM.picks || !MY_TEAM.picks.length || !FIXTURES.length){
-    tbody.innerHTML = '<tr><td colspan="7" class="empty">Nog geen teamgegevens of wedstrijdschema beschikbaar.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="10" class="empty">Nog geen teamgegevens of wedstrijdschema beschikbaar.</td></tr>';
     $('#tsBudget').textContent = '';
     $('#tsCombo').hidden = true;
     return;
@@ -972,6 +972,12 @@ function renderTransferSuggestions(){
   const windowSize = parseInt($('#tsWindow').value, 10) || 2;
   const posFilter = $('#tsPos').value;
   const { counts, weighted, startEvent, endEvent } = fixturesCountByTeam(windowSize);
+  // xP over 3 en 5 speelrondes vooruit, los van het gekozen venster
+  // hierboven -- zodat je direct kan vergelijken zonder steeds de
+  // "Speelrondes vooruit"-dropdown te wisselen.
+  const weighted3 = fixturesCountByTeam(3).weighted;
+  const weighted5 = fixturesCountByTeam(5).weighted;
+  const xpFor = (teamId, epNext, weightedMap) => (Number(epNext) || 0) * Math.max(1, weightedMap[teamId] || 0);
 
   const bank = MY_TEAM.bank || 0;
   const bankPerSlot = Math.floor(bank / transfers);
@@ -1071,9 +1077,11 @@ function renderTransferSuggestions(){
     <td class="num">${r.value_score!=null?Number(r.value_score).toFixed(2):'—'}</td>
     <td class="num">${r.fixtureCount>=2?`<span class="pill up">${r.fixtureCount}x</span>`:r.fixtureCount}<div class="meta" style="font-weight:400;">${upcomingFixturesLabel(r.team_id, windowSize)}</div></td>
     <td class="num">${expWindowPts(r).toFixed(1)}</td>
+    <td class="num">${xpFor(r.team_id, r.ep_next, weighted3).toFixed(1)}</td>
+    <td class="num">${xpFor(r.team_id, r.ep_next, weighted5).toFixed(1)}</td>
     <td>i.p.v. ${swapText}</td>
   </tr>`;
-  }).join('') : '<tr><td colspan="8" class="empty">Geen spelers gevonden binnen dit budget/filter.</td></tr>';
+  }).join('') : '<tr><td colspan="10" class="empty">Geen spelers gevonden binnen dit budget/filter.</td></tr>';
 }
 // Alle combinaties van precies k elementen uit arr (voor kleine arr/k
 // probleemloos, hier gebruikt met arr.length <= transfers+3 en k <= 3).
