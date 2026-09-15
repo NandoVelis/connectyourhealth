@@ -647,6 +647,7 @@ $('#pushBtn').addEventListener('click', async () => {
 $$('nav.tabs button').forEach(b => b.addEventListener('click', () => {
   $$('nav.tabs button').forEach(x => x.setAttribute('aria-selected', String(x === b)));
   $$('.panel').forEach(p => p.hidden = (p.id !== 'panel-' + b.dataset.tab));
+  logAccess(b.dataset.tab);
 }));
 
 /* =========================================================================
@@ -664,7 +665,28 @@ async function start(who){
   MY_ENTRY_ID = EMAIL_TO_ENTRY[who] || null;
   CURRENT_EMAIL = ALLOWED.includes(who) ? who : null;
   refreshPushButtonState();
+  logAccess('prijzen');
   await load();
+}
+
+// Registreert elk bezoek (login + terugkerende sessie bij page load, en
+// elke tabwissel) in espn_access_log -- best-effort, mag de app nooit
+// blokkeren bij falen.
+async function logAccess(tab){
+  if (!CURRENT_EMAIL) return;
+  try{
+    const { data:{ session } } = await sb.auth.getSession();
+    const token = session?.access_token;
+    if (!token) return;
+    await fetch(SUPABASE_URL + '/rest/v1/espn_access_log', {
+      method: 'POST',
+      headers: {
+        apikey: SUPABASE_KEY, Authorization: 'Bearer ' + token,
+        'Content-Type': 'application/json', Prefer: 'return=minimal',
+      },
+      body: JSON.stringify([{ email: CURRENT_EMAIL, page: 'overig/' + (tab || 'prijzen') }]),
+    });
+  }catch{ /* best-effort */ }
 }
 
 // Belangrijk: gebruikt het access_token van de ingelogde sessie i.p.v. de
