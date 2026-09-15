@@ -144,15 +144,15 @@
   /* In-app popup voor spelers uit je eigen team die dicht bij een
      prijswijziging staan -- onafhankelijk van e-mail/push (die vereisen
      server-secrets), dus werkt altijd zodra de pagina open is. */
-  #priceAlertPopup{position:fixed;top:16px;left:50%;transform:translateX(-50%);
+  #priceAlertPopup, #priceChangePopup{position:fixed;top:16px;left:50%;transform:translateX(-50%);
     z-index:50;max-width:420px;width:calc(100% - 32px);background:var(--navy-2);
     border:1px solid var(--line);border-radius:14px;padding:16px 18px;
     box-shadow:0 12px 32px rgba(0,0,0,.4)}
-  #priceAlertPopup h4{margin:0 0 8px;font-size:14px}
-  #priceAlertPopup .row{display:flex;justify-content:space-between;align-items:center;
+  #priceAlertPopup h4, #priceChangePopup h4{margin:0 0 8px;font-size:14px}
+  #priceAlertPopup .row, #priceChangePopup .row{display:flex;justify-content:space-between;align-items:center;
     padding:6px 0;border-top:1px solid var(--line)}
-  #priceAlertPopup .row:first-of-type{border-top:none}
-  #priceAlertPopup button{position:absolute;top:10px;right:12px;background:none;border:none;
+  #priceAlertPopup .row:first-of-type, #priceChangePopup .row:first-of-type{border-top:none}
+  #priceAlertPopup button, #priceChangePopup button{position:absolute;top:10px;right:12px;background:none;border:none;
     color:var(--muted);font-size:18px;cursor:pointer;line-height:1;padding:4px}
   /* Wekelijkse samenvatting-popup (elke vrijdag 19:00) -- toont zodra er
      een nieuwere digest is dan de laatst geziene (per e-mailadres). Ook
@@ -195,6 +195,7 @@
 </div>
 
 <div id="priceAlertPopup" hidden></div>
+<div id="priceChangePopup" hidden></div>
 <div id="weeklyDigestPopup" hidden></div>
 <div id="sundayReportPopup" hidden></div>
 <div id="matchReportPopup" hidden></div>
@@ -768,6 +769,7 @@ async function load(){
     renderKnownManagers(knownManagers, knownTransfers);
     renderXgSnapshot(xgSnapshot);
     checkOwnedPriceAlerts();
+    checkPriceChanges(events);
     checkWeeklyDigest(weeklyDigest[0] || null);
     checkSundayReport(sundayReport[0] || null);
     checkMatchReports(matchReports);
@@ -1367,6 +1369,50 @@ function showPriceAlertPopup(players){
   }).join('');
   el.innerHTML = `<button aria-label="Sluiten" type="button">&times;</button>
     <h4>Prijswijziging op komst in jouw team</h4>${rows}`;
+  el.hidden = false;
+  el.querySelector('button').addEventListener('click', () => { el.hidden = true; });
+}
+// Popup voor DAADWERKELIJKE prijswijzigingen (bv. na de nachtelijke
+// 04:45-batch), voor ALLE spelers -- los van de "dreigt te wijzigen"-
+// popup hierboven, die na de echte wijziging niet meer afgaat (verwachting
+// staat dan alweer op "stabiel"). Bewust niet beperkt tot je eigen team:
+// de nachtelijke batch is meestal maar een handvol spelers, en die zitten
+// lang niet altijd in een gevolgd team -- dan zou je 'm anders nooit
+// in-app te zien krijgen (alleen via mail/push, en die vereisen server-
+// side secrets zoals RESEND_API_KEY). Gebruikt de al geladen
+// espn_price_events (laatste 60) i.p.v. een aparte query. Per e-mailadres
+// het laatst geziene detected_at bijgehouden in localStorage, zodat alleen
+// nieuwe wijzigingen sinds de vorige keer getoond worden.
+function checkPriceChanges(events){
+  if (!CURRENT_EMAIL || !events || !events.length) return;
+  const byId = Object.fromEntries(ROWS.map(r => [r.id, r]));
+  const seenKey = `priceChangesSeen:${CURRENT_EMAIL}`;
+  let lastSeen = null;
+  try { lastSeen = localStorage.getItem(seenKey); } catch(e){}
+  // Zonder eerder bezoek (nieuwe gebruiker, of localStorage leeg): niet de
+  // volledige laatste-60-geschiedenis in één keer tonen, alleen het laatste
+  // etmaal -- anders zou de allereerste keer een lawine aan oude
+  // wijzigingen tonen i.p.v. alleen "wat is er recent gebeurd".
+  const fallbackSince = new Date(Date.now() - 24*3600*1000);
+  const fresh = events.filter(e => lastSeen ? new Date(e.detected_at) > new Date(lastSeen) : new Date(e.detected_at) > fallbackSince);
+  if (!fresh.length) return;
+  const newest = events.reduce((a,b) => new Date(a.detected_at) > new Date(b.detected_at) ? a : b);
+  try { localStorage.setItem(seenKey, newest.detected_at); } catch(e){}
+  const items = fresh.map(e => ({ ...e, pl: byId[e.player_id] })).filter(x => x.pl);
+  if (items.length) showPriceChangePopup(items);
+}
+function showPriceChangePopup(items){
+  const el = $('#priceChangePopup');
+  if (!el) return;
+  const rows = items.map(({pl, old_cost, new_cost, direction}) => {
+    const isUp = direction > 0 || new_cost > old_cost;
+    const color = isUp ? 'var(--up)' : 'var(--down)';
+    const arrow = isUp ? '&#9650;' : '&#9660;';
+    return `<div class="row"><span>${pl.web_name} <span class="meta">(${pl.team_short})</span></span>
+      <span style="color:${color};font-weight:600;">${arrow} ${eur(old_cost)} &rarr; ${eur(new_cost)}</span></div>`;
+  }).join('');
+  el.innerHTML = `<button aria-label="Sluiten" type="button">&times;</button>
+    <h4>Prijswijzigingen</h4>${rows}`;
   el.hidden = false;
   el.querySelector('button').addEventListener('click', () => { el.hidden = true; });
 }
