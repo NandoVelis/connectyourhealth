@@ -308,6 +308,11 @@
   <section class="panel" id="panel-team" hidden>
     <div class="tiles" id="myTeamTiles"><div class="loading">Laden…</div></div>
     <div class="card" id="nextRoundAdviceCard" style="margin-bottom:16px"></div>
+    <div class="card" id="chipAdviceCardWrap" style="margin-bottom:16px">
+      <h3>Chip-advies — speelronde <span id="chipAdviceEvent">—</span></h3>
+      <p class="hint">Elke chip is 2x per seizoen te gebruiken (1x in de eerste seizoenshelft t/m ronde 17, 1x in de tweede t/m ronde 34), en niet te combineren met een andere chip in dezelfde ronde. Zelfde xP x FDR-weging als het advies hierboven.</p>
+      <div id="chipAdvice"><div class="empty">Laden…</div></div>
+    </div>
     <div class="card" style="margin-bottom:16px">
       <h3>Selectie</h3>
       <p class="hint">Basisopstelling bovenaan, bank onderaan. C = kapitein (dubbele punten), VC = vice-kapitein.</p>
@@ -424,15 +429,10 @@
 
   <!-- ---------- COMPETITIE ---------- -->
   <section class="panel" id="panel-competitie" hidden>
-    <div class="card" style="margin-bottom:16px">
+    <div class="card">
       <h3>Nando vs Duncan</h3>
       <p class="hint">Onderlinge vergelijking, elke sync bijgewerkt.</p>
       <div id="h2hCompare"><div class="empty">Laden…</div></div>
-    </div>
-    <div class="card">
-      <h3>Chip-advies</h3>
-      <p class="hint">Elke chip is 2x per seizoen te gebruiken (1x in de eerste seizoenshelft t/m ronde 17, 1x in de tweede t/m ronde 34), en niet te combineren met een andere chip in dezelfde ronde.</p>
-      <div id="chipAdvice"><div class="empty">Laden…</div></div>
     </div>
   </section>
 
@@ -808,10 +808,10 @@ async function load(){
     renderMomentum();
     renderMyTeam(MY_TEAM);
     renderNextRoundAdvice(MY_TEAM);
+    renderChipAdvice();
     renderBenchAnalysis(MY_TEAM);
     renderTransferSuggestions();
     renderH2h();
-    renderChipAdvice();
     renderKnownManagers(knownManagers, knownTransfers);
     renderXgSnapshot(xgSnapshot);
     checkOwnedPriceAlerts();
@@ -1120,6 +1120,7 @@ function renderH2h(){
 //    beschikbaar) -- toon puur de resterende beschikbaarheid.
 function renderChipAdvice(){
   const el = $('#chipAdvice');
+  $('#chipAdviceEvent').textContent = GAME.next_event ?? '—';
   if (!MY_TEAM || !MY_TEAM.picks || !MY_TEAM.picks.length || !FIXTURES.length){ el.innerHTML = '<div class="empty">Nog geen data.</div>'; return; }
   const byId = Object.fromEntries(ROWS.map(r => [r.id, r]));
   const squad = MY_TEAM.picks.map(p => ({ ...p, pl: byId[p.element] })).filter(r => r.pl);
@@ -1135,8 +1136,6 @@ function renderChipAdvice(){
   const forwardTotal = forwards.reduce((s,r) => s + captainScore(r.pl, weighted), 0);
   const forwardNames = forwards.map(r => `${r.pl.web_name} <span class="meta">${r.pl.team_short}${fdrPillFor(r.pl)}</span>`).join(', ');
 
-  const half = (GAME.next_event||1) <= 17 ? '1e seizoenshelft (t/m ronde 17)' : '2e seizoenshelft (t/m ronde 34)';
-
   el.innerHTML = `
     <div class="row">
       <div>
@@ -1150,7 +1149,6 @@ function renderChipAdvice(){
         <div class="meta">${forwards.length} aanvaller(s) in de basis komende ronde: ${forwardNames || '—'} (${forwardTotal.toFixed(1)} verwachte punten samen, dubbel geteld)${forwards.length < 3 ? ' -- pas overwegen zodra je 3 aanvallers met hoge xP in de basis hebt staan' : ''}</div>
       </div>
     </div>
-    <p class="hint" style="margin-top:10px">We zitten nu in de ${half}. Elke chip is los daarvan nog 1x per helft te gebruiken (wildcard, 2capt, frush, rich) en niet te combineren binnen dezelfde speelronde -- ESPN houdt zelf bij welke je al gebruikt hebt.</p>
   `;
 }
 
