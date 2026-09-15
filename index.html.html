@@ -2372,17 +2372,23 @@ function generatePostWorkoutTip(training, weightKg, garmin, dateStr){
     ? (maxAerobicTE>=4 ? 'hoog' : maxAerobicTE>=2.5 ? 'gemiddeld' : 'laag')
     : (kcalPerMin>=12 ? 'hoog' : kcalPerMin>=7 ? 'gemiddeld' : 'laag');
 
-  // Koolhydraten: sportvoedingsrichtlijn in g/kg lichaamsgewicht PER UUR
-  // inspanning (i.p.v. een vaste indeling in 3 kcal-emmers), zodat een korte
-  // pittige training en een lange rustige duurloop niet meer toevallig
-  // hetzelfde advies krijgen terwijl de behoefte compleet anders is.
-  const carbsPerKgPerHour = intensity==='hoog' ? 1.1 : intensity==='gemiddeld' ? 0.8 : 0.5;
-  const carbsG = Math.round(weightKg * carbsPerKgPerHour * Math.min(durationHours, 3));
+  // Koolhydraten: rechtstreeks afgeleid van de daadwerkelijk verbrande kcal
+  // i.p.v. g/kg lichaamsgewicht PER UUR inspanning -- die laatste schaalde
+  // een training onder het uur (ongeacht hoeveel kcal 'm kostte) altijd naar
+  // beneden af, waardoor bv. een pittige 45 min sessie van bijna 600 kcal
+  // toch maar op ~37g koolhydraten uitkwam. Aandeel van de verbrande kcal
+  // dat als koolhydraten terugkomt schaalt met intensiteit (hogere
+  // intensiteit = relatief meer glycogeenverbruik, dus een groter aandeel).
+  const carbFractionOfKcal = intensity==='hoog' ? 0.6 : intensity==='gemiddeld' ? 0.5 : 0.35;
+  const carbsG = Math.round((activityKcal * carbFractionOfKcal) / 4); // 4 kcal/g koolhydraten
   // Eiwit: basis 0,3g/kg, opgehoogd bij een lange/pittige sessie of als er
-  // krachttraining bij zat (extra spiereiwitsynthese-prikkel).
+  // krachttraining bij zat (extra spiereiwitsynthese-prikkel). Ondergrens
+  // van 20g (de gangbare drempel voor een merkbare spiereiwitsynthese-
+  // respons), zodat een lager lichaamsgewicht niet tot een te mager advies
+  // leidt.
   let proteinFactor = 0.3;
   if(hasStrength || intensity==='hoog' || durationHours>=1.25) proteinFactor = 0.4;
-  const proteinG = Math.round(weightKg * proteinFactor);
+  const proteinG = Math.max(20, Math.round(weightKg * proteinFactor));
 
   const lines = [];
   const intensityLabel = durationMin>0 ? `${Math.round(durationMin)} min, ${intensity} intensiteit` : `${intensity} intensiteit (duur onbekend)`;
