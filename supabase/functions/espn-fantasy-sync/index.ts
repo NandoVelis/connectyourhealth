@@ -361,6 +361,163 @@ async function buildAndStoreMatchTransferReport(f: any, teams: Record<number, st
   }
 }
 
+// ---- LIVE STAND: PUSHMELDING BIJ DOELPUNT ----
+// /api/fixtures/ geeft team_h_score/team_a_score al live mee zodra een
+// wedstrijd loopt -- geen aparte call nodig. Vergelijkt de net opgehaalde
+// stand met de vorige bekende stand (uit espn_fixtures) en pusht zodra een
+// van de twee teams is gestegen. Alleen voor wedstrijden die al liepen
+// (started) op het moment van vorige sync, zodat de eerste keer dat een
+// wedstrijd binnenkomt (0-0, net begonnen) geen valse "doelpunt"-melding
+// geeft.
+async function checkGoalAlerts(fixtures: any[], teams: Record<number, string>) {
+  const relevant = fixtures.filter((f: any) => f.started && f.team_h_score != null && f.team_a_score != null);
+  if (!relevant.length) return;
+
+  const idsParam = relevant.map((f: any) => f.id).join(",");
+  const prev: any[] = await sbGet(
+    `espn_fixtures?select=id,team_h_score,team_a_score,started&id=in.(${idsParam})`,
+  );
+  const prevById = new Map(prev.map((p: any) => [p.id, p]));
+
+  const allEmails = new Set<string>([GLOBAL_WATCH_EMAIL]);
+  for (const { alertEmails } of MY_TEAMS) for (const e of alertEmails) allEmails.add(e);
+
+  for (const f of relevant) {
+    const before = prevById.get(f.id);
+    if (!before || !before.started) continue; // eerste keer "started", geen vergelijkingsbasis
+    const hDiff = (f.team_h_score ?? 0) - (before.team_h_score ?? 0);
+    const aDiff = (f.team_a_score ?? 0) - (before.team_a_score ?? 0);
+    if (hDiff <= 0 && aDiff <= 0) continue;
+    const homeShort = teams[f.team_h] ?? "?";
+    const awayShort = teams[f.team_a] ?? "?";
+    const scorer = hDiff > 0 ? homeShort : awayShort;
+    const bodyText = `${homeShort} ${f.team_h_score} - ${f.team_a_score} ${awayShort} (${f.minutes ?? "?"}')`;
+    for (const email of allEmails) {
+      await sendPush(email, `Doelpunt ${scorer}!`, bodyText);
+    }
+  }
+}
+
+// ---- OPSTELLINGEN VIA NOS.NL LIVEBLOG (BEST-EFFORT SCRAPE) ----
+// ESPN's eigen fantasy-API geeft geen vooraf-aangekondigde opstellingen (pas
+// achteraf, via minuten gespeeld) en ESPN's publieke site-API blokkeert
+// server-IP's (Akamai). NOS.nl publiceert per wedstrijd een liveblog met de
+// opstelling zodra bekend (meestal ~60-75 min vóór aftrap), server-side
+// gerenderd als JSON-LD (liveBlogUpdate met headline/articleBody) -- net zo
+// goed te parsen als de FDR-pagina, geen aparte key nodig.
+//
+// Matching van een wedstrijd naar de juiste NOS-liveblog-URL kan niet op ID
+// (NOS gebruikt eigen liveblog-ID's) -- we zoeken op de eigen clubnaam-
+// "slug" van beide teams (bv. "ajax" + "willem-ii") in de links op de
+// voetbal-overzichtspagina. Best-effort, net als de FDR-teamcode-fix: als
+// NOS een afwijkende naam gebruikt matcht dit gewoon niet, geen harde fout.
+function teamSlug(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/^fc\s+/, "")
+    .replace(/^sc\s+/, "")
+    .replace(/\./g, "")
+    .trim()
+    .replace(/\s+/g, "-");
+}
+const NOS_HEADERS = { "User-Agent": "Mozilla/5.0 (compatible; connectyourhealth-lineup-sync/1.0)" };
+async function findNosLiveblogUrls(): Promise<string[]> {
+  const res = await fetch("https://nos.nl/sport/voetbal", { headers: NOS_HEADERS });
+  if (!res.ok) return [];
+  const html = await res.text();
+  const hrefs = new Set<string>();
+  for (const m of html.matchAll(/"(\/liveblog\/\d+-[a-z0-9-]+)"/g)) hrefs.add(m[1]);
+  return [...hrefs];
+}
+async function checkAndSyncLineups(
+  fixtures: any[],
+  teams: Record<number, string>,
+  teamNames: Record<number, string>,
+) {
+  const now = Date.now();
+  const upcoming = fixtures.filter((f: any) => {
+    if (!f.kickoff_time) return false;
+    const minutesToKickoff = (new Date(f.kickoff_time).getTime() - now) / 60000;
+    return minutesToKickoff <= 150 && minutesToKickoff >= -30; // 2.5u vooraf t/m 30 min na aftrap
+  });
+  if (!upcoming.length) return;
+
+  const idsParam = upcoming.map((f: any) => f.id).join(",");
+  const existing: any[] = await sbGet(`espn_lineups?select=fixture_id,team_short&fixture_id=in.(${idsParam})`);
+  const haveLineup = new Set(existing.map((e: any) => `${e.fixture_id}:${e.team_short}`));
+  const needLineup = upcoming.filter((f: any) =>
+    !haveLineup.has(`${f.id}:${teams[f.team_h]}`) || !haveLineup.has(`${f.id}:${teams[f.team_a]}`)
+  );
+  if (!needLineup.length) return;
+
+  let liveblogUrls: string[] | null = null; // lazy, alleen ophalen als er echt iets te matchen valt
+  const allEmails = new Set<string>([GLOBAL_WATCH_EMAIL]);
+  for (const { alertEmails } of MY_TEAMS) for (const e of alertEmails) allEmails.add(e);
+
+  for (const f of needLineup) {
+    const homeName = teamNames[f.team_h], awayName = teamNames[f.team_a];
+    const homeShort = teams[f.team_h], awayShort = teams[f.team_a];
+    if (!homeName || !awayName || !homeShort || !awayShort) continue;
+
+    if (liveblogUrls === null) {
+      try {
+        liveblogUrls = await findNosLiveblogUrls();
+      } catch (e) {
+        console.warn(`NOS-overzichtspagina ophalen mislukt: ${String(e)}`);
+        liveblogUrls = [];
+      }
+    }
+    const hSlug = teamSlug(homeName), aSlug = teamSlug(awayName);
+    const match = liveblogUrls.find((u) => u.includes(hSlug) && u.includes(aSlug));
+    if (!match) continue;
+
+    try {
+      const blogRes = await fetch(`https://nos.nl${match}`, { headers: NOS_HEADERS });
+      if (!blogRes.ok) continue;
+      const html = await blogRes.text();
+      const rows: any[] = [];
+      for (const m of html.matchAll(/"dateModified":"[^"]*","headline":"([^"]*)","articleBody":"([^"]*)"/g)) {
+        const [, headline, articleBody] = m;
+        const teamMatch = headline.match(/Opstelling\s+([^:]+):/);
+        if (!teamMatch) continue; // alleen posts met een "Opstelling <club>:"-titel zijn bruikbaar
+        const forHome = teamMatch[1].trim().toLowerCase().includes(hSlug.replace(/-/g, " "));
+        const forAway = teamMatch[1].trim().toLowerCase().includes(aSlug.replace(/-/g, " "));
+        if (!forHome && !forAway) continue;
+        // NOS bewerkt dit soort posts na publicatie soms om (bv. van een vaste
+        // "Opstelling: A; B; C"-zin naar lopende tekst met dezelfde info) --
+        // pak de vaste lijst als die er nog staat, anders de titel zelf (na de
+        // wedstrijdcode) als samenvatting, zodat een latere edit niet stilletjes
+        // niets oplevert.
+        const lineupMatch = articleBody.match(/Opstelling:\s*(.+?)\.?$/);
+        const lineupText = lineupMatch ? lineupMatch[1].trim() : headline.replace(/^[A-Z]{2,4}-[A-Z]{2,4}\s*\|\s*/, "").trim();
+        if (forHome) rows.push({ short: homeShort, opp: awayShort, isHome: true, text: lineupText });
+        else rows.push({ short: awayShort, opp: homeShort, isHome: false, text: lineupText });
+      }
+      for (const r of rows) {
+        if (haveLineup.has(`${f.id}:${r.short}`)) continue;
+        const players = r.text.split(/[,;]/).map((p: string) => p.trim()).filter(Boolean);
+        await sbPost("espn_lineups", [{
+          fixture_id: f.id,
+          event: f.event ?? null,
+          team_short: r.short,
+          opponent_short: r.opp,
+          is_home: r.isHome,
+          lineup_text: r.text,
+          players,
+          source_url: `https://nos.nl${match}`,
+          published_at: new Date().toISOString(),
+        }], "return=minimal,resolution=merge-duplicates");
+        haveLineup.add(`${f.id}:${r.short}`);
+        for (const email of allEmails) {
+          await sendPush(email, `Opstelling bekend: ${r.short}`, r.text.slice(0, 180));
+        }
+      }
+    } catch (e) {
+      console.warn(`NOS-liveblog ophalen/parsen mislukt (fixture ${f.id}): ${String(e)}`);
+    }
+  }
+}
+
 // ---- PUSHMELDINGEN (Web Push) ----
 // Alleen actief als de VAPID-sleutels als Supabase-secrets gezet zijn
 // (Edge Functions -> Manage secrets: VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY,
@@ -422,7 +579,11 @@ Deno.serve(async (req: Request) => {
 
     const elements: any[] = data.elements ?? [];
     const teams: Record<number, string> = {};
-    for (const t of data.teams ?? []) teams[t.id] = t.short_name;
+    const teamNames: Record<number, string> = {};
+    for (const t of data.teams ?? []) {
+      teams[t.id] = t.short_name;
+      teamNames[t.id] = t.name;
+    }
     seen = elements.length;
 
     const teamRows = (data.teams ?? []).map((t: any) => ({
@@ -669,8 +830,21 @@ Deno.serve(async (req: Request) => {
           team_a: f.team_a ?? null,
           kickoff_time: f.kickoff_time ?? null,
           finished: !!f.finished,
+          team_h_score: f.team_h_score ?? null,
+          team_a_score: f.team_a_score ?? null,
+          minutes: f.minutes ?? null,
+          started: !!f.started,
           updated_at: capturedAt,
         }));
+
+        // Vóór het wegschrijven: vergelijk de net opgehaalde stand met de nog
+        // in de database staande (vorige) stand, voor de doelpunt-pushmelding.
+        try {
+          await checkGoalAlerts(fixtureRows, teams);
+        } catch (e) {
+          console.warn(`Doelpunt-check mislukt: ${String(e)}`);
+        }
+
         await sbPost("espn_fixtures", fixtureRows, "return=minimal,resolution=merge-duplicates");
 
         // Ong. 30 min vóór aftrap: transfertrend van de laatste 3 uur, om een
@@ -688,6 +862,14 @@ Deno.serve(async (req: Request) => {
           await checkFinishedMatchesForTransferReport(fixtureRows, teams);
         } catch (e) {
           console.warn(`Wedstrijd-transferrapporten mislukt: ${String(e)}`);
+        }
+
+        // Opstellingen via NOS.nl-liveblog, zodra bekend (meestal ~60-75 min
+        // vóór aftrap) -- best-effort scrape, zie checkAndSyncLineups().
+        try {
+          await checkAndSyncLineups(fixtureRows, teams, teamNames);
+        } catch (e) {
+          console.warn(`Opstellingen-sync mislukt: ${String(e)}`);
         }
       } else {
         console.warn(`espn fixtures gaf status ${fixturesRes.status}, overgeslagen.`);
