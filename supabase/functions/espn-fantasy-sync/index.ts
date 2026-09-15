@@ -695,12 +695,26 @@ Deno.serve(async (req: Request) => {
     // daadwerkelijk teweegbracht (net als de bestaande doelpunten/assists-
     // vs-transfers-correlatie daar).
     const injuryEventRows: any[] = [];
+    // Spelers die nieuw in de ESPN-spelerspool verschijnen (bv. een nieuwe
+    // aanwinst die aan het spel is toegevoegd) -- alleen relevant als er al
+    // eerder een bekende stand was (prevRows.length), anders zou de EERSTE
+    // ooit gedraaide sync alle ~600 spelers als "nieuw" melden.
+    const newPlayerRows: any[] = [];
 
     for (const e of elements) {
       const tin = Number(e.transfers_in ?? 0);
       const tout = Number(e.transfers_out ?? 0);
       const net = tin - tout;
       const p = prev.get(e.id);
+      if (!p && prevRows.length) {
+        newPlayerRows.push({
+          id: e.id,
+          web_name: e.web_name,
+          team_short: teams[e.team] ?? "?",
+          element_type: e.element_type,
+          now_cost: e.now_cost,
+        });
+      }
 
       let netAtLastChange = p ? Number(p.net_at_last_change ?? 0) : net;
       let lastChangeAt: string | null | undefined = undefined;
@@ -827,6 +841,42 @@ Deno.serve(async (req: Request) => {
     await sbPost("espn_price_events", eventRows);
     await sbPost("espn_injury_events", injuryEventRows);
     snaps = snapRows.length;
+
+    // ---- NIEUWE SPELER TOEGEVOEGD AAN HET SPEL ----
+    // Best-effort, geen dedup-tabel nodig: zodra een speler-ID eenmaal in
+    // espn_players staat (elke run hierboven al geüpsert) is 'ie bij de
+    // volgende sync-run geen "nieuw" meer (prev bevat 'm dan wel).
+    if (newPlayerRows.length) {
+      const POS_LABELS: Record<number, string> = { 1: "Keeper", 2: "Verdediger", 3: "Middenvelder", 4: "Spits" };
+      const lines = newPlayerRows.map((r) =>
+        `- ${r.web_name} (${r.team_short}, ${POS_LABELS[r.element_type] ?? "?"}, €${(r.now_cost / 10).toFixed(1)})`
+      );
+      const allEmails = new Set<string>([GLOBAL_WATCH_EMAIL]);
+      for (const { alertEmails } of MY_TEAMS) for (const e of alertEmails) allEmails.add(e);
+      for (const email of allEmails) {
+        await sendPush(
+          email,
+          `${newPlayerRows.length} nieuwe speler(s) toegevoegd aan het spel`,
+          newPlayerRows.map((r) => r.web_name).join(", "),
+        );
+      }
+      const resendKeyForNewPlayers = Deno.env.get("RESEND_API_KEY");
+      if (resendKeyForNewPlayers) {
+        const mailRes = await fetch("https://api.resend.com/emails", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${resendKeyForNewPlayers}`, "Content-Type": "application/json" },
+          body: JSON.stringify({
+            from: "ConnectYourHealth <onboarding@resend.dev>",
+            to: [GLOBAL_WATCH_EMAIL],
+            subject: `ESPN Fantasy: ${newPlayerRows.length} nieuwe speler(s) toegevoegd aan het spel`,
+            text: `Nieuw in de spelerspool:\n\n${lines.join("\n")}\n\nBekijk het overzicht: https://connectyourhealth.vercel.app/overig`,
+          }),
+        });
+        if (!mailRes.ok) {
+          console.warn(`Nieuwe-speler-mail mislukt: ${mailRes.status} ${await mailRes.text()}`);
+        }
+      }
+    }
 
     // Alleen herijken als er deze run ook echt iets te leren viel.
     if (eventRows.length) {
