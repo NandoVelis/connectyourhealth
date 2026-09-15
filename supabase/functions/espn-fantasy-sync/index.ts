@@ -398,6 +398,70 @@ async function checkGoalAlerts(fixtures: any[], teams: Record<number, string>) {
   }
 }
 
+// ---- EIGEN SPELERS: NIET IN DE BASIS / INGEVALLEN (o.b.v. echte speelminuten) ----
+// Los van de (best-effort, tekst-geschraapte) NOS-opstelling hierboven:
+// ESPN's eigen "minutes"-veld per speler is exact en hoeft niet geraden te
+// worden. Twee signalen, allebei simpel af te leiden uit de sync-tot-sync-
+// vergelijking die toch al gebeurt:
+//  - "niet in de basis": de wedstrijd van de speler is al minstens 15 min
+//    bezig (marge zodat een vroege wissel/blessure niet als "nooit
+//    gestart" wordt gelezen) en hij staat nog op 0 minuten.
+//  - "ingevallen": vorige sync nog 0 minuten, deze sync opeens > 0 -- dat
+//    kan alleen als invaller (een starter had bij de vorige sync al
+//    minuten).
+// Dedup per (e-mailadres, speler, wedstrijd, type) via
+// espn_lineup_status_alerts_sent, geen opschoon-logica nodig (per
+// wedstrijd-ID kan dit toch nooit dubbel voorkomen).
+async function checkOwnedPlayerMatchStatus(
+  alertEmail: string,
+  ownedIds: number[],
+  fixtures: any[],
+  prevByPlayerId: Map<number, any>,
+  playerById: Map<number, any>,
+) {
+  if (!ownedIds.length) return;
+  const now = Date.now();
+  const candidates: { id: number; type: "bench" | "sub_in"; pl: any; fixtureId: number }[] = [];
+
+  for (const id of ownedIds) {
+    const pl = playerById.get(id);
+    if (!pl) continue;
+    const fixture = fixtures.find((f: any) => f.team_h === pl.team_id || f.team_a === pl.team_id);
+    if (!fixture || !fixture.started || !fixture.kickoff_time) continue;
+    const minutesSinceKickoff = (now - new Date(fixture.kickoff_time).getTime()) / 60000;
+    const prevMinutes = Number(prevByPlayerId.get(id)?.minutes ?? 0);
+    const currentMinutes = Number(pl.minutes ?? 0);
+
+    if (!fixture.finished && minutesSinceKickoff >= 15 && currentMinutes === 0) {
+      candidates.push({ id, type: "bench", pl, fixtureId: fixture.id });
+    }
+    if (prevMinutes === 0 && currentMinutes > 0) {
+      candidates.push({ id, type: "sub_in", pl, fixtureId: fixture.id });
+    }
+  }
+  if (!candidates.length) return;
+
+  const idsParam = [...new Set(candidates.map((c) => c.id))].join(",");
+  const existing: any[] = await sbGet(
+    `espn_lineup_status_alerts_sent?select=player_id,fixture_id,alert_type&alert_email=eq.${
+      encodeURIComponent(alertEmail)
+    }&player_id=in.(${idsParam})`,
+  );
+  const existingSet = new Set(existing.map((e: any) => `${e.player_id}:${e.fixture_id}:${e.alert_type}`));
+  const toSend = candidates.filter((c) => !existingSet.has(`${c.id}:${c.fixtureId}:${c.type}`));
+  if (!toSend.length) return;
+
+  for (const c of toSend) {
+    const title = c.type === "bench" ? `${c.pl.web_name} staat niet in de basis` : `${c.pl.web_name} is ingevallen!`;
+    await sendPush(alertEmail, title, `${c.pl.web_name} (${c.pl.team_short})`);
+  }
+  await sbPost(
+    "espn_lineup_status_alerts_sent",
+    toSend.map((c) => ({ alert_email: alertEmail, player_id: c.id, fixture_id: c.fixtureId, alert_type: c.type })),
+    "return=minimal,resolution=merge-duplicates",
+  );
+}
+
 // ---- OPSTELLINGEN VIA NOS.NL LIVEBLOG (BEST-EFFORT SCRAPE) ----
 // ESPN's eigen fantasy-API geeft geen vooraf-aangekondigde opstellingen (pas
 // achteraf, via minuten gespeeld) en ESPN's publieke site-API blokkeert
@@ -605,7 +669,7 @@ Deno.serve(async (req: Request) => {
 
     // bestaande stand ophalen
     const prevRows: any[] = await sbGet(
-      "espn_players?select=id,now_cost,transfers_in,transfers_out,net_at_last_change,goals_scored,assists,bonus,clean_sheets,status&limit=2000",
+      "espn_players?select=id,now_cost,transfers_in,transfers_out,net_at_last_change,goals_scored,assists,bonus,clean_sheets,status,minutes&limit=2000",
     );
     const prev = new Map<number, any>(prevRows.map((r) => [r.id, r]));
 
@@ -818,12 +882,16 @@ Deno.serve(async (req: Request) => {
     });
 
     // ---- WEDSTRIJDSCHEMA (voor transfersuggesties: dubbele speelrondes) ----
-    // Best-effort, net als de andere aanvullende syncs hieronder.
+    // Best-effort, net als de andere aanvullende syncs hieronder. Buiten dit
+    // blok gehesen (i.p.v. const binnen de if) zodat de MIJN TEAMS-sectie
+    // verderop 'm ook kan gebruiken voor de "niet in de basis"/"ingevallen"-
+    // check.
+    let fixtureRows: any[] = [];
     try {
       const fixturesRes = await fetch("https://fantasy.espngoal.nl/api/fixtures/");
       if (fixturesRes.ok) {
         const fixtures: any[] = await fixturesRes.json();
-        const fixtureRows = fixtures.map((f: any) => ({
+        fixtureRows = fixtures.map((f: any) => ({
           id: f.id,
           event: f.event ?? null,
           team_h: f.team_h ?? null,
@@ -901,6 +969,18 @@ Deno.serve(async (req: Request) => {
             `https://fantasy.espngoal.nl/api/entry/${entryId}/event/${currentEvent}/picks/`,
           );
           if (picksRes.ok) picks = await picksRes.json();
+        }
+
+        // ---- NIET IN DE BASIS / INGEVALLEN (echte wedstrijd, eigen spelers) ----
+        if (picks?.picks?.length) {
+          const ownedIds: number[] = picks.picks.map((p: any) => p.element);
+          for (const alertEmail of alertEmails) {
+            try {
+              await checkOwnedPlayerMatchStatus(alertEmail, ownedIds, fixtureRows, prev, playerById);
+            } catch (e) {
+              console.warn(`Basis-/invalcheck (${alertEmail}) mislukt: ${String(e)}`);
+            }
+          }
         }
 
         await fetch(`${SB_URL}/rest/v1/espn_my_team`, {
