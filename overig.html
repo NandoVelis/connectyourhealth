@@ -320,7 +320,7 @@
           <option value="price" selected>Prijswijziging</option>
           <option value="form">Vorm</option>
           <option value="fixture">Komende 3 wedstrijden</option>
-          <option value="xg">xG/90 (snapshot)</option>
+          <option value="xp">xP komende wedstrijd</option>
         </select>
       </div>
       <div id="myTeamPitch"><div class="empty">Laden…</div></div>
@@ -856,11 +856,8 @@ function renderMyTeam(team){
         return `<div class="ptrend">${r.pl.form!=null ? r.pl.form : '—'}</div>`;
       case 'fixture':
         return `<div class="ptrend">${upcomingFixturesLabel(r.pl.team_id, 3)}</div>`;
-      case 'xg': {
-        const snap = r.pl.xg_snap;
-        if (!snap) return `<div class="ptrend" style="color:var(--muted)">geen data</div>`;
-        return `<div class="ptrend">${snap.xg_per90!=null ? Number(snap.xg_per90).toFixed(2) : '—'}</div>`;
-      }
+      case 'xp':
+        return `<div class="ptrend">${r.pl.ep_next!=null ? r.pl.ep_next : '—'} xP</div>`;
       default: {
         const pts = (r.pl.event_points||0)*r.multiplier;
         const color = pts < 0 ? 'var(--down)' : pts > 0 ? 'var(--up)' : '#fff';
