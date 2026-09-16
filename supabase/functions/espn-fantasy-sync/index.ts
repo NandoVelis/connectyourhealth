@@ -83,30 +83,35 @@ const num = (v: unknown) => {
   return Number.isFinite(n) ? n : null;
 };
 
-// ---- AUTOMATISCHE HERIJKING VAN DE PRIJSDREMPEL-FACTOREN ----
+// ---- AUTOMATISCHE HERIJKING VAN DE PRIJSDREMPEL-FACTOREN (TWEE TRAPS) ----
 // Draait alleen als er deze run daadwerkelijk een prijswijziging
-// gedetecteerd is (extra databasewerk anders overbodig). Herberekent
-// rise_owner_factor/fall_owner_factor als een laag percentiel van
-// |net_since_prev|/owners_estimate over ALLE ooit waargenomen wijzigingen
-// (met een bekend ankermoment, dus first_change_since_tracking uitgesloten
-// -- die gebruiken een andere teller/basis en zijn niet vergelijkbaar).
-// Was eerst het 75e percentiel, maar dat werkte averechts: hoe hoger het
-// gekozen percentiel, hoe groter de geschatte drempel, en dus hoe LAGER de
-// berekende voortgang (net-verschil / drempel) uitvalt op het moment dat de
-// wijziging in werkelijkheid al plaatsvindt -- bij het 75e percentiel bleek
-// 16 sept dat Suray en Daal allebei van prijs veranderden terwijl het model
-// nog maar 41-100% voortgang had berekend, waardoor de "bijna"-waarschuwing
-// (>=80%) werd gemist. Het 25e percentiel loste dat op maar schoot door:
-// meteen 73 spelers stonden op "al voorbij de drempel" (tot 730% voortgang)
-// zonder dat hun prijs ooit veranderde, tegenover 14 bij het 75e percentiel
-// als "natuurlijke" ruis. Het 50e percentiel (mediaan) is het compromis --
-// ~39 valse "al voorbij"-gevallen (ruim onder de 73 bij het 25e percentiel,
-// iets boven de 14 natuurlijke ruis bij het 75e), en voor de helft van
-// toekomstige wijzigingen (i.p.v. een kwart) wordt de drempel eerder bereikt
-// dan de wijziging zelf. Minimaal 5 waarnemingen per richting nodig -- met
-// minder is een percentiel te grillig (één uitschieter zou de drempel te
-// veel laten springen).
-const PRICE_THRESHOLD_PERCENTILE = 0.5;
+// gedetecteerd is (extra databasewerk anders overbodig).
+//
+// Geschiedenis: eerst één drempel op het 75e percentiel -- werkte averechts
+// (hoe hoger het percentiel, hoe groter de drempel, hoe LAGER de berekende
+// voortgang op het moment dat de wijziging al gebeurt; Suray/Daal werden zo
+// gemist). Het 25e percentiel loste dat op maar schoot door: 73 spelers
+// "al voorbij de drempel" zonder ooit gewijzigd te zijn (tegenover 14
+// natuurlijke ruis bij 75e). Het 50e percentiel (mediaan) was een
+// tussenweg, maar bleef een compromis tussen twee dingen die niet
+// tegelijk met ÉÉN getal op te lossen zijn: vroeg waarschuwen vs. niet te
+// veel loos alarm.
+//
+// Daarom nu twee aparte drempels per richting, gebaseerd op de kern-
+// spreiding (10e-90e percentiel, na het wegtrimmen van de extreme 10% aan
+// weerszijden -- die uitschieters zijn eenmalige buitenissige gevallen,
+// geen representatieve drempel):
+//  - *_early (10e percentiel): de LAAGSTE drempel die de kern van de
+//    waargenomen wijzigingen ooit nodig had -- vrijwel elke wijziging had
+//    deze ruim overschreden voordat 'ie gebeurde. Bereikt = "bijna"
+//    (vroeg, gevoelig signaal, met wat meer loos alarm -- dat is prima
+//    voor een waarschuwing).
+//  - *_confirmed (90e percentiel): de HOOGSTE drempel uit de kern -- hier
+//    onder was in de waargenomen historie maar 10% van de wijzigingen al
+//    gebeurd. Bereikt = "stijgt"/"daalt" (hoog vertrouwen, weinig loos
+//    alarm, geschikt als "zeker"-signaal).
+// Minimaal 5 waarnemingen per richting nodig -- met minder is een
+// percentiel te grillig.
 const PRICE_THRESHOLD_MIN_SAMPLES = 5;
 function percentile(sorted: number[], p: number): number | null {
   if (!sorted.length) return null;
@@ -132,23 +137,35 @@ async function recalibratePriceThresholdFactors() {
   const updates: any[] = [];
 
   if (riseRatios.length >= PRICE_THRESHOLD_MIN_SAMPLES) {
-    const factor = percentile(riseRatios, PRICE_THRESHOLD_PERCENTILE)!;
     updates.push({
-      key: "rise_owner_factor",
-      value: factor.toFixed(4),
+      key: "rise_owner_factor_early",
+      value: percentile(riseRatios, 0.1)!.toFixed(4),
       note:
         `Automatisch herijkt op ${nowIso} o.b.v. ${riseRatios.length} waargenomen stijgingen ` +
-        `(50e percentiel van |net_since_prev|/owners_estimate).`,
+        `(10e percentiel van |net_since_prev|/owners_estimate).`,
+    });
+    updates.push({
+      key: "rise_owner_factor_confirmed",
+      value: percentile(riseRatios, 0.9)!.toFixed(4),
+      note:
+        `Automatisch herijkt op ${nowIso} o.b.v. ${riseRatios.length} waargenomen stijgingen ` +
+        `(90e percentiel van |net_since_prev|/owners_estimate).`,
     });
   }
   if (fallRatios.length >= PRICE_THRESHOLD_MIN_SAMPLES) {
-    const factor = percentile(fallRatios, PRICE_THRESHOLD_PERCENTILE)!;
     updates.push({
-      key: "fall_owner_factor",
-      value: factor.toFixed(4),
+      key: "fall_owner_factor_early",
+      value: percentile(fallRatios, 0.1)!.toFixed(4),
       note:
         `Automatisch herijkt op ${nowIso} o.b.v. ${fallRatios.length} waargenomen dalingen ` +
-        `(50e percentiel van |net_since_prev|/owners_estimate).`,
+        `(10e percentiel van |net_since_prev|/owners_estimate).`,
+    });
+    updates.push({
+      key: "fall_owner_factor_confirmed",
+      value: percentile(fallRatios, 0.9)!.toFixed(4),
+      note:
+        `Automatisch herijkt op ${nowIso} o.b.v. ${fallRatios.length} waargenomen dalingen ` +
+        `(90e percentiel van |net_since_prev|/owners_estimate).`,
     });
   }
   if (updates.length) {
