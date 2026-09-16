@@ -90,21 +90,23 @@ const num = (v: unknown) => {
 // |net_since_prev|/owners_estimate over ALLE ooit waargenomen wijzigingen
 // (met een bekend ankermoment, dus first_change_since_tracking uitgesloten
 // -- die gebruiken een andere teller/basis en zijn niet vergelijkbaar).
-// Was eerder het 75e percentiel, maar dat werkte averechts: hoe hoger het
+// Was eerst het 75e percentiel, maar dat werkte averechts: hoe hoger het
 // gekozen percentiel, hoe groter de geschatte drempel, en dus hoe LAGER de
 // berekende voortgang (net-verschil / drempel) uitvalt op het moment dat de
 // wijziging in werkelijkheid al plaatsvindt -- bij het 75e percentiel bleek
-// 25 sept dat Suray en Daal allebei van prijs veranderden terwijl het model
-// nog maar 41-100% voortgang had berekend (bij Suray zelfs met een net
-// herijkte drempel), waardoor de "bijna"-waarschuwing (>=80%) werd gemist.
-// Het 25e percentiel i.p.v. het 75e, zodat de geschatte drempel voor de
-// MEERDERHEID van toekomstige wijzigingen (waarvan de werkelijke ratio er
-// per definitie boven ligt) eerder wordt bereikt dan de wijziging zelf --
-// wat vaker "bijna"-waarschuwingen oplevert die (nog) niet meteen uitkomen,
-// maar dat weegt niet op tegen een gemiste waarschuwing. Minimaal 5
-// waarnemingen per richting nodig -- met minder is een percentiel te
-// grillig (één uitschieter zou de drempel te veel laten springen).
-const PRICE_THRESHOLD_PERCENTILE = 0.25;
+// 16 sept dat Suray en Daal allebei van prijs veranderden terwijl het model
+// nog maar 41-100% voortgang had berekend, waardoor de "bijna"-waarschuwing
+// (>=80%) werd gemist. Het 25e percentiel loste dat op maar schoot door:
+// meteen 73 spelers stonden op "al voorbij de drempel" (tot 730% voortgang)
+// zonder dat hun prijs ooit veranderde, tegenover 14 bij het 75e percentiel
+// als "natuurlijke" ruis. Het 50e percentiel (mediaan) is het compromis --
+// ~39 valse "al voorbij"-gevallen (ruim onder de 73 bij het 25e percentiel,
+// iets boven de 14 natuurlijke ruis bij het 75e), en voor de helft van
+// toekomstige wijzigingen (i.p.v. een kwart) wordt de drempel eerder bereikt
+// dan de wijziging zelf. Minimaal 5 waarnemingen per richting nodig -- met
+// minder is een percentiel te grillig (één uitschieter zou de drempel te
+// veel laten springen).
+const PRICE_THRESHOLD_PERCENTILE = 0.5;
 const PRICE_THRESHOLD_MIN_SAMPLES = 5;
 function percentile(sorted: number[], p: number): number | null {
   if (!sorted.length) return null;
@@ -136,7 +138,7 @@ async function recalibratePriceThresholdFactors() {
       value: factor.toFixed(4),
       note:
         `Automatisch herijkt op ${nowIso} o.b.v. ${riseRatios.length} waargenomen stijgingen ` +
-        `(25e percentiel van |net_since_prev|/owners_estimate).`,
+        `(50e percentiel van |net_since_prev|/owners_estimate).`,
     });
   }
   if (fallRatios.length >= PRICE_THRESHOLD_MIN_SAMPLES) {
@@ -146,7 +148,7 @@ async function recalibratePriceThresholdFactors() {
       value: factor.toFixed(4),
       note:
         `Automatisch herijkt op ${nowIso} o.b.v. ${fallRatios.length} waargenomen dalingen ` +
-        `(25e percentiel van |net_since_prev|/owners_estimate).`,
+        `(50e percentiel van |net_since_prev|/owners_estimate).`,
     });
   }
   if (updates.length) {
