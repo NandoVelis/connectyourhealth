@@ -1344,13 +1344,28 @@ async function loadGarminStepsForDate(owner, dateStr){
   try{
     const { data, error } = await supabaseClient
       .from('garmin_metrics')
-      .select('steps_total, steps_training')
+      .select('steps_total, steps_training, garmin_total_kcal')
       .eq('owner', owner)
       .eq('metric_date', dateStr)
       .maybeSingle();
     if(error) throw error;
     return data || null;
   }catch(e){ console.error('Laden Garmin-stappen', e); return null; }
+}
+// Toont Garmin's eigen dagtotaal (totalKilocalories) als aparte, tweede
+// meting naast onze berekening -- niet als vervanging: onze rest_kcal x
+// activiteiten-formule blijft de basis voor "Totaal verbrand"/balans, dit
+// is puur ter vergelijking. Voor de lopende dag is Garmin's cijfer nog maar
+// "tot nu toe" (dag niet afgerond), dus dat wordt erbij vermeld.
+function garminCompareRow(garminStepsToday, dateStr){
+  const kcal = garminStepsToday && garminStepsToday.garmin_total_kcal;
+  if(kcal==null) return '';
+  const isToday = dateStr === fmtDate(new Date());
+  return `
+      <div class="stat-row" style="border-top:1px solid var(--line);margin-top:10px;padding-top:10px;">
+        <span class="stat-label">&#128999; Garmin dagtotaal${isToday ? ' (tot nu toe)' : ''}</span>
+        <span class="stat-val">${kcal} kcal</span>
+      </div>`;
 }
 // Vult Tredict-vitals (het bestaande "Herstel"-blok) aan met Garmin-
 // testdata voor dezelfde dag -- nu Tredict binnenkort stopt, blijft het
@@ -2850,7 +2865,8 @@ async function renderDashboard(){
       <div class="stat-row" style="border-bottom:none;">
         <span class="stat-label" style="font-weight:700;">Totaal verbrand</span>
         <span class="stat-val">~${burned ?? estimatedRestKcal} kcal</span>
-      </div>`;
+      </div>
+      ${garminCompareRow(garminStepsToday, dateStr)}`;
   } else if(!training){
     detailEl.innerHTML = '<div class="empty">Nog niet opgehaald voor deze dag.</div>';
   } else {
@@ -2889,7 +2905,8 @@ async function renderDashboard(){
       <div class="stat-row" style="border-bottom:none;">
         <span class="stat-label" style="font-weight:700;">Totaal verbrand</span>
         <span class="stat-val">${burned ?? training.totalKcal ?? 0} kcal</span>
-      </div>`;
+      </div>
+      ${garminCompareRow(garminStepsToday, dateStr)}`;
   }
 
   const balansEl = document.getElementById('balansNum');
