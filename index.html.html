@@ -408,6 +408,11 @@
       </details>
     </div>
 
+    <div class="card" style="margin-bottom:16px;display:none;" id="raceGoalsCard">
+      <h3>&#127942; Wedstrijden</h3>
+      <div id="raceGoalsList"></div>
+    </div>
+
     <div class="card" style="margin-bottom:16px;background:linear-gradient(115deg,#7A0A66 0%,#4B1F6B 40%,#1A1240 100%);border:none;">
       <div id="motivationQuote" style="font-family:'Archivo',sans-serif;font-size:16px;font-weight:600;color:#F5F1E8;text-align:center;line-height:1.5;"></div>
     </div>
@@ -2671,6 +2676,48 @@ function estimateRunKmToBurn(kcalToBurn, weightKg, kcalPerKm){
   return Math.round((kcalToBurn/perKm)*10)/10;
 }
 
+// Wedstrijden-countdown -- puur zichtbaar voor Nando (op verzoek), gebaseerd
+// op zijn trainingsplan (4 mijl Groningen, halve marathon Assen, marathon
+// Groningen). race_goals kent geen echte per-gebruiker RLS (net als de rest
+// van deze app zonder login), dus de owner-filter hier in de query +
+// de kaart alleen tonen voor owner==='Nando' is de enige afscherming.
+async function renderRaceGoals(owner){
+  const card = document.getElementById('raceGoalsCard');
+  if(!card) return;
+  if(owner !== 'Nando'){ card.style.display = 'none'; return; }
+  try{
+    const { data, error } = await supabaseClient
+      .from('race_goals')
+      .select('*')
+      .eq('owner', owner)
+      .order('race_date', { ascending: true });
+    if(error || !data || !data.length){ card.style.display = 'none'; return; }
+    const now = new Date();
+    const list = document.getElementById('raceGoalsList');
+    list.innerHTML = data.map(r=>{
+      const raceDate = new Date(r.race_date + 'T00:00:00');
+      const diffMs = raceDate - now;
+      const isPast = diffMs < 0;
+      let countdownLabel;
+      if(isPast){
+        countdownLabel = 'geweest';
+      } else {
+        const days = Math.floor(diffMs / (1000*60*60*24));
+        const hours = Math.floor((diffMs % (1000*60*60*24)) / (1000*60*60));
+        countdownLabel = `nog ${days}d ${hours}u`;
+      }
+      const dateLabel = raceDate.toLocaleDateString('nl-NL', { day:'numeric', month:'long', year:'numeric' });
+      return `<div class="stat-row" style="${isPast?'opacity:0.5;':''}">
+        <span class="stat-label">${r.race_name}${r.distance_label ? ' ('+r.distance_label+')' : ''}<br><span class="meal-meta">${dateLabel}</span></span>
+        <span class="stat-val" style="font-size:15px;">${countdownLabel}</span>
+      </div>`;
+    }).join('');
+    card.style.display = '';
+  }catch(e){
+    console.warn('Wedstrijden laden mislukt', e);
+    card.style.display = 'none';
+  }
+}
 async function renderDashboard(){
 
   const dateStr = fmtDate(state.currentDate);
@@ -2686,6 +2733,8 @@ async function renderDashboard(){
     if(tipElEarly) tipElEarly.textContent = 'Vul eerst je naam in bij het tabblad Team.';
     return;
   }
+
+  renderRaceGoals(owner);
 
   const meals = await loadMeals(dateStr);
   const totals = macroKcal(meals);
