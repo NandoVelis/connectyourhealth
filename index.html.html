@@ -1254,6 +1254,25 @@ restKcal: data[0].rest_kcal,
 totalKcal: data[0].total_kcal
 };
 }
+// Garmin's echte dagtotaal (uit garmin_metrics.garmin_total_kcal) is nauwkeuriger dan
+// onze eigen rest_kcal-schatting, die dag-op-dag amper varieert terwijl het echte
+// verbruik dat wel doet. Alleen gebruikt voor afgesloten dagen, zie renderDashboard().
+async function loadGarminTotalKcal(dateStr, owner){
+  if(!owner) return null;
+  try{
+    const { data, error } = await supabaseClient
+      .from('garmin_metrics')
+      .select('garmin_total_kcal')
+      .eq('metric_date', dateStr)
+      .eq('owner', owner)
+      .maybeSingle();
+    if(error || !data) return null;
+    return data.garmin_total_kcal ?? null;
+  }catch(e){
+    console.warn('Garmin dagtotaal laden mislukt', e);
+    return null;
+  }
+}
 // Geplande training uit Tredict's eigen agenda voor deze dag (gesynchroniseerd
 // door sync-tredict via plannedTrainingList), gebruikt door de trainingstip
 // om de concrete Tredict-planning te tonen i.p.v. alleen het vaste weekschema.
@@ -2788,7 +2807,11 @@ async function renderDashboard(){
   const totals = macroKcal(meals);
   const training = await loadTraining(dateStr);
   const weightEntry = await loadWeight(dateStr);
-  let burned = training ? training.totalKcal : null;
+  // Garmin's dagtotaal is pas na afloop van de dag een eerlijke vergelijking (tijdens
+  // de dag zelf is het nog maar 'tot nu toe'), dus alleen gebruiken voor afgesloten dagen.
+  const isPastDay = dateStr < fmtDate(new Date());
+  const garminDailyKcal = isPastDay ? await loadGarminTotalKcal(dateStr, owner) : null;
+  let burned = garminDailyKcal != null ? garminDailyKcal : (training ? training.totalKcal : null);
   let burnedIsEstimate = false;
   let estimatedRestKcal = null;
   const fallbackWeight = (weightEntry && weightEntry.kg) ? weightEntry : await loadMostRecentWeight(dateStr);

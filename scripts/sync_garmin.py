@@ -104,6 +104,31 @@ def upsert_metrics(owner, rows):
         raise RuntimeError(f"Opslaan garmin_metrics mislukt ({resp.status_code}): {resp.text[:500]}")
 
 
+def load_existing_raw(owner, week_start, today):
+    # PostgREST's merge-duplicates doet een kolom-voor-kolom upsert, geen
+    # JSON-merge op de 'raw'-kolom zelf -- dus zonder dit vooraf op te halen
+    # overschrijft elke run 'raw' met alleen de bronnen die DEZE run iets
+    # opleverden voor die datum. Voor een datum die niet meer "vandaag" is
+    # (dus geen training_status/stats/run_activities meer krijgt) wiste dat
+    # stilzwijgend eerder opgeslagen keys zoals "stats" (Garmin's dagtotaal-
+    # kcal) zodra de dag voorbij was -- precies de reden dat er geen
+    # historische dagtotalen bewaard bleven. Door de bestaande 'raw' als
+    # startpunt te gebruiken (i.p.v. een lege dict) blijven eerder
+    # opgeslagen keys behouden totdat een latere run ze expliciet vervangt.
+    resp = requests.get(
+        f"{SUPABASE_URL}/rest/v1/garmin_metrics",
+        headers=supabase_headers(),
+        params={
+            "owner": f"eq.{owner}",
+            "metric_date": f"gte.{week_start.isoformat()}",
+            "select": "metric_date,raw",
+        },
+        timeout=15,
+    )
+    resp.raise_for_status()
+    return {r["metric_date"]: (r.get("raw") or {}) for r in resp.json()}
+
+
 def load_profile(owner):
     resp = requests.get(
         f"{SUPABASE_URL}/rest/v1/profiles",
@@ -262,12 +287,20 @@ def main():
     sleep = safe(garmin.get_sleep_daily, week_start.isoformat(), today.isoformat())
     max_metrics = safe(garmin.get_max_metrics_range, week_start.isoformat(), today.isoformat())
     training_status = safe(garmin.get_training_status, today.isoformat())
-    # Alleen voor vandaag: totaal-stappen (voor de "extra stappen naast
-    # training"-functie in de app) en de stappen die Garmin toeschrijft aan
-    # de hardloopactiviteit(en) van vandaag, zodat de app die eraf kan
-    # trekken (anders tellen dezelfde stappen twee keer mee: eenmaal via de
-    # gesynchroniseerde training, eenmaal via het losse stappenverbruik).
-    today_stats = safe(garmin.get_stats, today.isoformat())
+    # Vroeger alleen voor "vandaag" opgehaald -- maar Garmin's dagtotaal-kcal
+    # (totalKilocalories/activeKilocalories/bmrKilocalories) is de enige
+    # betrouwbare bron voor het WERKELIJKE dagverbruik (i.t.t. onze eigen
+    # vaste BMR x1.2-schatting, die dag-op-dag-variatie in NEAT/stappen
+    # volledig mist -- tot 400 kcal verschil op een drukke dag). Nu voor elke
+    # dag in het 7-dagen-venster los opgehaald (Garmin's endpoint accepteert
+    # elke datum, niet alleen vandaag), zodat elke sync-run de hele week
+    # zelfhelend terugvult i.p.v. dat alleen "vandaag" een momentopname krijgt
+    # die de volgende run alweer overschrijft.
+    stats_by_date = {}
+    d = week_start
+    while d <= today:
+        stats_by_date[d.isoformat()] = safe(garmin.get_stats, d.isoformat())
+        d += timedelta(days=1)
     today_run_activities = safe(garmin.get_activities_by_date, today.isoformat(), today.isoformat(), "running")
     for name, val in [("rhr", rhr), ("hrv", hrv), ("sleep", sleep), ("max_metrics", max_metrics)]:
         if not isinstance(val, list):
@@ -278,6 +311,7 @@ def main():
     # daarnaast altijd de ruwe respons in de 'raw'-kolom, zodat niets
     # verloren gaat ook als een van deze extracties net niet klopt.
     per_date = {}
+    existing_raw_by_date = safe(load_existing_raw, owner, week_start, today) or {}
 
     # PostgREST's bulk-insert (POST met een JSON-array) eist dat elk object
     # exact dezelfde keys heeft ("All object keys must match") -- dus elke
@@ -306,8 +340,13 @@ def main():
             "training_balance_feedback": None,
             "steps_total": None,
             "steps_training": None,
+            "garmin_total_kcal": None,
+            "garmin_active_kcal": None,
+            "garmin_bmr_kcal": None,
             "updated_at": datetime.now(timezone.utc).isoformat(),
-            "raw": {},
+            # Start met wat al opgeslagen stond i.p.v. leeg -- zie
+            # load_existing_raw hierboven voor waarom.
+            "raw": dict(existing_raw_by_date.get(d) or {}),
         })
 
     if isinstance(rhr, list):
@@ -400,10 +439,15 @@ def main():
 
         row["raw"]["training_status"] = training_status
 
-    if today_stats:
-        row = bucket(today.isoformat())
-        row["steps_total"] = today_stats.get("totalSteps")
-        row["raw"]["stats"] = today_stats
+    for d_str, stats in stats_by_date.items():
+        if not stats:
+            continue
+        row = bucket(d_str)
+        row["steps_total"] = stats.get("totalSteps")
+        row["garmin_total_kcal"] = stats.get("totalKilocalories")
+        row["garmin_active_kcal"] = stats.get("activeKilocalories")
+        row["garmin_bmr_kcal"] = stats.get("bmrKilocalories")
+        row["raw"]["stats"] = stats
 
     if isinstance(today_run_activities, list):
         row = bucket(today.isoformat())
