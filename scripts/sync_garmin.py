@@ -439,20 +439,26 @@ def main():
 
         row["raw"]["training_status"] = training_status
 
+    def as_int(value):
+        # Garmin's stats-endpoint geeft deze kcal/stappen-velden soms terug
+        # als float (bv. 735.0) -- de kolommen zijn integer, en PostgREST
+        # wijst "735.0" af als integer-invoer, dus altijd afronden.
+        return round(value) if value is not None else None
+
     for d_str, stats in stats_by_date.items():
         if not stats:
             continue
         row = bucket(d_str)
-        row["steps_total"] = stats.get("totalSteps")
-        row["garmin_total_kcal"] = stats.get("totalKilocalories")
-        row["garmin_active_kcal"] = stats.get("activeKilocalories")
-        row["garmin_bmr_kcal"] = stats.get("bmrKilocalories")
+        row["steps_total"] = as_int(stats.get("totalSteps"))
+        row["garmin_total_kcal"] = as_int(stats.get("totalKilocalories"))
+        row["garmin_active_kcal"] = as_int(stats.get("activeKilocalories"))
+        row["garmin_bmr_kcal"] = as_int(stats.get("bmrKilocalories"))
         row["raw"]["stats"] = stats
 
     if isinstance(today_run_activities, list):
         row = bucket(today.isoformat())
         run_steps = sum(a.get("steps") or 0 for a in today_run_activities)
-        row["steps_training"] = run_steps if today_run_activities else None
+        row["steps_training"] = as_int(run_steps) if today_run_activities else None
         row["raw"]["run_activities_steps"] = run_steps
 
     rows = list(per_date.values())
