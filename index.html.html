@@ -413,6 +413,13 @@
       <div id="raceGoalsList"></div>
     </div>
 
+    <div class="card" style="margin-bottom:16px;display:none;" id="trainingPaceZonesCard">
+      <details>
+        <summary style="cursor:pointer;list-style:none;" class="h3-summary"><h3 style="display:inline;">&#9201;&#65039; Trainingstempo's (marathon-doel)</h3></summary>
+        <div id="trainingPaceZonesList" style="margin-top:10px;"></div>
+      </details>
+    </div>
+
     <div class="card" style="margin-bottom:16px;background:linear-gradient(115deg,#7A0A66 0%,#4B1F6B 40%,#1A1240 100%);border:none;">
       <div id="motivationQuote" style="font-family:'Archivo',sans-serif;font-size:16px;font-weight:600;color:#F5F1E8;text-align:center;line-height:1.5;"></div>
     </div>
@@ -2707,14 +2714,54 @@ async function renderRaceGoals(owner){
         countdownLabel = `nog ${days}d ${hours}u`;
       }
       const dateLabel = raceDate.toLocaleDateString('nl-NL', { day:'numeric', month:'long', year:'numeric' });
+      const goalLine = r.target_time_seconds
+        ? `<br><span class="meal-meta">Doel: ${formatSecondsAsClock(r.target_time_seconds)}${r.target_pace_per_km ? ' ('+r.target_pace_per_km+')' : ''}</span>`
+        : '';
       return `<div class="stat-row" style="${isPast?'opacity:0.5;':''}">
-        <span class="stat-label">${r.race_name}${r.distance_label ? ' ('+r.distance_label+')' : ''}<br><span class="meal-meta">${dateLabel}</span></span>
+        <span class="stat-label">${r.race_name}${r.distance_label ? ' ('+r.distance_label+')' : ''}<br><span class="meal-meta">${dateLabel}</span>${goalLine}</span>
         <span class="stat-val" style="font-size:15px;">${countdownLabel}</span>
       </div>`;
     }).join('');
     card.style.display = '';
   }catch(e){
     console.warn('Wedstrijden laden mislukt', e);
+    card.style.display = 'none';
+  }
+}
+function formatSecondsAsClock(totalSeconds){
+  const h = Math.floor(totalSeconds/3600);
+  const m = Math.floor((totalSeconds%3600)/60);
+  const s = totalSeconds%60;
+  return h>0
+    ? `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`
+    : `${m}:${String(s).padStart(2,'0')}`;
+}
+// Trainingstempo's (VDOT-zones, Jack Daniels) o.b.v. het marathon-doel als
+// hoofddoel -- alleen zichtbaar voor Nando, zelfde afscherming als
+// renderRaceGoals hierboven.
+async function renderTrainingPaceZones(owner){
+  const card = document.getElementById('trainingPaceZonesCard');
+  if(!card) return;
+  if(owner !== 'Nando'){ card.style.display = 'none'; return; }
+  try{
+    const { data, error } = await supabaseClient
+      .from('training_pace_zones')
+      .select('*')
+      .eq('owner', owner)
+      .order('sort_order', { ascending: true });
+    if(error || !data || !data.length){ card.style.display = 'none'; return; }
+    const list = document.getElementById('trainingPaceZonesList');
+    list.innerHTML = data.map(z=>`
+      <div class="stat-row" style="flex-direction:column;align-items:flex-start;border-bottom:1px solid var(--line);padding-bottom:8px;margin-bottom:8px;">
+        <div style="display:flex;justify-content:space-between;width:100%;">
+          <span class="stat-label">${z.zone_code} &mdash; ${z.zone_label}</span>
+          <span class="stat-val" style="font-size:15px;">${z.pace_per_km}</span>
+        </div>
+        ${z.tip ? `<span class="meal-meta" style="margin-top:4px;">${z.tip}</span>` : ''}
+      </div>`).join('');
+    card.style.display = '';
+  }catch(e){
+    console.warn('Trainingstempo\'s laden mislukt', e);
     card.style.display = 'none';
   }
 }
@@ -2735,6 +2782,7 @@ async function renderDashboard(){
   }
 
   renderRaceGoals(owner);
+  renderTrainingPaceZones(owner);
 
   const meals = await loadMeals(dateStr);
   const totals = macroKcal(meals);
