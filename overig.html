@@ -77,6 +77,7 @@
   .tile .value{font-size:24px;font-weight:700;margin-top:6px;font-variant-numeric:tabular-nums}
   .tile .sub{font-size:12px;color:var(--muted);margin-top:2px}
   .tile.up .value{color:var(--up)} .tile.down .value{color:var(--down)}
+  .tile.clickable{cursor:pointer} .tile.clickable:hover{border-color:var(--lavender)}
 
   /* ---------- watch columns ---------- */
   .cols{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:28px}
@@ -1453,9 +1454,9 @@ function renderTiles(){
   $('#tiles').innerHTML = `
     <div class="tile"><div class="label">Managers</div><div class="value">${nf.format(GAME.total_players||0)}</div>
       <div class="sub">${GAME.current_event_name || ''}</div></div>
-    <div class="tile up"><div class="label">Stijgt (bijna)</div><div class="value">${soonUp}</div>
+    <div class="tile up clickable" onclick="document.getElementById('risers').scrollIntoView({behavior:'smooth',block:'center'})"><div class="label">Stijgt (bijna)</div><div class="value">${soonUp}</div>
       <div class="sub">${seizoenUp} dit seizoen gestegen</div></div>
-    <div class="tile down"><div class="label">Daalt (bijna)</div><div class="value">${soonDown}</div>
+    <div class="tile down clickable" onclick="document.getElementById('fallers').scrollIntoView({behavior:'smooth',block:'center'})"><div class="label">Daalt (bijna)</div><div class="value">${soonDown}</div>
       <div class="sub">${seizoenDown} dit seizoen gedaald</div></div>
     <div class="tile"><div class="label">Deadline</div><div class="value">${uur !== null ? uur + 'u' : '—'}</div>
       <div class="sub">${deadline ? deadline.toLocaleString('nl-NL',{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}) : ''}</div></div>
