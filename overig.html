@@ -92,6 +92,14 @@
   .row .pct{font-variant-numeric:tabular-nums;font-weight:700;font-size:14px;text-align:right}
   .bar{grid-column:1/-1;height:5px;border-radius:3px;background:rgba(224,216,195,.12);overflow:hidden;margin-top:5px}
   .bar i{display:block;height:100%;border-radius:3px}
+  /* "Stijgt/Daalt binnenkort"-rijen: prijs/percentage-drempel-layout
+     geïnspireerd op livefpl.net/prices (Progress Now + Prediction-blok
+     rechts) -- percentage groot bovenaan, verwachte timing er direct onder,
+     werkt al op mobiel doordat .cols hierboven al naar 1 kolom stackt. */
+  .watchRow{grid-template-columns:1fr auto}
+  .watchRow .predict{text-align:right}
+  .watchRow .predict .pct{font-size:18px;display:block}
+  .watchRow .predict .eta{font-size:11px;color:var(--muted);white-space:nowrap;margin-top:1px}
   .bar i.up{background:var(--up)} .bar i.down{background:var(--down)}
   .empty{color:var(--muted);font-size:13px;padding:10px 0}
 
@@ -1479,12 +1487,15 @@ function renderTiles(){
 /* ---------- watchlists ---------- */
 function watchRow(r, dir){
   const p = Math.min(r.progress ?? 0, 1.35);
-  return `<div class="row">
+  return `<div class="row watchRow">
     <div>
       <div class="name">${r.web_name} <span class="meta">${r.team_short} · ${POS_SHORT[r.element_type]||''}</span></div>
-      <div class="meta">${eur(r.now_cost)} · ${r.selected_by_percent}% bezit · ${signed(r.net_since_change)} netto${r.basis==='geschat'?' · geschat':''} · verwacht ${formatEta(r.eta_at, r.progress)}</div>
+      <div class="meta">${eur(r.now_cost)} · ${r.selected_by_percent}% bezit · ${signed(r.net_since_change)} netto${r.basis==='geschat'?' · geschat':''}</div>
     </div>
-    <div class="pct" style="color:var(--${dir})">${dir==='down'?'-':''}${pct(r.progress)}</div>
+    <div class="predict">
+      <span class="pct" style="color:var(--${dir})">${dir==='down'?'-':''}${pct(r.progress)}</span>
+      <span class="eta">${formatEta(r.eta_at, r.progress)}</span>
+    </div>
     <div class="bar"><i class="${dir}" style="width:${Math.min(p*100,100)}%"></i></div>
   </div>`;
 }
