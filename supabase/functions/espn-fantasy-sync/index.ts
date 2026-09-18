@@ -106,10 +106,15 @@ const num = (v: unknown) => {
 //    deze ruim overschreden voordat 'ie gebeurde. Bereikt = "bijna"
 //    (vroeg, gevoelig signaal, met wat meer loos alarm -- dat is prima
 //    voor een waarschuwing).
-//  - *_confirmed (90e percentiel): de HOOGSTE drempel uit de kern -- hier
-//    onder was in de waargenomen historie maar 10% van de wijzigingen al
-//    gebeurd. Bereikt = "stijgt"/"daalt" (hoog vertrouwen, weinig loos
-//    alarm, geschikt als "zeker"-signaal).
+//  - *_confirmed: het 90e percentiel bleek achteraf (17-18 sept) structureel
+//    bijna onhaalbaar VOORDAT een wijziging al gebeurd was -- per definitie
+//    had ~90% van de waargenomen wijzigingen op het moment zelf al een
+//    lagere ratio, dus "zeker" werd zelden vooraf geraakt (hit-rate
+//    2/12 over twee nachten). Nu op het 50e percentiel (mediaan): net zo
+//    representatief voor de kern, maar wel voor de helft van de gevallen
+//    daadwerkelijk vooraf haalbaar. Bereikt = "stijgt"/"daalt" ("zeker"-
+//    signaal, met een bewust hogere kans op loos alarm dan voorheen -- dat
+//    is de prijs voor een drempel die niet chronisch te laat komt).
 // Minimaal 5 waarnemingen per richting nodig -- met minder is een
 // percentiel te grillig.
 const PRICE_THRESHOLD_MIN_SAMPLES = 5;
@@ -146,10 +151,11 @@ async function recalibratePriceThresholdFactors() {
     });
     updates.push({
       key: "rise_owner_factor_confirmed",
-      value: percentile(riseRatios, 0.9)!.toFixed(4),
+      value: percentile(riseRatios, 0.5)!.toFixed(4),
       note:
         `Automatisch herijkt op ${nowIso} o.b.v. ${riseRatios.length} waargenomen stijgingen ` +
-        `(90e percentiel van |net_since_prev|/owners_estimate).`,
+        `(50e percentiel van |net_since_prev|/owners_estimate -- verlaagd vanaf 90e op 18 sept, ` +
+        `zie recalibratePriceThresholdFactors() voor waarom).`,
     });
   }
   if (fallRatios.length >= PRICE_THRESHOLD_MIN_SAMPLES) {
@@ -162,14 +168,25 @@ async function recalibratePriceThresholdFactors() {
     });
     updates.push({
       key: "fall_owner_factor_confirmed",
-      value: percentile(fallRatios, 0.9)!.toFixed(4),
+      value: percentile(fallRatios, 0.5)!.toFixed(4),
       note:
         `Automatisch herijkt op ${nowIso} o.b.v. ${fallRatios.length} waargenomen dalingen ` +
-        `(90e percentiel van |net_since_prev|/owners_estimate).`,
+        `(50e percentiel van |net_since_prev|/owners_estimate -- verlaagd vanaf 90e op 18 sept, ` +
+        `zie recalibratePriceThresholdFactors() voor waarom).`,
     });
   }
   if (updates.length) {
     await sbPost("espn_model_config", updates, "return=minimal,resolution=merge-duplicates");
+    // Bewaar elke herijking met tijdstip, zodat een latere nauwkeurigheids-
+    // check (ochtend na de prijsronde) kan terugvinden welke drempel er
+    // daadwerkelijk gold op het moment dat een voorspelling werd gedaan --
+    // zonder dit was dat niet meer te reconstrueren (bleek 18 sept: de
+    // Chávez-analyse kon niet vaststellen welke config-waarden live stonden
+    // toen die avond de "bijna"-waarschuwing wel/niet afging).
+    await sbPost(
+      "espn_model_config_history",
+      updates.map((u) => ({ key: u.key, value: u.value, note: u.note, recorded_at: nowIso })),
+    );
   }
 }
 
