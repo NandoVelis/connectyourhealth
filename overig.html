@@ -134,6 +134,15 @@
   thead th:hover{color:var(--cream)}
   tbody tr{border-top:1px solid var(--line)}
   tbody tr:hover{background:rgba(141,133,255,.06)}
+  /* Spelernaam-kolom vastzetten in het transfersuggesties-blok, zodat je bij
+     horizontaal scrollen (veel statistiek-kolommen) nog weet welke rij bij
+     welke speler hoort. */
+  #tsTbl th:first-child, #tsTbl td:first-child{
+    position:sticky;left:0;z-index:1;background:var(--navy);
+    box-shadow:1px 0 0 var(--line);
+  }
+  #tsTbl thead th:first-child{z-index:2}
+  #tsTbl tbody tr:hover td:first-child{background:#131c4d}
   td.num{font-variant-numeric:tabular-nums}
   .pill{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:600}
   .pill.up{background:rgba(47,191,113,.16);color:var(--up)}
