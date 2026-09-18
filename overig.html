@@ -100,6 +100,7 @@
   .watchRow .predict{text-align:right}
   .watchRow .predict .pct{font-size:18px;display:block}
   .watchRow .predict .eta{font-size:11px;color:var(--muted);white-space:nowrap;margin-top:1px}
+  .watchRow .predict .trend{font-size:10px;font-weight:600;display:block;white-space:nowrap;margin-top:2px}
   .bar i.up{background:var(--up)} .bar i.down{background:var(--down)}
   .empty{color:var(--muted);font-size:13px;padding:10px 0}
 
@@ -1498,9 +1499,20 @@ function watchRow(r, dir){
     <div class="predict">
       <span class="pct" style="color:var(--${dir})">${dir==='down'?'-':''}${pct(r.progress)}</span>
       <span class="eta">${formatEta(r.eta_at, r.progress)}</span>
+      ${perHourTrend(r.pct_per_hour)}
     </div>
     <div class="bar"><i class="${dir}" style="width:${Math.min(p*100,100)}%"></i></div>
   </div>`;
+}
+// Per-uur-trend (livefpl-stijl "Per hr"): huidige transfersnelheid als
+// %-van-drempel-per-uur, uit espn_price_rate's lineaire fit -- alleen
+// beschikbaar bij genoeg recente datapunten (~210 van de 599 spelers),
+// dus stil weglaten i.p.v. een streepje tonen als het ontbreekt.
+function perHourTrend(pctPerHour){
+  if (pctPerHour == null) return '';
+  const up = pctPerHour > 0;
+  const arrows = Math.abs(pctPerHour) >= 0.05 ? '^^^' : Math.abs(pctPerHour) >= 0.02 ? '^^' : '^';
+  return `<span class="trend" style="color:var(--${up?'up':'down'})">${up?'+':''}${(pctPerHour*100).toFixed(2)}%/u ${up?arrows:arrows.replace(/\^/g,'v')}</span>`;
 }
 /* ---------- punten-statistieken ---------- */
 const ptsLeaderRow = (r, valueLabel) => `<div class="row">
