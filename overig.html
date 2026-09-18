@@ -143,6 +143,9 @@
   }
   #tsTbl thead th:first-child{z-index:2}
   #tsTbl tbody tr:hover td:first-child{background:#131c4d}
+  /* Tot 50 stijgers/dalers tonen i.p.v. maar top 8 -- scrollbaar houden
+     zodat een lange lijst niet de hele pagina uitrekt. */
+  #risers, #fallers{max-height:420px;overflow-y:auto}
   td.num{font-variant-numeric:tabular-nums}
   .pill{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:600}
   .pill.up{background:rgba(47,191,113,.16);color:var(--up)}
@@ -1521,9 +1524,9 @@ function renderWatch(){
   // Stijgers mogen al vanaf 0,5% meetellen: een vroege prijsstijging bij een
   // nog weinig-gekozen speler is juist een kans om vroeg in te stappen.
   const up = ROWS.filter(r => r.net_since_change > 0 && r.progress !== null && Number(r.selected_by_percent) >= 0.5)
-                 .sort((a,b) => b.progress - a.progress).slice(0,8);
+                 .sort((a,b) => b.progress - a.progress).slice(0,50);
   const dn = ROWS.filter(r => r.net_since_change < 0 && r.progress !== null && Number(r.selected_by_percent) >= 1.5)
-                 .sort((a,b) => b.progress - a.progress).slice(0,8);
+                 .sort((a,b) => b.progress - a.progress).slice(0,50);
   $('#risers').innerHTML  = up.length ? up.map(r => watchRow(r,'up')).join('')  : '<div class="empty">Nog geen kandidaten.</div>';
   $('#fallers').innerHTML = dn.length ? dn.map(r => watchRow(r,'down')).join('') : '<div class="empty">Nog geen kandidaten.</div>';
 }
