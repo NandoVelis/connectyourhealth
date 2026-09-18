@@ -1464,8 +1464,10 @@ function renderCombo(combo, transfers, startEvent, endEvent){
 
 /* ---------- tiles ---------- */
 function renderTiles(){
-  const soonUp   = ROWS.filter(r => r.verwachting === 'stijgt' || r.verwachting === 'stijgt bijna').length;
-  const soonDown = ROWS.filter(r => r.verwachting === 'daalt'  || r.verwachting === 'daalt bijna').length;
+  // Tegel heet "(bijna)", dus telt alleen die tier -- niet ook "zeker"
+  // (stijgt/daalt) erbij op, anders klopt het label niet met het getal.
+  const soonUp   = ROWS.filter(r => r.verwachting === 'stijgt bijna').length;
+  const soonDown = ROWS.filter(r => r.verwachting === 'daalt bijna').length;
   const seizoenUp   = ROWS.filter(r => r.cost_change_start > 0).length;
   const seizoenDown = ROWS.filter(r => r.cost_change_start < 0).length;
   const deadline = GAME.next_deadline ? new Date(GAME.next_deadline) : null;
