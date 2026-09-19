@@ -84,22 +84,30 @@ def pace_to_speed(min_per_km, sec_per_km):
 def distance_step(step_order, step_type_id, step_type_key, display_order,
                    distance_m, slow_pace, fast_pace, description=None):
     """Eén blok op afstand met een tempo-bandbreedte (langzaamste..snelste
-    tempo van het blok, als (min, sec)-tuples)."""
-    from garminconnect.workout import ExecutableStep, ConditionType, TargetType
+    tempo van het blok, als (min, sec)-tuples).
+
+    Gebruikt bewust de rauwe Garmin-API-waarden i.p.v. de ConditionType/
+    TargetType-enums van de library: die enums bleken tussen lokaal en de
+    GitHub Actions-runner (zelfde library-versie) inconsistent -- de
+    runner miste TargetType.SPEED terwijl die er lokaal wel was. De
+    onderliggende ID's (1=distance, 5=speed.zone) zijn Garmin's eigen,
+    stabiele API-schema en dus geen afhankelijkheid van de library-enums.
+    """
+    from garminconnect.workout import ExecutableStep
 
     extra = {"description": description} if description else {}
     return ExecutableStep(
         stepOrder=step_order,
         stepType={"stepTypeId": step_type_id, "stepTypeKey": step_type_key, "displayOrder": display_order},
         endCondition={
-            "conditionTypeId": ConditionType.DISTANCE,
+            "conditionTypeId": 1,
             "conditionTypeKey": "distance",
             "displayOrder": 3,
             "displayable": True,
         },
         endConditionValue=float(distance_m),
         targetType={
-            "workoutTargetTypeId": TargetType.SPEED,
+            "workoutTargetTypeId": 5,
             "workoutTargetTypeKey": "speed.zone",
             "displayOrder": 5,
         },
@@ -114,17 +122,19 @@ def distance_step(step_order, step_type_id, step_type_key, display_order,
 
 def build_progressive_15k():
     from garminconnect.workout import (
-        RunningWorkout, WorkoutSegment, StepType, create_warmup_step, create_cooldown_step,
+        RunningWorkout, WorkoutSegment, create_warmup_step, create_cooldown_step,
     )
 
+    INTERVAL_STEP_TYPE = 3  # Garmin's eigen ID, zie toelichting in distance_step()
+
     warmup = create_warmup_step(600.0, step_order=1)  # 10 min inlopen, geen doel
-    block1 = distance_step(2, StepType.INTERVAL, "interval", 3, 5000,
+    block1 = distance_step(2, INTERVAL_STEP_TYPE, "interval", 3, 5000,
                             slow_pace=(4, 40), fast_pace=(4, 20),
                             description="Blok 1/3: 5 km rustig opbouwend")
-    block2 = distance_step(3, StepType.INTERVAL, "interval", 3, 5000,
+    block2 = distance_step(3, INTERVAL_STEP_TYPE, "interval", 3, 5000,
                             slow_pace=(4, 15), fast_pace=(4, 0),
                             description="Blok 2/3: 5 km richting tempo")
-    block3 = distance_step(4, StepType.INTERVAL, "interval", 3, 5000,
+    block3 = distance_step(4, INTERVAL_STEP_TYPE, "interval", 3, 5000,
                             slow_pace=(4, 0), fast_pace=(3, 50),
                             description="Blok 3/3: 5 km op wedstrijdtempo (~3:59/km)")
     cooldown = create_cooldown_step(300.0, step_order=5)  # 5 min uitlopen
