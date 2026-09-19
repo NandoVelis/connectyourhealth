@@ -748,6 +748,28 @@
             <button class="btn-secondary defaultQuickAddRemove" data-key="kipfilet" title="Verwijderen uit Snel toevoegen" style="padding:6px 10px;flex-shrink:0;">&times;</button>
           </div>
         </div>
+        <div class="stat-row" data-default-key="ugali" style="border-bottom:1px solid var(--line);flex-direction:column;align-items:stretch;gap:8px;">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Cellipse cx='24' cy='36' rx='20' ry='7' fill='%23C77B3D'/%3E%3Cpath d='M6 36 C6 24 12 18 24 18 C36 18 42 24 42 36 Z' fill='%23E8934A'/%3E%3Cellipse cx='24' cy='22' rx='14' ry='7' fill='%23F5EFD8'/%3E%3C/svg%3E" alt="Ugali" style="width:28px;height:28px;flex-shrink:0;border-radius:6px;">
+            <div>
+              <div class="meal-desc">🌽 Ugali (wit maismeel)</div>
+              <div class="meal-meta">~363 kcal, 8g eiwit, 77g koolh. per 100g (droog maismeel) &middot; aantal gram aanpasbaar</div>
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:6px;flex-wrap:nowrap;">
+            <input type="number" id="ugaliGrams" value="150" min="1" style="width:52px;padding:6px 4px;flex-shrink:0;">
+            <span style="font-size:11px;color:var(--ink-soft);flex-shrink:0;">g</span>
+            <select class="qaGroupSelect" data-key="ugali" style="font-size:11px;padding:5px 2px;border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--ink-soft);width:76px;flex-shrink:0;">
+              <option value="Ontbijt">Ontbijt</option>
+              <option value="Lunch">Lunch</option>
+              <option value="Snack">Snack</option>
+              <option value="Diner" selected>Diner</option>
+              <option value="Drinken">Drinken</option>
+            </select>
+            <button class="btn-secondary" id="quickAddUgali" style="flex-shrink:0;padding:8px 10px;">+ Toevoegen</button>
+            <button class="btn-secondary defaultQuickAddRemove" data-key="ugali" title="Verwijderen uit Snel toevoegen" style="padding:6px 10px;flex-shrink:0;">&times;</button>
+          </div>
+        </div>
         <div id="dinerCategoryFilter" style="display:flex;gap:6px;flex-wrap:wrap;margin:10px 0 4px;"></div>
         <div id="customQuickAddList"></div>
         </div>
@@ -5098,6 +5120,19 @@ document.getElementById('quickAddKipfilet').addEventListener('click', (e)=>{
     kcal: Math.round(grams*1.65),
     protein: Math.round(grams*0.31*10)/10,
     carbs: 0,
+    fat: Math.round(grams*0.036*10)/10,
+    time: ''
+  }, document.getElementById('quickAddStatus'), e.target);
+});
+
+document.getElementById('quickAddUgali').addEventListener('click', (e)=>{
+  const grams = numOrDefault('ugaliGrams', 150, 0);
+  quickAdd({
+    desc: grams + 'g ugali (wit maismeel)',
+    mealType: 'Diner',
+    kcal: Math.round(grams*3.63),
+    protein: Math.round(grams*0.08*10)/10,
+    carbs: Math.round(grams*0.77*10)/10,
     fat: Math.round(grams*0.036*10)/10,
     time: ''
   }, document.getElementById('quickAddStatus'), e.target);
