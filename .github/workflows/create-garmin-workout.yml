@@ -15,6 +15,10 @@ on:
         description: 'Datum om de training in te plannen (YYYY-MM-DD), leeg = alleen aanmaken'
         required: false
         type: string
+      workout_id:
+        description: 'Bestaande workout-ID inplannen i.p.v. een nieuwe training aanmaken (leeg = nieuwe training)'
+        required: false
+        type: string
 
 jobs:
   create-workout:
@@ -36,4 +40,5 @@ jobs:
           GARMIN_PASSWORD: ${{ secrets.GARMIN_PASSWORD_NANDO }}
           GARMIN_MFA_CODE: ${{ inputs.mfa_code }}
           WORKOUT_SCHEDULE_DATE: ${{ inputs.schedule_date }}
+          WORKOUT_ID: ${{ inputs.workout_id }}
         run: python3 scripts/create_garmin_workout.py

@@ -181,13 +181,17 @@ def main():
     password = os.environ["GARMIN_PASSWORD"]
     mfa_code = os.environ.get("GARMIN_MFA_CODE") or None
     schedule_date = os.environ.get("WORKOUT_SCHEDULE_DATE") or None  # YYYY-MM-DD, optioneel
+    existing_workout_id = os.environ.get("WORKOUT_ID") or None  # als gezet: niet opnieuw aanmaken, alleen inplannen
 
     garmin = login(owner, email, password, mfa_code)
 
-    workout = build_five_by_three_progressive()
-    result = garmin.upload_running_workout(workout)
-    workout_id = result.get("workoutId") or result.get("workoutID") or result.get("id")
-    print(f"Training aangemaakt in Garmin Connect (workoutId={workout_id}).")
+    if existing_workout_id:
+        workout_id = existing_workout_id
+    else:
+        workout = build_five_by_three_progressive()
+        result = garmin.upload_running_workout(workout)
+        workout_id = result.get("workoutId") or result.get("workoutID") or result.get("id")
+        print(f"Training aangemaakt in Garmin Connect (workoutId={workout_id}).")
 
     if schedule_date and workout_id:
         garmin.schedule_workout(workout_id, schedule_date)
