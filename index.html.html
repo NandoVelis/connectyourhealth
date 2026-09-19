@@ -757,7 +757,7 @@
             </div>
           </div>
           <div style="display:flex;align-items:center;gap:6px;flex-wrap:nowrap;">
-            <input type="number" id="ugaliGrams" value="150" min="1" style="width:52px;padding:6px 4px;flex-shrink:0;">
+            <input type="number" id="ugaliGrams" value="166" min="1" style="width:52px;padding:6px 4px;flex-shrink:0;">
             <span style="font-size:11px;color:var(--ink-soft);flex-shrink:0;">g</span>
             <select class="qaGroupSelect" data-key="ugali" style="font-size:11px;padding:5px 2px;border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--ink-soft);width:76px;flex-shrink:0;">
               <option value="Ontbijt">Ontbijt</option>
@@ -5126,7 +5126,7 @@ document.getElementById('quickAddKipfilet').addEventListener('click', (e)=>{
 });
 
 document.getElementById('quickAddUgali').addEventListener('click', (e)=>{
-  const grams = numOrDefault('ugaliGrams', 150, 0);
+  const grams = numOrDefault('ugaliGrams', 166, 0);
   quickAdd({
     desc: grams + 'g ugali (wit maismeel)',
     mealType: 'Diner',
