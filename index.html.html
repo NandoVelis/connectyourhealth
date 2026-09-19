@@ -776,6 +776,16 @@
             <button class="btn-secondary defaultQuickAddRemove" data-key="shake" title="Verwijderen uit Snel toevoegen" style="padding:6px 10px;flex-shrink:0;">&times;</button>
           </div>
         </div>
+        <div class="stat-row" data-default-key="gel" style="border-bottom:1px solid var(--line);">
+          <div>
+            <div class="meal-desc">⚡ Energiegel</div>
+            <div class="meal-meta">sportvoeding &middot; ~100 kcal, 25g koolhydraten</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:6px;flex-wrap:nowrap;">
+            <button class="btn-secondary" id="quickAddGel" style="flex-shrink:0;padding:8px 10px;">+ Toevoegen</button>
+            <button class="btn-secondary defaultQuickAddRemove" data-key="gel" title="Verwijderen uit Snel toevoegen" style="padding:6px 10px;flex-shrink:0;">&times;</button>
+          </div>
+        </div>
         <div class="stat-row" data-default-key="leffe" style="border-bottom:1px solid var(--line);">
           <div>
             <div class="meal-desc">🍺 Leffe Blond 0.0</div>
@@ -4997,6 +5007,13 @@ document.getElementById('quickAddShake').addEventListener('click', (e)=>{
   quickAdd({
     desc: 'Eiwitshake (whey, met water)',
     mealType: 'Sportvoeding', kcal: 120, protein: 24, carbs: 3, fat: 1.5, time: ''
+  }, document.getElementById('quickAddStatus'), e.target);
+});
+
+document.getElementById('quickAddGel').addEventListener('click', (e)=>{
+  quickAdd({
+    desc: 'Energiegel',
+    mealType: 'Sportvoeding', kcal: 100, protein: 0, carbs: 25, fat: 0, time: ''
   }, document.getElementById('quickAddStatus'), e.target);
 });
 
