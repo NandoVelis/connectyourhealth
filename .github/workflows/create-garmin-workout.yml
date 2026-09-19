@@ -1,0 +1,39 @@
+name: Maak Garmin-training aan
+
+# Eenmalige/handmatige actie (geen schema): maakt een gestructureerde
+# training aan in Garmin Connect via scripts/create_garmin_workout.py.
+# Zie dat script om de training zelf aan te passen.
+
+on:
+  workflow_dispatch:
+    inputs:
+      mfa_code:
+        description: 'MFA-code (alleen nodig als de opgeslagen Garmin-sessie verlopen is)'
+        required: false
+        type: string
+      schedule_date:
+        description: 'Datum om de training in te plannen (YYYY-MM-DD), leeg = alleen aanmaken'
+        required: false
+        type: string
+
+jobs:
+  create-workout:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Installeer garminconnect
+        run: pip install --upgrade garminconnect curl_cffi requests pydantic
+
+      - name: Maak training aan voor Nando
+        env:
+          GARMIN_OWNER: Nando
+          GARMIN_EMAIL: ${{ secrets.GARMIN_EMAIL_NANDO }}
+          GARMIN_PASSWORD: ${{ secrets.GARMIN_PASSWORD_NANDO }}
+          GARMIN_MFA_CODE: ${{ inputs.mfa_code }}
+          WORKOUT_SCHEDULE_DATE: ${{ inputs.schedule_date }}
+        run: python3 scripts/create_garmin_workout.py
