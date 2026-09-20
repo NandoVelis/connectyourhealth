@@ -2863,6 +2863,7 @@ async function renderDashboard(){
   let trainingExtraStepsKcal = 0;
   let trainingRelevantSteps = null;
   let garminStepsToday = null;
+  let stepsKcalAdded = false;
   if(stepsWeightKg){
     garminStepsToday = await loadGarminStepsForDate(owner, dateStr);
     if(garminStepsToday && garminStepsToday.steps_total!=null){
@@ -2872,7 +2873,7 @@ async function renderDashboard(){
       if(training) trainingRelevantSteps = relevantSteps;
       const kcal = extraKcalFromSteps(relevantSteps, stepsWeightKg);
       if(training){ trainingExtraStepsKcal = kcal; } else { extraStepsKcal = kcal; }
-      if(kcal>0 && burned!=null) burned += kcal;
+      if(kcal>0 && burned!=null){ burned += kcal; stepsKcalAdded = true; }
     }
   }
   // Backup als er geen training gesynchroniseerd is voor deze dag: Garmin's
@@ -2896,6 +2897,16 @@ async function renderDashboard(){
         burnedIsEstimate = true;
       }
     }
+  }
+  // Zonder gesynchroniseerde training (bv. nog geen trainingsrij voor
+  // vandaag) werd extraStepsKcal hierboven wel berekend en los getoond,
+  // maar nooit bij "burned" opgeteld omdat burned op dat moment nog null
+  // was -- "Totaal verbrand" (en dus de balans) bleef daardoor vastzitten
+  // ook als er gedurende de dag meer stappen bijkwamen. Garmin's eigen
+  // dagtotaal (burnedFromGarminBackup) telt stappen al zelf mee, dus die
+  // niet nogmaals optellen.
+  if(!stepsKcalAdded && !burnedFromGarminBackup && extraStepsKcal>0 && burned!=null){
+    burned += extraStepsKcal;
   }
 
   document.getElementById('consumedVal').textContent = totals.kcal + ' kcal';
