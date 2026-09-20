@@ -566,6 +566,33 @@ def main():
         replace_training_for_date(owner, d, training_rows)
         print(f"  {d}: {len(training_rows)} activiteit(en) weggeschreven ({activity_kcal_sum} kcal training, {total_kcal} kcal totaal)")
 
+    # Dagen zonder Garmin-activiteit kregen tot nu toe helemaal geen rij in
+    # "training" -- rest_kcal/total_kcal (de rustverbranding-formule achter
+    # "Totaal verbrand") werd dan alleen gevuld als iemand de app handmatig
+    # opende voor die datum (saveTraining's eigen tak voor activities.length
+    # === 0). Nu synct dit elke run ook zelf voor elke dag in het venster
+    # zonder activiteit en zonder handmatige override, zodat rustdagen niet
+    # afhankelijk zijn van een appbezoek. Dezelfde eigen BMR x1.2-formule als
+    # hierboven, geen wijziging aan die berekening zelf.
+    d = week_start
+    while d <= today:
+        d_str = d.isoformat()
+        if d_str not in activities_by_date and d_str not in overridden_dates:
+            weight_kg = safe(latest_weight_before, owner, d_str) or 63
+            rest_kcal = calculate_rest_kcal(weight_kg, height_cm, birth_date, d)
+            replace_training_for_date(owner, d_str, [{
+                "owner": owner,
+                "training_date": d_str,
+                "activity_name": None,
+                "kcal": None,
+                "km": None,
+                "activity_type": None,
+                "rest_kcal": rest_kcal,
+                "total_kcal": rest_kcal,
+            }])
+            print(f"  {d_str}: geen activiteit (rustdag), rest_kcal/total_kcal={rest_kcal} weggeschreven")
+        d += timedelta(days=1)
+
     print("Klaar.")
 
 
