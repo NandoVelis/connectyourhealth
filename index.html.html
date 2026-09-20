@@ -1283,7 +1283,11 @@ if(error || !data || data.length === 0){
 return null;
 }
 return {
-activities: data.map(item => ({
+// Een dag zonder activiteiten (rustdag) heeft een rij met activity_name
+// null -- puur om rest_kcal/total_kcal op te slaan (zie saveTraining en
+// sync_garmin.py). Die placeholder-rij moet niet als "activiteit" in de
+// lijst verschijnen (gaf een "null kcal"-regel in de Training-kaart).
+activities: data.filter(item => item.activity_name).map(item => ({
 name: item.activity_name,
 kcal: item.kcal,
 km: item.km,
