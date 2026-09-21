@@ -184,7 +184,7 @@ def build_interval_6x1000():
     WARMUP_STEP_TYPE, INTERVAL_STEP_TYPE, RECOVERY_STEP_TYPE = 1, 3, 4
 
     steps = [pace_step(1, WARMUP_STEP_TYPE, "warmup", 1, "time", 900.0,
-                        slow_pace=(5, 15), fast_pace=(4, 45), hr_note="< 140",
+                        slow_pace=(5, 15), fast_pace=(4, 25), hr_note="< 140",
                         description="Warming-up")]
     order = 2
     for i in range(1, 7):
@@ -205,7 +205,7 @@ def build_interval_6x1000():
         workoutName="Hardlopen: 6x1000m interval (3:35/km)",
         estimatedDurationInSecs=total_secs,
         description=(
-            "15 min inlopen (4:45-5:15/km, HS<140), dan 6x1000m op 3:30-3:40/km "
+            "15 min inlopen (4:25-5:15/km, HS<140), dan 6x1000m op 3:30-3:40/km "
             "(HS 170-175) met 400m hersteljog (5:20-6:00/km) ertussen, "
             "10 min rustig uitlopen (HS<140)."
         ),
@@ -227,7 +227,7 @@ def build_tempo_10k_355():
     WARMUP_STEP_TYPE, INTERVAL_STEP_TYPE = 1, 3
 
     warmup = pace_step(1, WARMUP_STEP_TYPE, "warmup", 1, "time", 900.0,
-                        slow_pace=(5, 15), fast_pace=(4, 45), hr_note="< 140",
+                        slow_pace=(5, 15), fast_pace=(4, 25), hr_note="< 140",
                         description="Warming-up")
     tempo = pace_step(2, INTERVAL_STEP_TYPE, "interval", 3, "distance", 10000,
                        slow_pace=(3, 58), fast_pace=(3, 52), hr_note="165-168",
@@ -240,7 +240,7 @@ def build_tempo_10k_355():
         workoutName="Hardlopen: 10 km drempel (3:55/km)",
         estimatedDurationInSecs=total_secs,
         description=(
-            "15 min inlopen (4:45-5:15/km, HS<140), dan 10 km aaneengesloten "
+            "15 min inlopen (4:25-5:15/km, HS<140), dan 10 km aaneengesloten "
             "op 3:52-3:58/km (HS 165-168), 10 min rustig uitlopen (HS<140)."
         ),
         workoutSegments=[
@@ -260,7 +260,7 @@ def build_long_run_24k():
     INTERVAL_STEP_TYPE = 3  # één aaneengesloten blok op E-tempo
 
     long_run = pace_step(1, INTERVAL_STEP_TYPE, "interval", 1, "distance", 24000,
-                          slow_pace=(5, 15), fast_pace=(4, 45), hr_note="< 155",
+                          slow_pace=(5, 15), fast_pace=(4, 25), hr_note="< 155",
                           description="Duurloop")
 
     total_secs = int(24000 / pace_to_speed(5, 0))
@@ -268,7 +268,7 @@ def build_long_run_24k():
     return RunningWorkout(
         workoutName="Hardlopen: 24 km duurloop (rustig)",
         estimatedDurationInSecs=total_secs,
-        description="24 km rustig op 4:45-5:15/km, HS < 155.",
+        description="24 km rustig op 4:25-5:15/km, HS < 155.",
         workoutSegments=[
             WorkoutSegment(
                 segmentOrder=1,
