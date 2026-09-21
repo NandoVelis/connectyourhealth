@@ -19,6 +19,16 @@ on:
         description: 'Bestaande workout-ID inplannen i.p.v. een nieuwe training aanmaken (leeg = nieuwe training)'
         required: false
         type: string
+      workout_type:
+        description: 'Welke training aanmaken (alleen als workout_id leeg is)'
+        required: false
+        type: choice
+        default: progressive_15k
+        options:
+          - progressive_15k
+          - interval_6x1000
+          - tempo_10k_355
+          - long_run_24k
 
 jobs:
   create-workout:
@@ -41,4 +51,5 @@ jobs:
           GARMIN_MFA_CODE: ${{ inputs.mfa_code }}
           WORKOUT_SCHEDULE_DATE: ${{ inputs.schedule_date }}
           WORKOUT_ID: ${{ inputs.workout_id }}
+          WORKOUT_TYPE: ${{ inputs.workout_type }}
         run: python3 scripts/create_garmin_workout.py

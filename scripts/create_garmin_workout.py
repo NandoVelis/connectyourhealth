@@ -175,6 +175,118 @@ def build_five_by_three_progressive():
     )
 
 
+def build_interval_6x1000():
+    """Dinsdag: 6x1000m op 3:35/km (VDOT 56 I-tempo), met hersteljog ertussen.
+    Alle stappen hebben een afstand-/tijd-eindconditie (geen lap.button), dus
+    het horloge schakelt zelf door -- geen laptoets nodig."""
+    from garminconnect.workout import RunningWorkout, WorkoutSegment, create_cooldown_step
+
+    WARMUP_STEP_TYPE, INTERVAL_STEP_TYPE, RECOVERY_STEP_TYPE = 1, 3, 4
+
+    steps = [pace_step(1, WARMUP_STEP_TYPE, "warmup", 1, "time", 900.0,
+                        slow_pace=(5, 15), fast_pace=(4, 45), hr_note="< 140",
+                        description="Warming-up")]
+    order = 2
+    for i in range(1, 7):
+        steps.append(pace_step(order, INTERVAL_STEP_TYPE, "interval", 3, "distance", 1000,
+                                slow_pace=(3, 40), fast_pace=(3, 30), hr_note="170-175",
+                                description=f"Herhaling {i}/6"))
+        order += 1
+        if i < 6:
+            steps.append(pace_step(order, RECOVERY_STEP_TYPE, "recovery", 4, "distance", 400,
+                                    slow_pace=(6, 0), fast_pace=(5, 20),
+                                    description="Hersteljog"))
+            order += 1
+    steps.append(create_cooldown_step(600.0, step_order=order))  # 10 min rustig uitlopen, HS < 140
+
+    total_secs = int(900 + 6 * (1000 / pace_to_speed(3, 35)) + 5 * (400 / pace_to_speed(5, 40)) + 600)
+
+    return RunningWorkout(
+        workoutName="Hardlopen: 6x1000m interval (3:35/km)",
+        estimatedDurationInSecs=total_secs,
+        description=(
+            "15 min inlopen (4:45-5:15/km, HS<140), dan 6x1000m op 3:30-3:40/km "
+            "(HS 170-175) met 400m hersteljog (5:20-6:00/km) ertussen, "
+            "10 min rustig uitlopen (HS<140)."
+        ),
+        workoutSegments=[
+            WorkoutSegment(
+                segmentOrder=1,
+                sportType={"sportTypeId": 1, "sportTypeKey": "running"},
+                workoutSteps=steps,
+            )
+        ],
+    )
+
+
+def build_tempo_10k_355():
+    """Donderdag: 10 km aaneengesloten op 3:55/km (verlaagd t.o.v. de
+    oorspronkelijke 12 km op 3:53 -- op verzoek iets minder scherp)."""
+    from garminconnect.workout import RunningWorkout, WorkoutSegment, create_cooldown_step
+
+    WARMUP_STEP_TYPE, INTERVAL_STEP_TYPE = 1, 3
+
+    warmup = pace_step(1, WARMUP_STEP_TYPE, "warmup", 1, "time", 900.0,
+                        slow_pace=(5, 15), fast_pace=(4, 45), hr_note="< 140",
+                        description="Warming-up")
+    tempo = pace_step(2, INTERVAL_STEP_TYPE, "interval", 3, "distance", 10000,
+                       slow_pace=(3, 58), fast_pace=(3, 52), hr_note="165-168",
+                       description="Drempeltempo")
+    cooldown = create_cooldown_step(600.0, step_order=3)  # 10 min rustig uitlopen, HS < 140
+
+    total_secs = int(900 + 10000 / pace_to_speed(3, 55) + 600)
+
+    return RunningWorkout(
+        workoutName="Hardlopen: 10 km drempel (3:55/km)",
+        estimatedDurationInSecs=total_secs,
+        description=(
+            "15 min inlopen (4:45-5:15/km, HS<140), dan 10 km aaneengesloten "
+            "op 3:52-3:58/km (HS 165-168), 10 min rustig uitlopen (HS<140)."
+        ),
+        workoutSegments=[
+            WorkoutSegment(
+                segmentOrder=1,
+                sportType={"sportTypeId": 1, "sportTypeKey": "running"},
+                workoutSteps=[warmup, tempo, cooldown],
+            )
+        ],
+    )
+
+
+def build_long_run_24k():
+    """Zaterdag: 24 km rustige duurloop (E-tempo, geen harde HS-eis)."""
+    from garminconnect.workout import RunningWorkout, WorkoutSegment
+
+    INTERVAL_STEP_TYPE = 3  # één aaneengesloten blok op E-tempo
+
+    long_run = pace_step(1, INTERVAL_STEP_TYPE, "interval", 1, "distance", 24000,
+                          slow_pace=(5, 15), fast_pace=(4, 45), hr_note="< 155",
+                          description="Duurloop")
+
+    total_secs = int(24000 / pace_to_speed(5, 0))
+
+    return RunningWorkout(
+        workoutName="Hardlopen: 24 km duurloop (rustig)",
+        estimatedDurationInSecs=total_secs,
+        description="24 km rustig op 4:45-5:15/km, HS < 155.",
+        workoutSegments=[
+            WorkoutSegment(
+                segmentOrder=1,
+                sportType={"sportTypeId": 1, "sportTypeKey": "running"},
+                workoutSteps=[long_run],
+            )
+        ],
+    )
+
+
+WORKOUT_BUILDERS = {
+    "progressive_15k": build_five_by_three_progressive,
+    "interval_6x1000": build_interval_6x1000,
+    "tempo_10k_355": build_tempo_10k_355,
+    "long_run_24k": build_long_run_24k,
+}
+
+
 def main():
     owner = os.environ["GARMIN_OWNER"]
     email = os.environ["GARMIN_EMAIL"]
@@ -182,16 +294,21 @@ def main():
     mfa_code = os.environ.get("GARMIN_MFA_CODE") or None
     schedule_date = os.environ.get("WORKOUT_SCHEDULE_DATE") or None  # YYYY-MM-DD, optioneel
     existing_workout_id = os.environ.get("WORKOUT_ID") or None  # als gezet: niet opnieuw aanmaken, alleen inplannen
+    workout_type = os.environ.get("WORKOUT_TYPE") or "progressive_15k"
 
     garmin = login(owner, email, password, mfa_code)
 
     if existing_workout_id:
         workout_id = existing_workout_id
     else:
-        workout = build_five_by_three_progressive()
+        builder = WORKOUT_BUILDERS.get(workout_type)
+        if builder is None:
+            print(f"Onbekend WORKOUT_TYPE '{workout_type}', kies uit: {', '.join(WORKOUT_BUILDERS)}")
+            sys.exit(1)
+        workout = builder()
         result = garmin.upload_running_workout(workout)
         workout_id = result.get("workoutId") or result.get("workoutID") or result.get("id")
-        print(f"Training aangemaakt in Garmin Connect (workoutId={workout_id}).")
+        print(f"Training aangemaakt in Garmin Connect (workoutId={workout_id}, type={workout_type}).")
 
     if schedule_date and workout_id:
         garmin.schedule_workout(workout_id, schedule_date)
