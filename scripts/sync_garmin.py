@@ -115,18 +115,26 @@ def load_existing_raw(owner, week_start, today):
     # historische dagtotalen bewaard bleven. Door de bestaande 'raw' als
     # startpunt te gebruiken (i.p.v. een lege dict) blijven eerder
     # opgeslagen keys behouden totdat een latere run ze expliciet vervangt.
+    #
+    # steps_training heeft hetzelfde probleem: die wordt alleen gevuld voor
+    # "vandaag" (via today_run_activities hieronder), dus een gewone kolom
+    # op None-default zou 'm bij de eerstvolgende run alweer wissen zodra de
+    # dag niet meer "vandaag" is -- precies wat "Stappen (excl. hardlopen)"
+    # daarna gelijk aan het volledige dagtotaal liet zien (geen aftrek meer
+    # van de hardloopstappen). Daarom ook deze kolom vooraf ophalen en als
+    # startpunt gebruiken, net als 'raw'.
     resp = requests.get(
         f"{SUPABASE_URL}/rest/v1/garmin_metrics",
         headers=supabase_headers(),
         params={
             "owner": f"eq.{owner}",
             "metric_date": f"gte.{week_start.isoformat()}",
-            "select": "metric_date,raw",
+            "select": "metric_date,raw,steps_training",
         },
         timeout=15,
     )
     resp.raise_for_status()
-    return {r["metric_date"]: (r.get("raw") or {}) for r in resp.json()}
+    return {r["metric_date"]: (r.get("raw") or {}, r.get("steps_training")) for r in resp.json()}
 
 
 def load_profile(owner):
@@ -311,13 +319,14 @@ def main():
     # daarnaast altijd de ruwe respons in de 'raw'-kolom, zodat niets
     # verloren gaat ook als een van deze extracties net niet klopt.
     per_date = {}
-    existing_raw_by_date = safe(load_existing_raw, owner, week_start, today) or {}
+    existing_by_date = safe(load_existing_raw, owner, week_start, today) or {}
 
     # PostgREST's bulk-insert (POST met een JSON-array) eist dat elk object
     # exact dezelfde keys heeft ("All object keys must match") -- dus elke
     # rij begint met alle kolommen expliciet op None, in plaats van dat een
     # rij alleen de kolommen krijgt waarvoor toevallig data gevonden is.
     def bucket(d):
+        existing_raw, existing_steps_training = existing_by_date.get(d) or ({}, None)
         return per_date.setdefault(d, {
             "owner": owner,
             "metric_date": d,
@@ -339,14 +348,17 @@ def main():
             "acwr_status": None,
             "training_balance_feedback": None,
             "steps_total": None,
-            "steps_training": None,
+            # Start met de eerder opgeslagen waarde i.p.v. None -- zie
+            # load_existing_raw hierboven voor waarom (anders wist elke run
+            # dit zodra de dag niet meer "vandaag" is).
+            "steps_training": existing_steps_training,
             "garmin_total_kcal": None,
             "garmin_active_kcal": None,
             "garmin_bmr_kcal": None,
             "updated_at": datetime.now(timezone.utc).isoformat(),
             # Start met wat al opgeslagen stond i.p.v. leeg -- zie
             # load_existing_raw hierboven voor waarom.
-            "raw": dict(existing_raw_by_date.get(d) or {}),
+            "raw": dict(existing_raw),
         })
 
     if isinstance(rhr, list):
