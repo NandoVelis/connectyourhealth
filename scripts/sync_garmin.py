@@ -116,25 +116,37 @@ def load_existing_raw(owner, week_start, today):
     # startpunt te gebruiken (i.p.v. een lege dict) blijven eerder
     # opgeslagen keys behouden totdat een latere run ze expliciet vervangt.
     #
-    # steps_training heeft hetzelfde probleem: die wordt alleen gevuld voor
-    # "vandaag" (via today_run_activities hieronder), dus een gewone kolom
-    # op None-default zou 'm bij de eerstvolgende run alweer wissen zodra de
-    # dag niet meer "vandaag" is -- precies wat "Stappen (excl. hardlopen)"
-    # daarna gelijk aan het volledige dagtotaal liet zien (geen aftrek meer
-    # van de hardloopstappen). Daarom ook deze kolom vooraf ophalen en als
-    # startpunt gebruiken, net als 'raw'.
+    # steps_training en de trainingsbelasting-kolommen (training_load_acute/
+    # chronic/ratio, acwr_status, training_feedback, training_balance_feedback,
+    # training_status) hebben hetzelfde probleem: die worden alleen gevuld
+    # voor "vandaag" (via today_run_activities resp. de eenmalige
+    # get_training_status-call hieronder), dus een gewone kolom op
+    # None-default zou ze bij de eerstvolgende run alweer wissen zodra de dag
+    # niet meer "vandaag" is -- precies wat zowel "Stappen (excl. hardlopen)"
+    # als de trainingsbelasting-cijfers elke dag opnieuw leeg liet zien.
+    # Daarom ook deze kolommen vooraf ophalen en als startpunt gebruiken, net
+    # als 'raw'.
+    preserved_cols = [
+        "steps_training", "training_status", "training_feedback",
+        "training_load_acute", "training_load_chronic", "training_load_ratio",
+        "acwr_status", "training_balance_feedback",
+    ]
     resp = requests.get(
         f"{SUPABASE_URL}/rest/v1/garmin_metrics",
         headers=supabase_headers(),
         params={
             "owner": f"eq.{owner}",
             "metric_date": f"gte.{week_start.isoformat()}",
-            "select": "metric_date,raw,steps_training",
+            "select": "metric_date,raw," + ",".join(preserved_cols),
         },
         timeout=15,
     )
     resp.raise_for_status()
-    return {r["metric_date"]: (r.get("raw") or {}, r.get("steps_training")) for r in resp.json()}
+    result = {}
+    for r in resp.json():
+        preserved = {col: r.get(col) for col in preserved_cols}
+        result[r["metric_date"]] = (r.get("raw") or {}, preserved)
+    return result
 
 
 def load_profile(owner):
@@ -326,7 +338,7 @@ def main():
     # rij begint met alle kolommen expliciet op None, in plaats van dat een
     # rij alleen de kolommen krijgt waarvoor toevallig data gevonden is.
     def bucket(d):
-        existing_raw, existing_steps_training = existing_by_date.get(d) or ({}, None)
+        existing_raw, existing_preserved = existing_by_date.get(d) or ({}, {})
         return per_date.setdefault(d, {
             "owner": owner,
             "metric_date": d,
@@ -335,23 +347,25 @@ def main():
             "hrv": None,
             "sleep_minutes": None,
             "sleep_score": None,
-            "training_status": None,
             "body_battery_max": None,
             "hrv_status": None,
             "sleep_quality": None,
             "body_battery_change": None,
             "respiration": None,
-            "training_load_acute": None,
-            "training_load_chronic": None,
-            "training_load_ratio": None,
-            "training_feedback": None,
-            "acwr_status": None,
-            "training_balance_feedback": None,
             "steps_total": None,
-            # Start met de eerder opgeslagen waarde i.p.v. None -- zie
-            # load_existing_raw hierboven voor waarom (anders wist elke run
-            # dit zodra de dag niet meer "vandaag" is).
-            "steps_training": existing_steps_training,
+            # Deze kolommen worden alleen gevuld voor "vandaag" (training-
+            # status/steps_training hieronder) -- start met de eerder
+            # opgeslagen waarde i.p.v. None, zie load_existing_raw hierboven
+            # voor waarom (anders wist elke run dit zodra de dag niet meer
+            # "vandaag" is).
+            "training_status": existing_preserved.get("training_status"),
+            "training_feedback": existing_preserved.get("training_feedback"),
+            "training_load_acute": existing_preserved.get("training_load_acute"),
+            "training_load_chronic": existing_preserved.get("training_load_chronic"),
+            "training_load_ratio": existing_preserved.get("training_load_ratio"),
+            "acwr_status": existing_preserved.get("acwr_status"),
+            "training_balance_feedback": existing_preserved.get("training_balance_feedback"),
+            "steps_training": existing_preserved.get("steps_training"),
             "garmin_total_kcal": None,
             "garmin_active_kcal": None,
             "garmin_bmr_kcal": None,
