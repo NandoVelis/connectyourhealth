@@ -240,13 +240,23 @@ def calculate_age(birth_date, at_date):
     return age
 
 
-# Zelfde Mifflin-St Jeor-formule als de Tredict-sync (calculateBMR), x1.2 voor
-# een puur sedentaire rustverbranding -- losse stappen tellen apart mee via
-# extraKcalFromSteps in index.html.html.
+# Zelfde Mifflin-St Jeor-formule als de Tredict-sync (calculateBMR) -- losse
+# stappen tellen apart mee via extraKcalFromSteps in index.html.html.
+#
+# Activiteitsfactor op 22 sept verlaagd van x1.2 naar x1.13: data-analyse
+# over 12 dagen (10-21 sept, chat) liet zien dat "mijn formule" gemiddeld
+# ~4,3% boven Garmin's eigen dagtotaal lag. Bij het uitrekenen wat de bron
+# van dat verschil was, bleek een aanpassing van de stappenformule geen
+# stabiele verklaring (impliciete kcal/stap liep dag-op-dag uiteen van
+# 0,00006 tot 0,00051 -- geen consistent patroon), terwijl x1.13 i.p.v.
+# x1.2 (stappenformule ongewijzigd) de resterende dagelijkse afwijking
+# terugbracht tot een vrij nauwe, willekeurig verdeelde bandbreedte
+# (±125 kcal). Duidt op een iets zuiniger rustverbranding dan de generieke
+# "sedentair"-factor 1.2 veronderstelt.
 def calculate_rest_kcal(weight_kg, height_cm, birth_date, at_date):
     age = calculate_age(birth_date, at_date)
     bmr = 10 * weight_kg + 6.25 * height_cm - 5 * age + 5
-    return round(bmr * 1.2)
+    return round(bmr * 1.13)
 
 
 def login(owner, email, password, mfa_code):

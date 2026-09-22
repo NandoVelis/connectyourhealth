@@ -2702,7 +2702,7 @@ function estimateRestKcalFromProfile(weightKg, birthdateStr, heightCm){
   const m = now.getMonth() - birth.getMonth();
   if(m<0 || (m===0 && now.getDate()<birth.getDate())) age--;
   const bmr = 10*weightKg + 6.25*heightCm - 5*age + 5;
-  return Math.round(bmr*1.2);
+  return Math.round(bmr*1.13);
 }
 
 // Berekent iemands gemiddelde hardloopstatistieken op basis van zijn eigen
