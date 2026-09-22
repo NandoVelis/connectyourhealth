@@ -576,10 +576,21 @@ def main():
         print("  geen activiteiten gevonden in dit venster.")
     for d, acts in activities_by_date.items():
         activity_kcal_sum = sum(a["kcal"] for a in acts)
+        # "Afterburn"-bonus (EPOC) voor zware/anaerobe trainingen: data-analyse
+        # over 12 dagen (22 sept, chat) liet zien dat mijn formule op dagen
+        # met een anaeroob trainingseffect >0 gemiddeld ~67 kcal te laag
+        # uitkwam t.o.v. Garmin's eigen dagtotaal, tegen ~-34 kcal (al zo
+        # goed als kloppend) op dagen zonder anaeroob effect. Een combinatie
+        # met max-hartslag gaf op zo'n klein sample (3-4 harde dagen) een
+        # instabiele/overfitte fit, dus voorlopig alleen dit ene signaal.
+        # Coëfficiënt (25 kcal/punt) is een ruwe, naar boven afgeronde schatting
+        # van de gefitte ~23 -- wordt elke week herijkt, zie de
+        # "Wekelijkse kcal-formule kalibratie"-routine.
+        anaerobic_bonus = sum(round((a.get("training_effect_anaerobic") or 0) * 25) for a in acts)
         weight_kg = safe(latest_weight_before, owner, d) or 63
         at_date = datetime.strptime(d, "%Y-%m-%d").date()
         rest_kcal = calculate_rest_kcal(weight_kg, height_cm, birth_date, at_date)
-        total_kcal = rest_kcal + activity_kcal_sum
+        total_kcal = rest_kcal + activity_kcal_sum + anaerobic_bonus
         training_rows = [{
             "owner": owner,
             "training_date": d,
