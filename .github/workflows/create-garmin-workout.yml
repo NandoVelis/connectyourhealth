@@ -31,6 +31,7 @@ on:
           - long_run_24k
           - norwegian_4x4
           - hm_surge_float
+          - 4mile_pace_test
 
 jobs:
   create-workout:

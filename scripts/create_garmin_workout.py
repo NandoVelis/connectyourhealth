@@ -404,6 +404,45 @@ def build_hm_surge_float():
     )
 
 
+def build_4mile_pace_test():
+    """4 mijl race-tempotest: 10 min inlopen, dan 4x 1 mijl op 6:00/mijl
+    (3:44/km, doel sub 24 min -- zelfde tempo als het racedoel "4 Mijl,
+    sub 24" in race_goals), 10 min uitlopen. Op verzoek, 23 sept."""
+    from garminconnect.workout import RunningWorkout, WorkoutSegment, create_cooldown_step
+
+    WARMUP_STEP_TYPE, INTERVAL_STEP_TYPE = 1, 3
+    MILE_M = 1609.34
+
+    steps = [pace_step(1, WARMUP_STEP_TYPE, "warmup", 1, "time", 600.0,
+                        slow_pace=(5, 15), fast_pace=(4, 25), hr_note="< 140",
+                        description="Warming-up")]
+    order = 2
+    for i in range(1, 5):
+        steps.append(pace_step(order, INTERVAL_STEP_TYPE, "interval", 3, "distance", MILE_M,
+                                slow_pace=(3, 46), fast_pace=(3, 42),
+                                description=f"Mijl {i}/4 op 6:00/mijl (doel 24 min totaal)"))
+        order += 1
+    steps.append(create_cooldown_step(600.0, step_order=order))  # 10 min rustig uitlopen, HS < 140
+
+    total_secs = int(600 + 4 * (MILE_M / pace_to_speed(3, 44)) + 600)
+
+    return RunningWorkout(
+        workoutName="Hardlopen: 4 mijl op 6:00/mijl (doel 24:00)",
+        estimatedDurationInSecs=total_secs,
+        description=(
+            "10 min inlopen (4:25-5:15/km, HS<140), dan 4x 1 mijl op "
+            "3:42-3:46/km (6:00/mijl, doel 24 min totaal), 10 min rustig uitlopen (HS<140)."
+        ),
+        workoutSegments=[
+            WorkoutSegment(
+                segmentOrder=1,
+                sportType={"sportTypeId": 1, "sportTypeKey": "running"},
+                workoutSteps=steps,
+            )
+        ],
+    )
+
+
 WORKOUT_BUILDERS = {
     "progressive_15k": build_five_by_three_progressive,
     "interval_6x1000": build_interval_6x1000,
@@ -411,6 +450,7 @@ WORKOUT_BUILDERS = {
     "long_run_24k": build_long_run_24k,
     "norwegian_4x4": build_norwegian_4x4,
     "hm_surge_float": build_hm_surge_float,
+    "4mile_pace_test": build_4mile_pace_test,
 }
 
 
