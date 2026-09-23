@@ -128,6 +128,87 @@ def pace_step(step_order, step_type_id, step_type_key, display_order,
     )
 
 
+def hr_step(step_order, step_type_id, step_type_key, display_order,
+            condition, value, hr_low, hr_high, description=None):
+    """Eén stap met een hartslag-bandbreedte als sturend doel (i.p.v. tempo)
+    -- gebruikt voor de Noorse 4x4-methode, waar de intervallen bewust op
+    hartslag i.p.v. tempo gestuurd worden (zo blijft het protocol consistent
+    ongeacht terrein/vermoeidheid, precies het idee achter de methode).
+
+    condition: "distance" (value in meter) of "time" (value in seconden).
+    hr_low/hr_high: bpm-grenzen. Zelfde rauwe-Garmin-API-waarden-aanpak als
+    pace_step hierboven (workoutTargetTypeId 4 = heart.rate.zone) i.p.v. de
+    library-enums, om dezelfde reden (inconsistent tussen lokaal/CI)."""
+    from garminconnect.workout import ExecutableStep
+
+    cond_id, cond_key = (1, "distance") if condition == "distance" else (2, "time")
+    extra = {"description": description} if description else {}
+    return ExecutableStep(
+        stepOrder=step_order,
+        stepType={"stepTypeId": step_type_id, "stepTypeKey": step_type_key, "displayOrder": display_order},
+        endCondition={
+            "conditionTypeId": cond_id,
+            "conditionTypeKey": cond_key,
+            "displayOrder": 3,
+            "displayable": True,
+        },
+        endConditionValue=float(value),
+        targetType={
+            "workoutTargetTypeId": 4,
+            "workoutTargetTypeKey": "heart.rate.zone",
+            "displayOrder": 4,
+        },
+        targetValueOne=float(hr_low),
+        targetValueTwo=float(hr_high),
+        **extra,
+    )
+
+
+def build_norwegian_4x4():
+    """Noorse 4x4-methode: 4x 4 min op 90-95% maxHF (162-171bpm, maxHF 180)
+    met 3 min actief herstel (rustige jog) ertussen. Op verzoek, 23 sept --
+    hartslaggestuurd i.p.v. tempogestuurd, want dat is het hele punt van de
+    methode (consistent effort ongeacht terrein/vermoeidheid)."""
+    from garminconnect.workout import RunningWorkout, WorkoutSegment, create_cooldown_step
+
+    WARMUP_STEP_TYPE, INTERVAL_STEP_TYPE, RECOVERY_STEP_TYPE = 1, 3, 4
+
+    steps = [pace_step(1, WARMUP_STEP_TYPE, "warmup", 1, "time", 900.0,
+                        slow_pace=(5, 15), fast_pace=(4, 25), hr_note="< 140",
+                        description="Warming-up")]
+    order = 2
+    for i in range(1, 5):
+        steps.append(hr_step(order, INTERVAL_STEP_TYPE, "interval", 3, "time", 240,
+                              hr_low=162, hr_high=171,
+                              description=f"Herhaling {i}/4 (90-95% maxHF)"))
+        order += 1
+        if i < 4:
+            steps.append(pace_step(order, RECOVERY_STEP_TYPE, "recovery", 4, "time", 180,
+                                    slow_pace=(6, 0), fast_pace=(5, 20),
+                                    description="Actief herstel (rustige jog)"))
+            order += 1
+    steps.append(create_cooldown_step(600.0, step_order=order))  # 10 min rustig uitlopen, HS < 140
+
+    total_secs = int(900 + 4 * 240 + 3 * 180 + 600)
+
+    return RunningWorkout(
+        workoutName="Hardlopen: Noorse 4x4 (90-95% maxHF)",
+        estimatedDurationInSecs=total_secs,
+        description=(
+            "15 min inlopen (4:25-5:15/km, HS<140), dan 4x4 min op 162-171bpm "
+            "(90-95% maxHF 180) met 3 min actief herstel (jog, 5:20-6:00/km) "
+            "ertussen, 10 min rustig uitlopen (HS<140)."
+        ),
+        workoutSegments=[
+            WorkoutSegment(
+                segmentOrder=1,
+                sportType={"sportTypeId": 1, "sportTypeKey": "running"},
+                workoutSteps=steps,
+            )
+        ],
+    )
+
+
 def build_five_by_three_progressive():
     """15 km progressief: 5x3 km oplopend in tempo, met hartslagzones als
     referentie per blok (opgegeven specificatie, 19 sept)."""
@@ -284,6 +365,7 @@ WORKOUT_BUILDERS = {
     "interval_6x1000": build_interval_6x1000,
     "tempo_10k_355": build_tempo_10k_355,
     "long_run_24k": build_long_run_24k,
+    "norwegian_4x4": build_norwegian_4x4,
 }
 
 

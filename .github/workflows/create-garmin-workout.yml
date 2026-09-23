@@ -29,6 +29,7 @@ on:
           - interval_6x1000
           - tempo_10k_355
           - long_run_24k
+          - norwegian_4x4
 
 jobs:
   create-workout:
