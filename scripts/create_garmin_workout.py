@@ -404,6 +404,97 @@ def build_hm_surge_float():
     )
 
 
+def build_strides(order_start, reps=5):
+    """5x (100m stride op ~3:00/km + 300m jog-herstel) = exact 2 km, aan het
+    eind van een rustige duurloop -- korte versnellingen voor beenspeed/
+    loopeconomie, geen aerobe belasting (vandaar losse, brede tempoband i.p.v.
+    een harde HS-eis)."""
+    RECOVERY_STEP_TYPE = 4
+    INTERVAL_STEP_TYPE = 3
+    steps = []
+    order = order_start
+    for i in range(1, reps + 1):
+        steps.append(pace_step(order, INTERVAL_STEP_TYPE, "interval", 3, "distance", 100,
+                                slow_pace=(3, 20), fast_pace=(2, 40),
+                                description=f"Stride {i}/{reps}"))
+        order += 1
+        steps.append(pace_step(order, RECOVERY_STEP_TYPE, "recovery", 4, "distance", 300,
+                                slow_pace=(6, 0), fast_pace=(5, 20),
+                                description="Jog-herstel"))
+        order += 1
+    return steps, order
+
+
+def build_easy_with_strides(total_km, workout_name):
+    """Rustige duurloop met de laatste 2 km strides (5x 100m/300m-blok, zie
+    build_strides) -- de rest van de afstand aaneengesloten op E-tempo.
+    total_km is de totale afstand incl. het 2 km strides-blok."""
+    from garminconnect.workout import RunningWorkout, WorkoutSegment
+
+    INTERVAL_STEP_TYPE = 3
+    easy_km = total_km - 2
+
+    easy = pace_step(1, INTERVAL_STEP_TYPE, "interval", 1, "distance", easy_km * 1000,
+                      slow_pace=(5, 15), fast_pace=(4, 25), hr_note="< 140",
+                      description="Rustig")
+    stride_steps, _ = build_strides(2)
+
+    total_secs = int(easy_km * 1000 / pace_to_speed(5, 0) + 5 * (100 / pace_to_speed(3, 0) + 300 / pace_to_speed(5, 40)))
+
+    return RunningWorkout(
+        workoutName=workout_name,
+        estimatedDurationInSecs=total_secs,
+        description=(
+            f"{easy_km} km rustig op 4:25-5:15/km (HS<140), dan 5x (100m stride "
+            "op ~2:40-3:20/km + 300m jog-herstel op 5:20-6:00/km) -- laatste 2 km."
+        ),
+        workoutSegments=[
+            WorkoutSegment(
+                segmentOrder=1,
+                sportType={"sportTypeId": 1, "sportTypeKey": "running"},
+                workoutSteps=[easy] + stride_steps,
+            )
+        ],
+    )
+
+
+def build_easy_10k_strides():
+    """Vrijdag: 10 km rustig met laatste 2 km strides. Op verzoek, 23 sept."""
+    return build_easy_with_strides(10, "Hardlopen: 10 km rustig + strides")
+
+
+def build_easy_8k_strides():
+    """Maandag: 8 km rustig met laatste 2 km strides. Op verzoek, 23 sept."""
+    return build_easy_with_strides(8, "Hardlopen: 8 km rustig + strides")
+
+
+def build_long_run_18k():
+    """Zondag: 18 km rustige duurloop (E-tempo, geen harde HS-eis). Op
+    verzoek, 23 sept."""
+    from garminconnect.workout import RunningWorkout, WorkoutSegment
+
+    INTERVAL_STEP_TYPE = 3
+
+    long_run = pace_step(1, INTERVAL_STEP_TYPE, "interval", 1, "distance", 18000,
+                          slow_pace=(5, 15), fast_pace=(4, 25), hr_note="< 155",
+                          description="Duurloop")
+
+    total_secs = int(18000 / pace_to_speed(5, 0))
+
+    return RunningWorkout(
+        workoutName="Hardlopen: 18 km duurloop (rustig)",
+        estimatedDurationInSecs=total_secs,
+        description="18 km rustig op 4:25-5:15/km, HS < 155.",
+        workoutSegments=[
+            WorkoutSegment(
+                segmentOrder=1,
+                sportType={"sportTypeId": 1, "sportTypeKey": "running"},
+                workoutSteps=[long_run],
+            )
+        ],
+    )
+
+
 def build_4mile_pace_test():
     """4 mijl race-tempotest: 10 min inlopen, dan 4x 1 mijl op 6:00/mijl
     (3:44/km, doel sub 24 min -- zelfde tempo als het racedoel "4 Mijl,
@@ -451,6 +542,9 @@ WORKOUT_BUILDERS = {
     "norwegian_4x4": build_norwegian_4x4,
     "hm_surge_float": build_hm_surge_float,
     "4mile_pace_test": build_4mile_pace_test,
+    "easy_10k_strides": build_easy_10k_strides,
+    "easy_8k_strides": build_easy_8k_strides,
+    "long_run_18k": build_long_run_18k,
 }
 
 

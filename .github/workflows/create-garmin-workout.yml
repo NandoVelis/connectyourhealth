@@ -32,6 +32,9 @@ on:
           - norwegian_4x4
           - hm_surge_float
           - 4mile_pace_test
+          - easy_10k_strides
+          - easy_8k_strides
+          - long_run_18k
 
 jobs:
   create-workout:
