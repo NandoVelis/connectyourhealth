@@ -360,12 +360,57 @@ def build_long_run_24k():
     )
 
 
+def build_hm_surge_float():
+    """15 km HM-tempo surge/float: 2 km inlopen op 4:40/km, dan 4x (2 km op
+    HM-tempo 3:53/km + 1 km float-herstel op 4:40/km), waarbij het laatste
+    blok een dubbele float (2 km i.p.v. 1 km) heeft als afsluiting. Exact
+    15 km totaal: 2 + (2+1)x3 + (2+2) = 15. Op verzoek, 23 sept."""
+    from garminconnect.workout import RunningWorkout, WorkoutSegment
+
+    WARMUP_STEP_TYPE, INTERVAL_STEP_TYPE, RECOVERY_STEP_TYPE = 1, 3, 4
+
+    steps = [pace_step(1, WARMUP_STEP_TYPE, "warmup", 1, "distance", 2000,
+                        slow_pace=(4, 43), fast_pace=(4, 37),
+                        description="Inlopen op float-tempo")]
+    order = 2
+    for i in range(1, 5):
+        steps.append(pace_step(order, INTERVAL_STEP_TYPE, "interval", 3, "distance", 2000,
+                                slow_pace=(3, 56), fast_pace=(3, 50),
+                                description=f"Blok {i}/4: HM-tempo"))
+        order += 1
+        float_km = 2000 if i == 4 else 1000
+        steps.append(pace_step(order, RECOVERY_STEP_TYPE, "recovery", 4, "distance", float_km,
+                                slow_pace=(4, 43), fast_pace=(4, 37),
+                                description=f"Blok {i}/4: float-herstel"))
+        order += 1
+
+    total_secs = int(2000 / pace_to_speed(4, 40) + 4 * (2000 / pace_to_speed(3, 53)) + 3 * (1000 / pace_to_speed(4, 40)) + 2000 / pace_to_speed(4, 40))
+
+    return RunningWorkout(
+        workoutName="Hardlopen: 15 km HM surge/float (3:53 + 4:40)",
+        estimatedDurationInSecs=total_secs,
+        description=(
+            "2 km inlopen op 4:40/km, dan 4x (2 km op 3:50-3:56/km HM-tempo + "
+            "1 km float-herstel op 4:37-4:43/km), laatste float 2 km i.p.v. 1 km. "
+            "Totaal 15 km, geen aparte cooling-down (laatste float doet die rol)."
+        ),
+        workoutSegments=[
+            WorkoutSegment(
+                segmentOrder=1,
+                sportType={"sportTypeId": 1, "sportTypeKey": "running"},
+                workoutSteps=steps,
+            )
+        ],
+    )
+
+
 WORKOUT_BUILDERS = {
     "progressive_15k": build_five_by_three_progressive,
     "interval_6x1000": build_interval_6x1000,
     "tempo_10k_355": build_tempo_10k_355,
     "long_run_24k": build_long_run_24k,
     "norwegian_4x4": build_norwegian_4x4,
+    "hm_surge_float": build_hm_surge_float,
 }
 
 

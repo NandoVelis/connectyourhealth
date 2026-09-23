@@ -30,6 +30,7 @@ on:
           - tempo_10k_355
           - long_run_24k
           - norwegian_4x4
+          - hm_surge_float
 
 jobs:
   create-workout:
