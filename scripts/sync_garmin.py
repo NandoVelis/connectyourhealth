@@ -253,10 +253,20 @@ def calculate_age(birth_date, at_date):
 # terugbracht tot een vrij nauwe, willekeurig verdeelde bandbreedte
 # (±125 kcal). Duidt op een iets zuiniger rustverbranding dan de generieke
 # "sedentair"-factor 1.2 veronderstelt.
+#
+# Op 24 sept verder verlaagd naar x1.11: met de afterburn-bonus erbij
+# (zie de anaerobic_bonus hierboven) lag het gemiddelde verschil over
+# 14 dagen (10-23 sept) nog op +28 kcal/dag t.o.v. Garmin's dagtotaal --
+# geen duidelijke correlatie met stappen of aerobisch trainingseffect
+# gevonden (dus geen reden om die formules aan te passen), dus die
+# resterende kleine bias volledig op de rustfactor afgeboekt. x1.11
+# brengt het gemiddelde vrijwel exact op 0. Op verzoek verder herijken
+# als de wekelijkse kalibratieroutine over een paar weken iets anders
+# laat zien.
 def calculate_rest_kcal(weight_kg, height_cm, birth_date, at_date):
     age = calculate_age(birth_date, at_date)
     bmr = 10 * weight_kg + 6.25 * height_cm - 5 * age + 5
-    return round(bmr * 1.13)
+    return round(bmr * 1.11)
 
 
 def login(owner, email, password, mfa_code):
