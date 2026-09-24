@@ -1399,6 +1399,30 @@ async function loadGarminStepsForDate(owner, dateStr){
     return data || null;
   }catch(e){ console.error('Laden Garmin-stappen', e); return null; }
 }
+// Geplande training (uit het Garmin-workoutschema) voor dagen die nog niet
+// gelopen/gesynchroniseerd zijn -- puur voor de voorlopige kcal-schatting,
+// zie planned_trainings hierboven.
+async function loadPlannedTrainingForDate(owner, dateStr){
+  if(!owner) return null;
+  try{
+    const { data, error } = await supabaseClient
+      .from('planned_trainings')
+      .select('description, estimated_distance_km')
+      .eq('owner', owner)
+      .eq('training_date', dateStr)
+      .maybeSingle();
+    if(error) throw error;
+    return data || null;
+  }catch(e){ console.error('Laden geplande training', e); return null; }
+}
+// Ruwe schatting van trainings-kcal uit afstand: ~0,95 kcal/kg/km, gekalibreerd
+// op de werkelijke Garmin-activiteit-kcal van eerdere hardlooprondes (zie
+// chat 24 sept) -- puur indicatief, de echte Garmin-meting na de training
+// vervangt dit altijd.
+function estimateActivityKcalFromDistance(distanceKm, weightKg){
+  if(!distanceKm || !weightKg) return 0;
+  return Math.round(distanceKm * weightKg * 0.95);
+}
 // Toont Garmin's eigen dagtotaal (totalKilocalories) als aparte, tweede
 // meting naast onze berekening -- niet als vervanging: onze rest_kcal x
 // activiteiten-formule blijft de basis voor "Totaal verbrand"/balans, dit
@@ -2902,6 +2926,21 @@ async function renderDashboard(){
       }
     }
   }
+  // Geplande training (uit het Garmin-workoutschema) nog niet gesynchroniseerd
+  // vandaag/toekomstig -- tel een voorlopige inschatting van de trainings-kcal
+  // erbij op, puur voor een realistischer "Totaal verbrand" tot de echte
+  // Garmin-activiteit binnenkomt (die wint dan automatisch, via de gewone
+  // training-tak hierboven). Alleen voor vandaag/toekomst -- een afgesloten
+  // dag in het verleden gebruikt liever de Garmin-dagtotaal-backup hierboven.
+  let plannedTraining = null;
+  let plannedActivityKcal = 0;
+  if(burned!=null && !training && !burnedFromGarminBackup && !isPastDay){
+    plannedTraining = await loadPlannedTrainingForDate(owner, dateStr);
+    if(plannedTraining && plannedTraining.estimated_distance_km){
+      plannedActivityKcal = estimateActivityKcalFromDistance(plannedTraining.estimated_distance_km, stepsWeightKg);
+      if(plannedActivityKcal>0) burned += plannedActivityKcal;
+    }
+  }
   // Zonder gesynchroniseerde training (bv. nog geen trainingsrij voor
   // vandaag) werd extraStepsKcal hierboven wel berekend en los getoond,
   // maar nooit bij "burned" opgeteld omdat burned op dat moment nog null
@@ -2921,15 +2960,23 @@ async function renderDashboard(){
   const sportMin = trainingDurationByType(training);
   const sportIcon = {hardlopen:'\u{1F3C3}', fietsen:'\u{1F6B4}', zwemmen:'\u{1F3CA}', sportschool:'\u{1F3CB}\u{FE0F}'};
   if(!training && burnedIsEstimate){
+    const plannedRow = plannedTraining ? `
+      <div class="stat-row">
+        <span class="stat-label">&#127939; Gepland: ${escapeHtml(plannedTraining.description)} (~${plannedTraining.estimated_distance_km} km)</span>
+        <span class="stat-val">~${plannedActivityKcal} kcal</span>
+      </div>` : '';
     detailEl.innerHTML = `
       <div class="stat-row"><span class="stat-label">Geen training gesynchroniseerd</span><span class="stat-val">0 kcal</span></div>
       <div class="stat-row">
         <span class="stat-label">${burnedFromGarminBackup ? 'Garmin dagtotaal (backup, geen training)' : 'Geschat rustverbruik'}</span>
         <span class="stat-val">~${burnedFromGarminBackup ? burned : estimatedRestKcal} kcal</span>
       </div>
+      ${plannedRow}
       <div class="meal-meta" style="margin-top:4px;">${burnedFromGarminBackup
         ? 'Nog niet gesynchroniseerd met Tredict &mdash; Garmin\'s eigen dagtotaal gebruikt als backup, geen trainingen meegeteld.'
-        : 'Nog niet gesynchroniseerd met Tredict &mdash; dit is een schatting op basis van je profiel, geen trainingen meegeteld.'}</div>
+        : plannedTraining
+          ? 'Nog niet gelopen/gesynchroniseerd &mdash; inclusief een voorlopige schatting van de geplande training, wordt automatisch vervangen zodra de echte Garmin-activiteit binnenkomt.'
+          : 'Nog niet gesynchroniseerd met Tredict &mdash; dit is een schatting op basis van je profiel, geen trainingen meegeteld.'}</div>
       <div class="stat-row" style="border-top:1px solid var(--line);margin-top:10px;padding-top:10px;">
         <span class="stat-label">&#128099; Stappen vandaag (Garmin)${garminStepsToday && garminStepsToday.steps_total!=null ? ': '+garminStepsToday.steps_total.toLocaleString('nl-NL') : ''}</span>
         <span class="stat-val">${garminStepsToday && garminStepsToday.steps_total!=null ? extraStepsKcal+' kcal' : '—'}</span>
