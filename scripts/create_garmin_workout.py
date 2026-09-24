@@ -566,6 +566,44 @@ WORKOUT_BUILDERS = {
 }
 
 
+def unschedule_workout_on_date(garmin, date_str):
+    """Haalt alle ingeplande trainingen op voor de maand van date_str en
+    verwijdert elke training die exact op date_str staat (de training zelf
+    -- de 'template' -- blijft bestaan, alleen de kalenderinplanning wordt
+    verwijderd). Robuust tegen wisselende veldnamen in Garmin's respons
+    (calendarDate/date, workoutScheduleId/id)."""
+    from datetime import date as date_cls
+
+    d = date_cls.fromisoformat(date_str)
+    scheduled = garmin.get_scheduled_workouts(d.year, d.month)
+    entries = scheduled if isinstance(scheduled, list) else (
+        scheduled.get("workouts") or scheduled.get("scheduledWorkouts") or
+        scheduled.get("items") or []
+    )
+    removed = 0
+    for entry in entries:
+        entry_date = (
+            entry.get("calendarDate") or entry.get("date") or
+            entry.get("startDate") or entry.get("workoutDate")
+        )
+        if not entry_date or entry_date[:10] != date_str:
+            continue
+        scheduled_id = (
+            entry.get("workoutScheduleId") or entry.get("scheduleId") or
+            entry.get("id") or entry.get("scheduledWorkoutId")
+        )
+        if not scheduled_id:
+            print(f"  (kon geen scheduled_workout_id vinden in entry: {entry})")
+            continue
+        garmin.unschedule_workout(scheduled_id)
+        name = entry.get("workoutName") or entry.get("name") or "?"
+        print(f"  Verwijderd van kalender: '{name}' op {date_str} (scheduleId={scheduled_id}).")
+        removed += 1
+    if removed == 0:
+        print(f"  Geen ingeplande training gevonden op {date_str}.")
+    return removed
+
+
 def main():
     owner = os.environ["GARMIN_OWNER"]
     email = os.environ["GARMIN_EMAIL"]
@@ -574,8 +612,13 @@ def main():
     schedule_date = os.environ.get("WORKOUT_SCHEDULE_DATE") or None  # YYYY-MM-DD, optioneel
     existing_workout_id = os.environ.get("WORKOUT_ID") or None  # als gezet: niet opnieuw aanmaken, alleen inplannen
     workout_type = os.environ.get("WORKOUT_TYPE") or "progressive_15k"
+    unschedule_date = os.environ.get("UNSCHEDULE_DATE") or None  # YYYY-MM-DD: verwijdert alleen de kalenderinplanning die dag
 
     garmin = login(owner, email, password, mfa_code)
+
+    if unschedule_date:
+        unschedule_workout_on_date(garmin, unschedule_date)
+        return
 
     if existing_workout_id:
         workout_id = existing_workout_id

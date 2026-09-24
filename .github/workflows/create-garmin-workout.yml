@@ -19,6 +19,10 @@ on:
         description: 'Bestaande workout-ID inplannen i.p.v. een nieuwe training aanmaken (leeg = nieuwe training)'
         required: false
         type: string
+      unschedule_date:
+        description: 'Verwijdert alleen de kalenderinplanning op deze datum (YYYY-MM-DD), maakt niets aan (negeert de andere velden hierboven)'
+        required: false
+        type: string
       workout_type:
         description: 'Welke training aanmaken (alleen als workout_id leeg is)'
         required: false
@@ -58,4 +62,5 @@ jobs:
           WORKOUT_SCHEDULE_DATE: ${{ inputs.schedule_date }}
           WORKOUT_ID: ${{ inputs.workout_id }}
           WORKOUT_TYPE: ${{ inputs.workout_type }}
+          UNSCHEDULE_DATE: ${{ inputs.unschedule_date }}
         run: python3 scripts/create_garmin_workout.py
