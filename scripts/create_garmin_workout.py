@@ -404,11 +404,15 @@ def build_hm_surge_float():
     )
 
 
-def build_strides(order_start, reps=5):
-    """5x (100m stride op ~3:00/km + 300m jog-herstel) = exact 2 km, aan het
-    eind van een rustige duurloop -- korte versnellingen voor beenspeed/
-    loopeconomie, geen aerobe belasting (vandaar losse, brede tempoband i.p.v.
-    een harde HS-eis)."""
+def build_strides(order_start, reps=5, final_cooldown_secs=None):
+    """5x (100m stride op ~3:00/km + 300m jog-herstel), afstandgebaseerd
+    (geen lap.button, schakelt zelf door) -- korte versnellingen voor
+    beenspeed/loopeconomie, geen aerobe belasting (vandaar losse, brede
+    tempoband i.p.v. een harde HS-eis). Zonder final_cooldown_secs is dit
+    exact 2 km (5x 100m+300m). Met final_cooldown_secs vervangt een formele
+    cooling-down-stap (tijdgebaseerd) de laatste 300m-jog na de 5e stride."""
+    from garminconnect.workout import create_cooldown_step
+
     RECOVERY_STEP_TYPE = 4
     INTERVAL_STEP_TYPE = 3
     steps = []
@@ -418,17 +422,21 @@ def build_strides(order_start, reps=5):
                                 slow_pace=(3, 20), fast_pace=(2, 40),
                                 description=f"Stride {i}/{reps}"))
         order += 1
-        steps.append(pace_step(order, RECOVERY_STEP_TYPE, "recovery", 4, "distance", 300,
-                                slow_pace=(6, 0), fast_pace=(5, 20),
-                                description="Jog-herstel"))
+        if i == reps and final_cooldown_secs:
+            steps.append(create_cooldown_step(float(final_cooldown_secs), step_order=order))
+        else:
+            steps.append(pace_step(order, RECOVERY_STEP_TYPE, "recovery", 4, "distance", 300,
+                                    slow_pace=(6, 0), fast_pace=(5, 20),
+                                    description="Jog-herstel"))
         order += 1
     return steps, order
 
 
-def build_easy_with_strides(total_km, workout_name):
+def build_easy_with_strides(total_km, workout_name, final_cooldown_secs=None):
     """Rustige duurloop met de laatste 2 km strides (5x 100m/300m-blok, zie
     build_strides) -- de rest van de afstand aaneengesloten op E-tempo.
-    total_km is de totale afstand incl. het 2 km strides-blok."""
+    total_km is de totale afstand incl. het 2 km strides-blok (bij een
+    final_cooldown_secs komt de tijdgebaseerde cooling-down er nog bovenop)."""
     from garminconnect.workout import RunningWorkout, WorkoutSegment
 
     INTERVAL_STEP_TYPE = 3
@@ -437,16 +445,24 @@ def build_easy_with_strides(total_km, workout_name):
     easy = pace_step(1, INTERVAL_STEP_TYPE, "interval", 1, "distance", easy_km * 1000,
                       slow_pace=(5, 15), fast_pace=(4, 25), hr_note="< 140",
                       description="Rustig")
-    stride_steps, _ = build_strides(2)
+    stride_steps, _ = build_strides(2, final_cooldown_secs=final_cooldown_secs)
 
-    total_secs = int(easy_km * 1000 / pace_to_speed(5, 0) + 5 * (100 / pace_to_speed(3, 0) + 300 / pace_to_speed(5, 40)))
+    total_secs = int(
+        easy_km * 1000 / pace_to_speed(5, 0)
+        + 4 * (100 / pace_to_speed(3, 0) + 300 / pace_to_speed(5, 40))
+        + 100 / pace_to_speed(3, 0)
+        + (final_cooldown_secs if final_cooldown_secs else 300 / pace_to_speed(5, 40))
+    )
 
+    cooldown_note = (
+        f", dan {final_cooldown_secs/60:.0f} min cooling-down (HS<140)" if final_cooldown_secs else ""
+    )
     return RunningWorkout(
         workoutName=workout_name,
         estimatedDurationInSecs=total_secs,
         description=(
             f"{easy_km} km rustig op 4:25-5:15/km (HS<140), dan 5x (100m stride "
-            "op ~2:40-3:20/km + 300m jog-herstel op 5:20-6:00/km) -- laatste 2 km."
+            f"op ~2:40-3:20/km + 300m jog-herstel op 5:20-6:00/km) -- laatste 2 km{cooldown_note}."
         ),
         workoutSegments=[
             WorkoutSegment(
@@ -459,8 +475,10 @@ def build_easy_with_strides(total_km, workout_name):
 
 
 def build_easy_10k_strides():
-    """Vrijdag: 10 km rustig met laatste 2 km strides. Op verzoek, 23 sept."""
-    return build_easy_with_strides(10, "Hardlopen: 10 km rustig + strides")
+    """Vrijdag: 10 km rustig met laatste 2 km strides, na de 5e stride een
+    tijdgebaseerde cooling-down van 5 min i.p.v. de normale 300m-jog. Op
+    verzoek, 23-24 sept."""
+    return build_easy_with_strides(10, "Hardlopen: 10 km rustig + strides", final_cooldown_secs=300.0)
 
 
 def build_easy_8k_strides():
