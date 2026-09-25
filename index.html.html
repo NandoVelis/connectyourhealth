@@ -2932,9 +2932,14 @@ async function renderDashboard(){
   // Garmin-activiteit binnenkomt (die wint dan automatisch, via de gewone
   // training-tak hierboven). Alleen voor vandaag/toekomst -- een afgesloten
   // dag in het verleden gebruikt liever de Garmin-dagtotaal-backup hierboven.
+  // Een placeholder-trainingsrij (alleen rustverbruik, geen activiteiten --
+  // aangemaakt door de uursync voor élke dag, ook rustdagen) telt hier niet
+  // als "training" -- anders wordt de geplande-training-schatting hieronder
+  // nooit getoond zodra die placeholder al bestaat.
+  const hasRealActivity = !!(training && training.activities && training.activities.length>0);
   let plannedTraining = null;
   let plannedActivityKcal = 0;
-  if(burned!=null && !training && !burnedFromGarminBackup && !isPastDay){
+  if(burned!=null && !hasRealActivity && !burnedFromGarminBackup && !isPastDay){
     plannedTraining = await loadPlannedTrainingForDate(owner, dateStr);
     if(plannedTraining && plannedTraining.estimated_distance_km){
       plannedActivityKcal = estimateActivityKcalFromDistance(plannedTraining.estimated_distance_km, stepsWeightKg);
@@ -2959,7 +2964,7 @@ async function renderDashboard(){
   const sportKm = trainingDistanceByType(training);
   const sportMin = trainingDurationByType(training);
   const sportIcon = {hardlopen:'\u{1F3C3}', fietsen:'\u{1F6B4}', zwemmen:'\u{1F3CA}', sportschool:'\u{1F3CB}\u{FE0F}'};
-  if(!training && burnedIsEstimate){
+  if(!hasRealActivity && !training && burnedIsEstimate){
     const plannedRow = plannedTraining ? `
       <div class="stat-row">
         <span class="stat-label">&#127939; Gepland: ${escapeHtml(plannedTraining.description)} (~${plannedTraining.estimated_distance_km} km)</span>
@@ -2989,7 +2994,12 @@ async function renderDashboard(){
   } else if(!training){
     detailEl.innerHTML = '<div class="empty">Nog niet opgehaald voor deze dag.</div>';
   } else {
-    const actRows = (training.activities && training.activities.length>0)
+    const plannedRow = (!hasRealActivity && plannedTraining) ? `
+          <div class="stat-row">
+            <span class="stat-label">&#127939; Gepland: ${escapeHtml(plannedTraining.description)} (~${plannedTraining.estimated_distance_km} km)</span>
+            <span class="stat-val">~${plannedActivityKcal} kcal</span>
+          </div>` : '';
+    const actRows = hasRealActivity
       ? training.activities.map(a=>{
           const t = (a.type||'').toLowerCase();
           const icon = sportIcon[t] ? sportIcon[t]+' ' : '';
@@ -3011,8 +3021,8 @@ async function renderDashboard(){
             <span class="stat-val">${a.kcal} kcal</span>
           </div>`;
         }).join('')
-      : '<div class="stat-row"><span class="stat-label">Geen training</span><span class="stat-val">0 kcal</span></div>';
-    detailEl.innerHTML = actRows + `
+      : (plannedTraining ? '' : '<div class="stat-row"><span class="stat-label">Geen training</span><span class="stat-val">0 kcal</span></div>');
+    detailEl.innerHTML = actRows + plannedRow + `
       <div class="stat-row">
         <span class="stat-label">Rust / dagelijks verbruik</span>
         <span class="stat-val">${training.restKcal ?? 0} kcal</span>
