@@ -362,9 +362,19 @@ def build_long_run_24k():
 
 def build_hm_surge_float():
     """15 km HM-tempo surge/float: 2 km inlopen op 4:40/km, dan 4x (2 km op
-    HM-tempo 3:53/km + 1 km float-herstel op 4:40/km), waarbij het laatste
-    blok een dubbele float (2 km i.p.v. 1 km) heeft als afsluiting. Exact
-    15 km totaal: 2 + (2+1)x3 + (2+2) = 15. Op verzoek, 23 sept."""
+    HM-tempo 3:53/km + 1 km float-herstel), waarbij het laatste blok een
+    dubbele float (2 km i.p.v. 1 km) heeft als afsluiting. Exact 15 km
+    totaal: 2 + (2+1)x3 + (2+2) = 15. Op verzoek, 23 sept.
+
+    Surge = tempo leidend (HM-tempo als doel, HS is alleen een bovengrens-
+    check -- sneller dan het doeltempo mag zolang HS onder LT2 blijft, zie
+    analyse 26 sept van de eerste uitvoering).
+    Float = hartslag leidend i.p.v. tempo (heart.rate.zone-doel, doel <155
+    bpm) -- het gaat er niet om een vaste pace aan te houden, maar om zo
+    laag mogelijk te komen binnen die kilometer, ook als dat trager is dan
+    4:40/km. Eerste uitvoering liet zien dat de floats bij een vast
+    tempo-doel niet meer onder 155 kwamen vanaf blok 2/3 (152->156->157),
+    vandaar de omzetting naar een HS-doel i.p.v. tempo-doel."""
     from garminconnect.workout import RunningWorkout, WorkoutSegment
 
     WARMUP_STEP_TYPE, INTERVAL_STEP_TYPE, RECOVERY_STEP_TYPE = 1, 3, 4
@@ -376,23 +386,28 @@ def build_hm_surge_float():
     for i in range(1, 5):
         steps.append(pace_step(order, INTERVAL_STEP_TYPE, "interval", 3, "distance", 2000,
                                 slow_pace=(3, 56), fast_pace=(3, 50),
-                                description=f"Blok {i}/4: HM-tempo"))
+                                description=(f"Blok {i}/4: HM-tempo leidend -- HS is bovengrens-check "
+                                             "(mag oplopen richting ~173-177, niet harder pushen dan dat)")))
         order += 1
         float_km = 2000 if i == 4 else 1000
-        steps.append(pace_step(order, RECOVERY_STEP_TYPE, "recovery", 4, "distance", float_km,
-                                slow_pace=(4, 43), fast_pace=(4, 37),
-                                description=f"Blok {i}/4: float-herstel"))
+        steps.append(hr_step(order, RECOVERY_STEP_TYPE, "recovery", 4, "distance", float_km,
+                              hr_low=100, hr_high=155,
+                              description=(f"Blok {i}/4: float-herstel -- HS leidend, doel <155. "
+                                           "Geen tempo-doel: loop zo nodig trager dan 4:40/km om er "
+                                           "echt onder te komen, in plaats van tempo vast te houden.")))
         order += 1
 
     total_secs = int(2000 / pace_to_speed(4, 40) + 4 * (2000 / pace_to_speed(3, 53)) + 3 * (1000 / pace_to_speed(4, 40)) + 2000 / pace_to_speed(4, 40))
 
     return RunningWorkout(
-        workoutName="Hardlopen: 15 km HM surge/float (3:53 + 4:40)",
+        workoutName="Hardlopen: 15 km HM surge/float (3:53 + HS<155)",
         estimatedDurationInSecs=total_secs,
         description=(
             "2 km inlopen op 4:40/km, dan 4x (2 km op 3:50-3:56/km HM-tempo + "
-            "1 km float-herstel op 4:37-4:43/km), laatste float 2 km i.p.v. 1 km. "
-            "Totaal 15 km, geen aparte cooling-down (laatste float doet die rol)."
+            "1 km float-herstel op HS-doel <155 i.p.v. tempo-doel), laatste float 2 km "
+            "i.p.v. 1 km. Totaal 15 km, geen aparte cooling-down (laatste float doet die rol). "
+            "Surge = tempo leidend (HS is bovengrens ~173-177, sneller dan doeltempo mag). "
+            "Float = HS leidend (doel <155, tempo is hier een gevolg, niet een doel)."
         ),
         workoutSegments=[
             WorkoutSegment(
