@@ -304,7 +304,8 @@ def build_4x1000_race_pace():
     """Dinsdag 6 okt (sharpening-week voor 4 mijl-wedstrijd 11 okt): 5x1000m
     op 3:45/km (dicht tegen het 4 mijl-doeltempo van 3:43/km aan) i.p.v.
     volle I-tempo (3:35) -- race-specifiek, op verzoek uitgebreid van 4
-    naar 5 herhalingen op 5 okt."""
+    naar 5 herhalingen op 5 okt, met een iets langere uitloop zodat het
+    totaal (net als donderdag) op ~12 km uitkomt."""
     from garminconnect.workout import RunningWorkout, WorkoutSegment, create_cooldown_step
 
     WARMUP_STEP_TYPE, INTERVAL_STEP_TYPE, RECOVERY_STEP_TYPE = 1, 3, 4
@@ -323,17 +324,17 @@ def build_4x1000_race_pace():
                                     slow_pace=(6, 0), fast_pace=(5, 20),
                                     description="Hersteljog"))
             order += 1
-    steps.append(create_cooldown_step(600.0, step_order=order))  # 10 min rustig uitlopen, HS < 140
+    steps.append(create_cooldown_step(700.0, step_order=order))  # ~11.7 min rustig uitlopen, HS < 140
 
-    total_secs = int(900 + 5 * (1000 / pace_to_speed(3, 45)) + 4 * (400 / pace_to_speed(5, 40)) + 600)
+    total_secs = int(900 + 5 * (1000 / pace_to_speed(3, 45)) + 4 * (400 / pace_to_speed(5, 40)) + 700)
 
     return RunningWorkout(
-        workoutName="Hardlopen: 5x1000m wedstrijdtempo (3:43-3:47/km)",
+        workoutName="Hardlopen: 5x1000m wedstrijdtempo (3:43-3:47/km, 12 km totaal)",
         estimatedDurationInSecs=total_secs,
         description=(
             "15 min inlopen (4:25-5:15/km, HS<140), dan 5x1000m op 3:43-3:47/km "
             "(doeltempo 4 mijl-wedstrijd 11 okt) met 400m hersteljog (5:20-6:00/km) "
-            "ertussen, 10 min rustig uitlopen (HS<140)."
+            "ertussen, ~12 min rustig uitlopen (HS<140), totaal ~12 km."
         ),
         workoutSegments=[
             WorkoutSegment(
