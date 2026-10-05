@@ -301,10 +301,10 @@ def build_interval_6x1000():
 
 
 def build_4x1000_race_pace():
-    """Dinsdag 6 okt (sharpening-week voor 4 mijl-wedstrijd 11 okt): 4x1000m
-    op wedstrijdtempo (3:43/km doel voor sub-24 4 mijl) i.p.v. volle I-tempo
-    (3:35) -- race-specifiek maar met beperkt volume (4 km op tempo) om geen
-    vermoeidheid op te bouwen vlak voor de wedstrijd."""
+    """Dinsdag 6 okt (sharpening-week voor 4 mijl-wedstrijd 11 okt): 5x1000m
+    op 3:45/km (dicht tegen het 4 mijl-doeltempo van 3:43/km aan) i.p.v.
+    volle I-tempo (3:35) -- race-specifiek, op verzoek uitgebreid van 4
+    naar 5 herhalingen op 5 okt."""
     from garminconnect.workout import RunningWorkout, WorkoutSegment, create_cooldown_step
 
     WARMUP_STEP_TYPE, INTERVAL_STEP_TYPE, RECOVERY_STEP_TYPE = 1, 3, 4
@@ -313,25 +313,25 @@ def build_4x1000_race_pace():
                         slow_pace=(5, 15), fast_pace=(4, 25), hr_note="< 140",
                         description="Warming-up")]
     order = 2
-    for i in range(1, 5):
+    for i in range(1, 6):
         steps.append(pace_step(order, INTERVAL_STEP_TYPE, "interval", 3, "distance", 1000,
-                                slow_pace=(3, 48), fast_pace=(3, 44), hr_note="~165-170",
-                                description=f"Herhaling {i}/4 (wedstrijdtempo)"))
+                                slow_pace=(3, 47), fast_pace=(3, 43), hr_note="~165-170",
+                                description=f"Herhaling {i}/5 (wedstrijdtempo)"))
         order += 1
-        if i < 4:
+        if i < 5:
             steps.append(pace_step(order, RECOVERY_STEP_TYPE, "recovery", 4, "distance", 400,
                                     slow_pace=(6, 0), fast_pace=(5, 20),
                                     description="Hersteljog"))
             order += 1
     steps.append(create_cooldown_step(600.0, step_order=order))  # 10 min rustig uitlopen, HS < 140
 
-    total_secs = int(900 + 4 * (1000 / pace_to_speed(3, 46)) + 3 * (400 / pace_to_speed(5, 40)) + 600)
+    total_secs = int(900 + 5 * (1000 / pace_to_speed(3, 45)) + 4 * (400 / pace_to_speed(5, 40)) + 600)
 
     return RunningWorkout(
-        workoutName="Hardlopen: 4x1000m wedstrijdtempo (3:44-3:48/km)",
+        workoutName="Hardlopen: 5x1000m wedstrijdtempo (3:43-3:47/km)",
         estimatedDurationInSecs=total_secs,
         description=(
-            "15 min inlopen (4:25-5:15/km, HS<140), dan 4x1000m op 3:44-3:48/km "
+            "15 min inlopen (4:25-5:15/km, HS<140), dan 5x1000m op 3:43-3:47/km "
             "(doeltempo 4 mijl-wedstrijd 11 okt) met 400m hersteljog (5:20-6:00/km) "
             "ertussen, 10 min rustig uitlopen (HS<140)."
         ),
@@ -346,40 +346,41 @@ def build_4x1000_race_pace():
 
 
 def build_4x500_sharpening():
-    """Donderdag 8 okt (3 dagen voor de 4 mijl-wedstrijd): 4x500m scherp op
-    R-tempo (~3:20-3:25/km) met volledige rust -- puur beenspeed/scherpte
-    opzoeken, geen aerobe belasting zodat er geen vermoeidheid overblijft
-    voor zondag."""
+    """Donderdag 8 okt (3 dagen voor de 4 mijl-wedstrijd): 5x500m scherp op
+    3:30/km met volledige rust, totaal ~12 km -- op verzoek uitgebreid van
+    4x500m/3:20-3:25 naar 5x500m/3:30 met langere in-/uitloop op 5 okt, om
+    op 12 km totaalvolume uit te komen zonder de herhalingen zelf te hard
+    te maken vlak voor de wedstrijd."""
     from garminconnect.workout import RunningWorkout, WorkoutSegment, create_cooldown_step
 
     WARMUP_STEP_TYPE, INTERVAL_STEP_TYPE, RECOVERY_STEP_TYPE = 1, 3, 4
 
-    steps = [pace_step(1, WARMUP_STEP_TYPE, "warmup", 1, "time", 900.0,
+    steps = [pace_step(1, WARMUP_STEP_TYPE, "warmup", 1, "time", 1200.0,
                         slow_pace=(5, 15), fast_pace=(4, 25), hr_note="< 140",
                         description="Warming-up")]
     order = 2
-    for i in range(1, 5):
+    for i in range(1, 6):
         steps.append(pace_step(order, INTERVAL_STEP_TYPE, "interval", 3, "distance", 500,
-                                slow_pace=(3, 25), fast_pace=(3, 20),
-                                description=f"Herhaling {i}/4 (scherp)"))
+                                slow_pace=(3, 32), fast_pace=(3, 28),
+                                description=f"Herhaling {i}/5 (scherp)"))
         order += 1
-        if i < 4:
+        if i < 5:
             steps.append(pace_step(order, RECOVERY_STEP_TYPE, "recovery", 4, "distance", 500,
                                     slow_pace=(6, 30), fast_pace=(5, 30),
                                     description="Volledige hersteljog"))
             order += 1
-    steps.append(create_cooldown_step(600.0, step_order=order))  # 10 min rustig uitlopen, HS < 140
+    steps.append(create_cooldown_step(900.0, step_order=order))  # 15 min rustig uitlopen, HS < 140
 
-    total_secs = int(900 + 4 * (500 / pace_to_speed(3, 22)) + 3 * (500 / pace_to_speed(6, 0)) + 600)
+    total_secs = int(1200 + 5 * (500 / pace_to_speed(3, 30)) + 4 * (500 / pace_to_speed(6, 0)) + 900)
 
     return RunningWorkout(
-        workoutName="Hardlopen: 4x500m scherpte (3:20-3:25/km)",
+        workoutName="Hardlopen: 5x500m scherpte (3:28-3:32/km, 12 km totaal)",
         estimatedDurationInSecs=total_secs,
         description=(
-            "15 min inlopen (4:25-5:15/km, HS<140), dan 4x500m op 3:20-3:25/km "
+            "20 min inlopen (4:25-5:15/km, HS<140), dan 5x500m op 3:28-3:32/km "
             "met 500m volledige hersteljog (5:30-6:30/km) ertussen -- scherpte/"
             "beenspeed voor de 4 mijl-wedstrijd (11 okt), geen conditietraining. "
-            "10 min rustig uitlopen (HS<140)."
+            "15 min rustig uitlopen (HS<140), totaal ~12 km."
         ),
         workoutSegments=[
             WorkoutSegment(
