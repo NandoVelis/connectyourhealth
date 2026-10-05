@@ -95,13 +95,18 @@ def pace_step(step_order, step_type_id, step_type_key, display_order,
     Gebruikt bewust de rauwe Garmin-API-waarden i.p.v. de ConditionType/
     TargetType-enums van de library: die enums bleken tussen lokaal en de
     GitHub Actions-runner (zelfde library-versie) inconsistent -- de
-    runner miste TargetType.SPEED terwijl die er lokaal wel was. De
-    onderliggende ID's zijn Garmin's eigen, stabiele API-schema en dus
-    geen afhankelijkheid van de library-enums.
+    runner miste TargetType.SPEED terwijl die er lokaal wel was.
+
+    Let op (gevonden 5 okt, via een screenshot van een echte stap op het
+    horloge): de library's eigen ConditionType-klasse zet DISTANCE=1, maar
+    Garmin's live server interpreteert conditionTypeId=1 als lap.button --
+    elke "distance"-stap verscheen daardoor als "Druk op de knop Lap"
+    i.p.v. automatisch door te schakelen. De juiste, server-kloppende
+    waarde voor distance is 3 (1=lap.button, 2=time, 3=distance).
     """
     from garminconnect.workout import ExecutableStep
 
-    cond_id, cond_key = (1, "distance") if condition == "distance" else (2, "time")
+    cond_id, cond_key = (3, "distance") if condition == "distance" else (2, "time")
     full_description = " · ".join(p for p in [description, f"HS {hr_note}" if hr_note else None] if p)
     extra = {"description": full_description} if full_description else {}
     return ExecutableStep(
@@ -138,10 +143,12 @@ def hr_step(step_order, step_type_id, step_type_key, display_order,
     condition: "distance" (value in meter) of "time" (value in seconden).
     hr_low/hr_high: bpm-grenzen. Zelfde rauwe-Garmin-API-waarden-aanpak als
     pace_step hierboven (workoutTargetTypeId 4 = heart.rate.zone) i.p.v. de
-    library-enums, om dezelfde reden (inconsistent tussen lokaal/CI)."""
+    library-enums, om dezelfde reden (inconsistent tussen lokaal/CI). Zelfde
+    5 okt-fix als pace_step: conditionTypeId voor distance is 3, niet 1
+    (1 = lap.button op Garmin's live server, zie pace_step-docstring)."""
     from garminconnect.workout import ExecutableStep
 
-    cond_id, cond_key = (1, "distance") if condition == "distance" else (2, "time")
+    cond_id, cond_key = (3, "distance") if condition == "distance" else (2, "time")
     extra = {"description": description} if description else {}
     return ExecutableStep(
         stepOrder=step_order,
