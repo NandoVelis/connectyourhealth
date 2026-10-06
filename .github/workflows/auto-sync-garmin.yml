@@ -16,18 +16,28 @@ name: Auto-sync Garmin
 
 on:
   schedule:
-    # Elk uur, behalve tussen 12:00-14:00 (lokale lunchpauze) waar elke
-    # 15 min gesynct wordt -- op verzoek, i.p.v. de hele dag elke 15 min.
-    # Cron draait in UTC; 10-11 UTC = 12:00-13:59 lokale tijd tijdens
-    # zomertijd (UTC+2). Let op: bij terugschakelen naar wintertijd
-    # (eind okt, UTC+1) schuift dit venster een uur op naar 13:00-14:59
-    # lokale tijd -- dan moet dit handmatig aangepast worden naar 11-12 UTC.
+    # Elk uur, behalve:
+    # - 12:00-14:00 lokaal (lunchpauze): elke 15 min -- op verzoek, i.p.v.
+    #   de hele dag elke 15 min.
+    # - 6:00-8:00 lokaal, doordeweeks (ma-vr): elke 10 min -- op verzoek,
+    #   24 sept... (6 okt): Nando weegt zichzelf in dit venster en wil het
+    #   gewicht snel terugzien i.p.v. tot de volgende hele-uur-sync wachten;
+    #   na 8:00 is hij op werk en komt er toch geen nieuw gewicht meer bij,
+    #   dus geen extra frequentie nodig buiten dit venster.
+    # Cron draait in UTC; 10-11 UTC = 12:00-13:59 lokale tijd en 4-5 UTC =
+    # 6:00-7:59 lokale tijd tijdens zomertijd (UTC+2). Let op: bij
+    # terugschakelen naar wintertijd (eind okt, UTC+1) schuiven beide
+    # vensters een uur op (13:00-14:59 resp. 7:00-8:59 lokaal) -- dan
+    # moeten deze cron-regels handmatig aangepast worden naar 11-12 UTC
+    # resp. 5-6 UTC.
     # Let ook op: GitHub Actions' scheduled workflows op publieke/gratis
     # repo's lopen zelf regelmatig 1-3 uur achter op de ingestelde cron
     # (bekende platformbeperking, niet iets wat deze instelling kan
-    # oplossen).
+    # oplossen) -- dit verkleint het gat in de praktijkgevoelige vensters,
+    # lost het niet volledig op.
     - cron: '0 * * * *'
     - cron: '*/15 10-11 * * *'
+    - cron: '*/10 4-5 * * 1-5'
   workflow_dispatch:
     inputs:
       mfa_code:
