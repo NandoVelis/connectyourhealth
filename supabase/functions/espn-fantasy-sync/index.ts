@@ -1325,10 +1325,14 @@ Deno.serve(async (req: Request) => {
     // bereikt. Gebruikt dezelfde dedup-tabel als de team-waarschuwingen
     // hierboven, dus een speler die al gemaild is (bv. omdat hij ook in
     // een van de gevolgde teams zit) wordt niet dubbel gemaild.
+    // Op verzoek, 8 okt: alleen spelers met owners > 0 -- de bekende
+    // lage-/nul-bezit-stuck-lijst (zie Ochtendcheck prijsdrempelmodel)
+    // zorgde voor ruis van spelers die vrijwel nooit daadwerkelijk
+    // wijzigen, dus die filteren we hier eruit.
     if (resendKey) {
       try {
         const boardRes = await fetch(
-          `${SB_URL}/rest/v1/espn_price_board?select=id,web_name,team_short,now_cost,verwachting,progress&progress=gte.0.9`,
+          `${SB_URL}/rest/v1/espn_price_board?select=id,web_name,team_short,now_cost,verwachting,progress,owners&progress=gte.0.9&owners=gt.0`,
           { headers: sbHeaders() },
         );
         if (boardRes.ok) {
