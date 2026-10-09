@@ -51,17 +51,19 @@ SPORT_TYPE_MAP = {
     "indoor_cardio": "sportschool",
 }
 
-# Dezelfde publieke "publishable" sleutel die al in index.html.html en de
-# Tredict-sync-workflow staat -- geen geheim, RLS op de garmin_*-tabellen is
-# net als de rest van deze app permissief ("using (true)").
+# Gebruikt de service-role-sleutel (GitHub Actions-secret
+# SUPABASE_SERVICE_ROLE_KEY, zie auto-sync-garmin.yml) i.p.v. de publieke
+# publishable key -- de garmin_*-tabellen staan nu dicht met RLS
+# ("to authenticated"), en deze Action logt niet in als een echte gebruiker,
+# dus heeft de service-role-sleutel nodig om de RLS-check te omzeilen.
 SUPABASE_URL = "https://mhvduufxeqyxgkkvwimx.supabase.co"
-SUPABASE_PUBLISHABLE_KEY = "sb_publishable_Oy2NNm-yMP358eH3NPHl1A_d24-72WS"
+SUPABASE_SERVICE_ROLE_KEY = os.environ["SUPABASE_SERVICE_ROLE_KEY"]
 
 
 def supabase_headers():
     return {
-        "apikey": SUPABASE_PUBLISHABLE_KEY,
-        "Authorization": f"Bearer {SUPABASE_PUBLISHABLE_KEY}",
+        "apikey": SUPABASE_SERVICE_ROLE_KEY,
+        "Authorization": f"Bearer {SUPABASE_SERVICE_ROLE_KEY}",
         "Content-Type": "application/json",
     }
 

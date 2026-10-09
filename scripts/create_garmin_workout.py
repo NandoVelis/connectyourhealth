@@ -17,15 +17,17 @@ from garminconnect import Garmin, GarminConnectAuthenticationError
 import requests
 
 # Zelfde login-/sessie-opslaglogica als sync_garmin.py -- zie dat bestand
-# voor de uitleg waarom sessie-hergebruik nodig is (MFA/rate-limiting).
+# voor de uitleg waarom sessie-hergebruik nodig is (MFA/rate-limiting) en
+# waarom hier de service-role-sleutel (GitHub Actions-secret
+# SUPABASE_SERVICE_ROLE_KEY) nodig is i.p.v. de publieke publishable key.
 SUPABASE_URL = "https://mhvduufxeqyxgkkvwimx.supabase.co"
-SUPABASE_PUBLISHABLE_KEY = "sb_publishable_Oy2NNm-yMP358eH3NPHl1A_d24-72WS"
+SUPABASE_SERVICE_ROLE_KEY = os.environ["SUPABASE_SERVICE_ROLE_KEY"]
 
 
 def supabase_headers():
     return {
-        "apikey": SUPABASE_PUBLISHABLE_KEY,
-        "Authorization": f"Bearer {SUPABASE_PUBLISHABLE_KEY}",
+        "apikey": SUPABASE_SERVICE_ROLE_KEY,
+        "Authorization": f"Bearer {SUPABASE_SERVICE_ROLE_KEY}",
         "Content-Type": "application/json",
     }
 

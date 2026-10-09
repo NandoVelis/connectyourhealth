@@ -65,4 +65,5 @@ jobs:
           WORKOUT_ID: ${{ inputs.workout_id }}
           WORKOUT_TYPE: ${{ inputs.workout_type }}
           UNSCHEDULE_DATE: ${{ inputs.unschedule_date }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: python3 scripts/create_garmin_workout.py

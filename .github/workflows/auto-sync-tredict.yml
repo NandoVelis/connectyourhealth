@@ -13,11 +13,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Sync Tredict voor elk geregistreerd profiel
+        env:
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
           SUPABASE_URL="https://mhvduufxeqyxgkkvwimx.supabase.co"
-          # Dezelfde publieke "publishable" sleutel die al in index.html.html
-          # staat — geen geheim, dus veilig om hier letterlijk te gebruiken.
-          SUPABASE_KEY="sb_publishable_Oy2NNm-yMP358eH3NPHl1A_d24-72WS"
+          # Service-role-sleutel (repo-secret) i.p.v. de publieke publishable
+          # key -- de profiles-tabel staat nu dicht met RLS ("to
+          # authenticated"), en deze Action logt niet in als een echte
+          # gebruiker, dus heeft de service-role-sleutel nodig om de
+          # RLS-check te omzeilen.
+          SUPABASE_KEY="$SUPABASE_SERVICE_ROLE_KEY"
 
           echo "Profielen ophalen..."
           OWNERS=$(curl -s "$SUPABASE_URL/rest/v1/profiles?select=owner" \
