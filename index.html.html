@@ -276,7 +276,32 @@
 </style>
 </head>
 <body>
-<div class="wrap">
+
+<!-- ======================= LOGIN GATE ======================= -->
+<!-- Zelfservice: iedereen met een @connectyou.nl-adres (of jouw eigen
+     gmail-uitzondering, zie ALLOWED_EXTRA_EMAILS in de script-sectie
+     onderaan) mag hier 1x een account aanmaken met een zelf gekozen
+     wachtwoord, en daarna gewoon inloggen. Geen losse goedkeuring per
+     persoon nodig -- de RLS-policies in Supabase controleren hetzelfde
+     domein/adres aan de databasekant. -->
+<div id="gate" style="max-width:380px;margin:14vh auto;text-align:center;padding:0 20px;font-family:'Archivo',sans-serif;color:var(--ink);" hidden>
+  <div style="font-weight:800;font-size:22px;margin-bottom:4px;">ConnectYourHealth</div>
+  <p style="color:var(--ink-soft);font-size:14px;margin-bottom:18px;">Deze pagina is privé. Log in of maak 1x een account aan met je @connectyou.nl-adres.</p>
+  <div style="display:flex;flex-direction:column;gap:8px;">
+    <input type="email" id="gateEmailInput" placeholder="jij@connectyou.nl" autocomplete="email"
+      style="font:inherit;background:var(--card);color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:10px 14px;">
+    <input type="password" id="gatePwInput" placeholder="wachtwoord" autocomplete="current-password"
+      style="font:inherit;background:var(--card);color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:10px 14px;">
+    <div style="display:flex;gap:8px;">
+      <button id="gateLoginBtn" class="btn-primary" style="flex:1;">Inloggen</button>
+      <button id="gateSignupBtn" class="btn-secondary" style="flex:1;">Account aanmaken</button>
+    </div>
+  </div>
+  <div id="gateErr" style="color:#B3261E;font-size:13px;margin-top:14px;line-height:1.5;" hidden></div>
+  <div id="gateInfo" style="color:var(--ink-soft);font-size:13px;margin-top:14px;line-height:1.5;" hidden></div>
+</div>
+
+<div id="app" class="wrap" hidden>
   <div class="brand-banner">
     <div class="brand-banner-left">
       <div class="cy-badge" aria-hidden="true">CY</div>
@@ -303,6 +328,7 @@
       <button id="prevDay">&larr;</button>
       <span class="dateLabel" id="dateLabel">-</span>
       <button id="nextDay">&rarr;</button>
+      <button id="gateLogoutBtn" title="Uitloggen" style="font-size:12px;">Uitloggen</button>
     </div>
   </header>
 
@@ -1137,6 +1163,84 @@ const supabaseClient = window.supabase.createClient(
   SUPABASE_KEY
 );
 console.log("Supabase verbonden");
+
+// =====================
+// LOGIN GATE
+// =====================
+// Zelfservice-toegang: elk @connectyou.nl-adres mag zichzelf 1x registreren
+// (signUp) en daarna gewoon inloggen (signInWithPassword) -- geen losse
+// goedkeuring per persoon. Nando mag daarnaast ook met zijn privé-gmail
+// inloggen. Dit is alleen de UI-poort; de echte afdwinging gebeurt via de
+// RLS-policies in Supabase (zelfde domein/adres-check aan de databasekant),
+// dus een gate-bypass in de browser geeft geen toegang tot data.
+const ALLOWED_DOMAIN = '@connectyou.nl';
+const ALLOWED_EXTRA_EMAILS = ['nandovelis@gmail.com'];
+function emailAllowed(email){
+  email = (email || '').toLowerCase();
+  return email.endsWith(ALLOWED_DOMAIN) || ALLOWED_EXTRA_EMAILS.includes(email);
+}
+
+function showGate(msg){
+  document.getElementById('app').hidden = true;
+  document.getElementById('gate').hidden = false;
+  const errEl = document.getElementById('gateErr');
+  if(msg){ errEl.hidden = false; errEl.textContent = msg; }
+  else { errEl.hidden = true; }
+}
+
+async function bootGate(){
+  const { data:{ session } } = await supabaseClient.auth.getSession();
+  if(!session) return showGate();
+  const email = (session.user.email || '').toLowerCase();
+  if(!emailAllowed(email)){
+    await supabaseClient.auth.signOut();
+    return showGate('Dit account (' + email + ') heeft geen toegang.');
+  }
+  document.getElementById('gate').hidden = true;
+  document.getElementById('app').hidden = false;
+  await startApp();
+}
+
+document.getElementById('gateLoginBtn').addEventListener('click', async ()=>{
+  const email = document.getElementById('gateEmailInput').value.trim().toLowerCase();
+  const password = document.getElementById('gatePwInput').value;
+  const errEl = document.getElementById('gateErr');
+  errEl.hidden = true;
+  if(!email || !password){ errEl.hidden = false; errEl.textContent = 'Vul e-mail en wachtwoord in.'; return; }
+  if(!emailAllowed(email)){ errEl.hidden = false; errEl.textContent = 'Dit adres heeft geen toegang.'; return; }
+  const btn = document.getElementById('gateLoginBtn');
+  btn.disabled = true;
+  const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
+  btn.disabled = false;
+  if(error){ errEl.hidden = false; errEl.textContent = 'Inloggen mislukt: ' + error.message; return; }
+  bootGate();
+});
+
+document.getElementById('gateSignupBtn').addEventListener('click', async ()=>{
+  const email = document.getElementById('gateEmailInput').value.trim().toLowerCase();
+  const password = document.getElementById('gatePwInput').value;
+  const errEl = document.getElementById('gateErr');
+  const infoEl = document.getElementById('gateInfo');
+  errEl.hidden = true; infoEl.hidden = true;
+  if(!email || !password){ errEl.hidden = false; errEl.textContent = 'Vul e-mail en wachtwoord in.'; return; }
+  if(password.length < 6){ errEl.hidden = false; errEl.textContent = 'Wachtwoord moet minstens 6 tekens zijn.'; return; }
+  if(!emailAllowed(email)){ errEl.hidden = false; errEl.textContent = 'Dit adres heeft geen toegang.'; return; }
+  const btn = document.getElementById('gateSignupBtn');
+  btn.disabled = true;
+  const { data, error } = await supabaseClient.auth.signUp({ email, password });
+  btn.disabled = false;
+  if(error){ errEl.hidden = false; errEl.textContent = 'Account aanmaken mislukt: ' + error.message; return; }
+  if(data.session){ return bootGate(); }
+  infoEl.hidden = false;
+  infoEl.textContent = 'Account aangemaakt. Check je mail om te bevestigen, log daarna hierboven in.';
+});
+
+document.getElementById('gateEmailInput').addEventListener('keydown', e=>{ if(e.key==='Enter') document.getElementById('gateLoginBtn').click(); });
+document.getElementById('gatePwInput').addEventListener('keydown', e=>{ if(e.key==='Enter') document.getElementById('gateLoginBtn').click(); });
+document.getElementById('gateLogoutBtn').addEventListener('click', async ()=>{
+  await supabaseClient.auth.signOut();
+  location.reload();
+});
 
 const state = { currentDate: new Date(), tab: 'dashboard' };
   function extractJson(text){
@@ -5634,11 +5738,13 @@ document
 
   });
 
-(async () => {
+async function startApp(){
   updateOverigLinkVisibility();
   await checkTredictSyncStatus();
   await renderDashboard();
-})();
+}
+
+bootGate();
 </script>
 </body>
 </html>
