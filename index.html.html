@@ -960,7 +960,7 @@
       </div>
       <div class="table-scroll">
       <table>
-        <thead><tr><th>Dag</th><th>⚖️ Gewicht</th><th>❤️ Rusthartslag</th><th>💓 HRV</th><th>😴 Slaap</th><th>Kcal in</th><th>Eiwit</th><th>Vet</th><th>Verbrand</th><th>Balans</th><th>Score</th></tr></thead>
+        <thead><tr><th>Dag</th><th>⚖️ Gewicht</th><th>❤️ Rusthartslag</th><th>💓 HRV</th><th>😴 Slaap</th><th>Kcal in</th><th>Eiwit</th><th>Koolh.</th><th>Vet</th><th>Verbrand</th><th>Balans</th><th>Score</th></tr></thead>
         <tbody id="weekBody"></tbody>
       </table>
       </div>
@@ -976,7 +976,7 @@
       </div>
       <div class="table-scroll">
       <table>
-        <thead><tr><th>Dag</th><th>⚖️ Gewicht</th><th>❤️ Rusthartslag</th><th>💓 HRV</th><th>😴 Slaap</th><th>Kcal in</th><th>Eiwit</th><th>Vet</th><th>Verbrand</th><th>Balans</th><th>Score</th></tr></thead>
+        <thead><tr><th>Dag</th><th>⚖️ Gewicht</th><th>❤️ Rusthartslag</th><th>💓 HRV</th><th>😴 Slaap</th><th>Kcal in</th><th>Eiwit</th><th>Koolh.</th><th>Vet</th><th>Verbrand</th><th>Balans</th><th>Score</th></tr></thead>
         <tbody id="maandBody"></tbody>
       </table>
       </div>
@@ -4371,7 +4371,7 @@ async function renderPersonalPeriod(days, labelElId, bodyElId, label){
 
   const dayNames = ['zo','ma','di','wo','do','vr','za'];
   const owner = currentOwner();
-  const agg = { weights:[], hrRests:[], hrvs:[], sleepMins:[], kcalIns:0, proteins:0, fats:0, burnedTotal:0, scores:[] };
+  const agg = { weights:[], hrRests:[], hrvs:[], sleepMins:[], kcalIns:0, proteins:0, carbs:0, fats:0, burnedTotal:0, scores:[] };
   let rows = '';
   for(const d of days){
     const dateStr = fmtDate(d);
@@ -4406,6 +4406,7 @@ async function renderPersonalPeriod(days, labelElId, bodyElId, label){
     if(c.sleepMinutes) agg.sleepMins.push(c.sleepMinutes);
     agg.kcalIns += macros.kcal||0;
     agg.proteins += macros.protein||0;
+    agg.carbs += macros.carbs||0;
     agg.fats += macros.fat||0;
     agg.burnedTotal += burned||0;
     if(score!==null) agg.scores.push(score);
@@ -4414,6 +4415,7 @@ async function renderPersonalPeriod(days, labelElId, bodyElId, label){
 
     let kcalCell = macros.kcal || '\u2014';
     let proteinCell = macros.protein ? macros.protein+'g' : '\u2014';
+    let carbsCell = macros.carbs ? macros.carbs+'g' : '\u2014';
     let fatCell = macros.fat ? macros.fat+'g' : '\u2014';
     if(w && w.kg){
       let proteinFactor = 1.8;
@@ -4423,6 +4425,10 @@ async function renderPersonalPeriod(days, labelElId, bodyElId, label){
       }
       const targetProtein = Math.round(w.kg*proteinFactor);
       const targetFat = Math.round(w.kg*1.0);
+      let targetCarbs = null;
+      if(burned){
+        targetCarbs = Math.max(0, Math.round((burned - targetProtein*4 - targetFat*9)/4));
+      }
       if(macros.kcal && training){
         const pctKcal = Math.round(macros.kcal/burned*100);
         kcalCell = `${macros.kcal} <span style="color:var(--ink-soft);">(${pctKcal}%)</span>`;
@@ -4430,6 +4436,10 @@ async function renderPersonalPeriod(days, labelElId, bodyElId, label){
       if(macros.protein){
         const pctProtein = Math.round(macros.protein/targetProtein*100);
         proteinCell = `${macros.protein}g <span style="color:var(--ink-soft);">(${pctProtein}%)</span>`;
+      }
+      if(macros.carbs && targetCarbs){
+        const pctCarbs = Math.round(macros.carbs/targetCarbs*100);
+        carbsCell = `${macros.carbs}g <span style="color:var(--ink-soft);">(${pctCarbs}%)</span>`;
       }
       if(macros.fat){
         const pctFat = Math.round(macros.fat/targetFat*100);
@@ -4445,6 +4455,7 @@ async function renderPersonalPeriod(days, labelElId, bodyElId, label){
       <td>${sleepLabel}</td>
       <td>${kcalCell}</td>
       <td>${proteinCell}</td>
+      <td>${carbsCell}</td>
       <td>${fatCell}</td>
       <td>${training ? burned+' kcal' : '\u2014'}</td>
       <td style="color:${balans>0 ? 'var(--clay)' : 'var(--pine)'};font-weight:700;">${(meals.length>0 || training) ? (balans>=0?'+':'')+balans : '\u2014'}</td>
@@ -4467,6 +4478,7 @@ async function renderPersonalPeriod(days, labelElId, bodyElId, label){
     <td>${avgSleepMin!=null ? Math.floor(avgSleepMin/60)+'u'+String(avgSleepMin%60).padStart(2,'0')+'m' : '\u2014'}</td>
     <td>${agg.kcalIns || '\u2014'}</td>
     <td>${agg.proteins ? agg.proteins+'g' : '\u2014'}</td>
+    <td>${agg.carbs ? agg.carbs+'g' : '\u2014'}</td>
     <td>${agg.fats ? agg.fats+'g' : '\u2014'}</td>
     <td>${agg.burnedTotal || '\u2014'}</td>
     <td style="color:${totalBalans>0 ? 'var(--clay)' : 'var(--pine)'};">${(totalBalans>=0?'+':'')+totalBalans}</td>
