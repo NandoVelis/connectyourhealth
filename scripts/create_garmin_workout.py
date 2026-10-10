@@ -673,6 +673,163 @@ def build_4mile_pace_test():
     )
 
 
+def build_generale_16k_race_pace():
+    """Donderdag 22 okt (piekweek voor de halve marathon Assen, 1 nov):
+    generale repetitie -- 16 km totaal met 12 km aaneengesloten op
+    3:53/km (HM-doeltempo, doel 1:22:00 over 21,1 km), 2 km in-/uitlopen
+    erom heen. Uit het bestaande weekschema (training_plan_weeks)."""
+    from garminconnect.workout import RunningWorkout, WorkoutSegment
+
+    WARMUP_STEP_TYPE, INTERVAL_STEP_TYPE, COOLDOWN_STEP_TYPE = 1, 3, 2
+
+    warmup = pace_step(1, WARMUP_STEP_TYPE, "warmup", 1, "distance", 2000,
+                        slow_pace=(5, 15), fast_pace=(4, 25), hr_note="< 140",
+                        description="Inlopen")
+    race_pace = pace_step(2, INTERVAL_STEP_TYPE, "interval", 3, "distance", 12000,
+                           slow_pace=(3, 56), fast_pace=(3, 50), hr_note="~165-170",
+                           description="HM-tempo (generale)")
+    cooldown = pace_step(3, COOLDOWN_STEP_TYPE, "cooldown", 2, "distance", 2000,
+                          slow_pace=(5, 15), fast_pace=(4, 25), hr_note="< 140",
+                          description="Uitlopen")
+
+    total_secs = int(2000/pace_to_speed(4, 50) + 12000/pace_to_speed(3, 53) + 2000/pace_to_speed(4, 50))
+
+    return RunningWorkout(
+        workoutName="Hardlopen: 16 km generale (12 km op 3:53/km)",
+        estimatedDurationInSecs=total_secs,
+        description=(
+            "2 km inlopen (4:25-5:15/km, HS<140), dan 12 km aaneengesloten op "
+            "3:50-3:56/km (HM-doeltempo, HS~165-170), 2 km uitlopen (4:25-5:15/km, "
+            "HS<140). Generale repetitie voor halve marathon Assen (1 nov, doel 1:22:00)."
+        ),
+        workoutSegments=[
+            WorkoutSegment(
+                segmentOrder=1,
+                sportType={"sportTypeId": 1, "sportTypeKey": "running"},
+                workoutSteps=[warmup, race_pace, cooldown],
+            )
+        ],
+    )
+
+
+def build_4x1000_taper():
+    """Dinsdag 27 okt (taperweek voor de halve marathon Assen, 1 nov):
+    4x1000m op HM-tempo (3:50-3:56/km) met volledige hersteljog -- scherpte
+    vasthouden zonder vermoeidheid op te bouwen, dus lichter dan de
+    sharpening-sessies voor de 4 mijl (minder herhalingen, ruimere rust)."""
+    from garminconnect.workout import RunningWorkout, WorkoutSegment, create_cooldown_step
+
+    WARMUP_STEP_TYPE, INTERVAL_STEP_TYPE, RECOVERY_STEP_TYPE = 1, 3, 4
+
+    steps = [pace_step(1, WARMUP_STEP_TYPE, "warmup", 1, "time", 900.0,
+                        slow_pace=(5, 15), fast_pace=(4, 25), hr_note="< 140",
+                        description="Warming-up")]
+    order = 2
+    for i in range(1, 5):
+        steps.append(pace_step(order, INTERVAL_STEP_TYPE, "interval", 3, "distance", 1000,
+                                slow_pace=(3, 56), fast_pace=(3, 50), hr_note="~165-170",
+                                description=f"Herhaling {i}/4 (HM-tempo, taper)"))
+        order += 1
+        if i < 4:
+            steps.append(pace_step(order, RECOVERY_STEP_TYPE, "recovery", 4, "distance", 400,
+                                    slow_pace=(6, 30), fast_pace=(5, 30),
+                                    description="Volledige hersteljog"))
+            order += 1
+    steps.append(create_cooldown_step(600.0, step_order=order))  # 10 min rustig uitlopen, HS < 140
+
+    total_secs = int(900 + 4 * (1000 / pace_to_speed(3, 53)) + 3 * (400 / pace_to_speed(6, 0)) + 600)
+
+    return RunningWorkout(
+        workoutName="Hardlopen: 4x1000m taper (3:50-3:56/km)",
+        estimatedDurationInSecs=total_secs,
+        description=(
+            "15 min inlopen (4:25-5:15/km, HS<140), dan 4x1000m op 3:50-3:56/km "
+            "(HM-tempo) met 400m volledige hersteljog (5:30-6:30/km) ertussen -- "
+            "taperweek, scherpte vasthouden zonder te vermoeien. "
+            "10 min rustig uitlopen (HS<140)."
+        ),
+        workoutSegments=[
+            WorkoutSegment(
+                segmentOrder=1,
+                sportType={"sportTypeId": 1, "sportTypeKey": "running"},
+                workoutSteps=steps,
+            )
+        ],
+    )
+
+
+def build_3k_race_pace():
+    """Donderdag 29 okt (taperweek, 3 dagen voor de halve marathon Assen):
+    korte sharpening -- 3 km aaneengesloten op 3:53/km (HM-doeltempo),
+    kort en licht, puur beenspeed/ritmegevoel vasthouden."""
+    from garminconnect.workout import RunningWorkout, WorkoutSegment, create_cooldown_step
+
+    WARMUP_STEP_TYPE, INTERVAL_STEP_TYPE = 1, 3
+
+    warmup = pace_step(1, WARMUP_STEP_TYPE, "warmup", 1, "time", 600.0,
+                        slow_pace=(5, 15), fast_pace=(4, 25), hr_note="< 140",
+                        description="Warming-up")
+    race_pace = pace_step(2, INTERVAL_STEP_TYPE, "interval", 3, "distance", 3000,
+                           slow_pace=(3, 56), fast_pace=(3, 50), hr_note="~165-170",
+                           description="HM-tempo (sharpening)")
+    cooldown = create_cooldown_step(600.0, step_order=3)  # 10 min rustig uitlopen, HS < 140
+
+    total_secs = int(600 + 3000 / pace_to_speed(3, 53) + 600)
+
+    return RunningWorkout(
+        workoutName="Hardlopen: 3 km op 3:53/km (taper sharpening)",
+        estimatedDurationInSecs=total_secs,
+        description=(
+            "10 min inlopen (4:25-5:15/km, HS<140), dan 3 km aaneengesloten op "
+            "3:50-3:56/km (HM-doeltempo), 10 min rustig uitlopen (HS<140). "
+            "Kort en licht -- taperweek, 3 dagen voor halve marathon Assen."
+        ),
+        workoutSegments=[
+            WorkoutSegment(
+                segmentOrder=1,
+                sportType={"sportTypeId": 1, "sportTypeKey": "running"},
+                workoutSteps=[warmup, race_pace, cooldown],
+            )
+        ],
+    )
+
+
+def build_shakeout_pre_race():
+    """Zaterdag 31 okt (1 dag voor de halve marathon Assen, 1 nov): heel
+    lichte shakeout -- 2 km rustig + 4x100m strides. Geen training, puur
+    losmaken en beenspeed activeren vlak voor de wedstrijd."""
+    from garminconnect.workout import RunningWorkout, WorkoutSegment
+
+    INTERVAL_STEP_TYPE = 3
+    easy = pace_step(1, INTERVAL_STEP_TYPE, "interval", 1, "distance", 2000,
+                      slow_pace=(5, 15), fast_pace=(4, 25), hr_note="< 140",
+                      description="Rustig")
+    stride_steps, _ = build_strides(2, reps=4)
+
+    total_secs = int(
+        2000 / pace_to_speed(5, 0)
+        + 3 * (100 / pace_to_speed(3, 0) + 300 / pace_to_speed(5, 40))
+        + 100 / pace_to_speed(3, 0) + 300 / pace_to_speed(5, 40)
+    )
+
+    return RunningWorkout(
+        workoutName="Hardlopen: shakeout pre-race (2 km + 4x100m strides)",
+        estimatedDurationInSecs=total_secs,
+        description=(
+            "2 km rustig op 4:25-5:15/km (HS<140), dan 4x (100m stride op "
+            "~2:40-3:20/km + 300m jog-herstel). Geen training -- losmaken "
+            "vlak voor de halve marathon Assen (1 nov)."
+        ),
+        workoutSegments=[
+            WorkoutSegment(
+                segmentOrder=1,
+                sportType={"sportTypeId": 1, "sportTypeKey": "running"},
+                workoutSteps=[easy] + stride_steps,
+            )
+        ],
+    )
+
+
 WORKOUT_BUILDERS = {
     "progressive_15k": build_five_by_three_progressive,
     "interval_6x1000": build_interval_6x1000,
@@ -686,6 +843,10 @@ WORKOUT_BUILDERS = {
     "long_run_18k": build_long_run_18k,
     "4x1000_race_pace": build_4x1000_race_pace,
     "4x500_sharpening": build_4x500_sharpening,
+    "generale_16k_race_pace": build_generale_16k_race_pace,
+    "4x1000_taper": build_4x1000_taper,
+    "3k_race_pace": build_3k_race_pace,
+    "shakeout_pre_race": build_shakeout_pre_race,
 }
 
 

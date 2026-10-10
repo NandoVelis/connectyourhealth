@@ -41,6 +41,10 @@ on:
           - long_run_18k
           - 4x1000_race_pace
           - 4x500_sharpening
+          - generale_16k_race_pace
+          - 4x1000_taper
+          - 3k_race_pace
+          - shakeout_pre_race
 
 jobs:
   create-workout:
