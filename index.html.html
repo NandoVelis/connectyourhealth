@@ -2999,9 +2999,9 @@ async function renderDashboard(){
   if(stepsWeightKg){
     garminStepsToday = await loadGarminStepsForDate(owner, dateStr);
     if(garminStepsToday && garminStepsToday.steps_total!=null){
-      const relevantSteps = training
+      const relevantSteps = projectStepsForToday(training
         ? Math.max(0, garminStepsToday.steps_total - (garminStepsToday.steps_training||0))
-        : garminStepsToday.steps_total;
+        : garminStepsToday.steps_total, dateStr);
       if(training) trainingRelevantSteps = relevantSteps;
       const kcal = extraKcalFromSteps(relevantSteps, stepsWeightKg);
       if(training){ trainingExtraStepsKcal = kcal; } else { extraStepsKcal = kcal; }
@@ -3604,6 +3604,29 @@ const KCAL_PER_STEP_PER_KG = 0.0004;
 function extraKcalFromSteps(steps, weightKg){
   if(!steps || !weightKg) return 0;
   return Math.round(steps * KCAL_PER_STEP_PER_KG * weightKg);
+}
+
+// Projecteert "stappen tot nu toe" naar een schatting voor de HELE dag,
+// alleen voor de lopende dag (gisteren/eerder heeft al een definitief
+// dagtotaal, dus niets te projecteren). Zonder dit bleef het koolhydraten-
+// doel (afgeleid van "verbrand vandaag") vroeg op de dag kunstmatig laag,
+// waardoor je %-koolhydraten pas rond 19:00 een betrouwbaar beeld gaf --
+// te laat om nog bij te sturen wat je die dag nog kunt eten.
+// Aanname: de meeste stappen vallen tussen 6:00 en 22:00 (wakkere uren),
+// lineair geëxtrapoleerd vanaf het verstreken deel van dat venster. Voor
+// 6:00 (nog geen stappen te verwachten) geen projectie; een vloer van 20%
+// voorkomt gekke uitschieters vlak na 6:00 (1 stap op het display zou anders
+// x5 geprojecteerd worden).
+function projectStepsForToday(steps, dateStr){
+  if(!steps) return steps;
+  if(dateStr !== fmtDate(new Date())) return steps;
+  const DAY_START_HOUR = 6, DAY_END_HOUR = 22;
+  const now = new Date();
+  const nowHours = now.getHours() + now.getMinutes()/60;
+  if(nowHours <= DAY_START_HOUR) return steps;
+  const elapsedFraction = Math.min(1, (nowHours - DAY_START_HOUR) / (DAY_END_HOUR - DAY_START_HOUR));
+  const safeFraction = Math.max(elapsedFraction, 0.2);
+  return Math.round(steps / safeFraction);
 }
 
 function trainingDistanceKm(training){
@@ -4367,9 +4390,9 @@ async function renderPersonalPeriod(days, labelElId, bodyElId, label){
     if(stepsWeightKg && owner){
       const garminSteps = await loadGarminStepsForDate(owner, dateStr);
       if(garminSteps && garminSteps.steps_total!=null){
-        const relevantSteps = training
+        const relevantSteps = projectStepsForToday(training
           ? Math.max(0, garminSteps.steps_total - (garminSteps.steps_training||0))
-          : garminSteps.steps_total;
+          : garminSteps.steps_total, dateStr);
         extraStepsKcal = extraKcalFromSteps(relevantSteps, stepsWeightKg);
       }
     }
@@ -5539,9 +5562,9 @@ async function renderHistory(){
       if(stepsWeightKg){
         const garminSteps = await loadGarminStepsForDate(owner, dateStr);
         if(garminSteps && garminSteps.steps_total!=null){
-          const relevantSteps = training
+          const relevantSteps = projectStepsForToday(training
             ? Math.max(0, garminSteps.steps_total - (garminSteps.steps_training||0))
-            : garminSteps.steps_total;
+            : garminSteps.steps_total, dateStr);
           extraStepsKcal = extraKcalFromSteps(relevantSteps, stepsWeightKg);
         }
       }
