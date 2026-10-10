@@ -462,6 +462,42 @@ def build_long_run_24k():
     )
 
 
+def build_long_run_24k_progressive():
+    """Zaterdag 17 okt (week 1 van het halve-marathon-Assen-schema, geen
+    hersteltussenweek -- maar 2 echte trainingsweken voor de taper, dus ook
+    de lange duurloop krijgt inhoud): 24 km, waarvan de laatste 8 km op
+    HM-tempo (3:50-3:56/km), de eerste 16 km rustig."""
+    from garminconnect.workout import RunningWorkout, WorkoutSegment
+
+    INTERVAL_STEP_TYPE = 3
+
+    easy = pace_step(1, INTERVAL_STEP_TYPE, "interval", 1, "distance", 16000,
+                      slow_pace=(5, 15), fast_pace=(4, 25), hr_note="< 155",
+                      description="Rustig")
+    race_pace = pace_step(2, INTERVAL_STEP_TYPE, "interval", 3, "distance", 8000,
+                           slow_pace=(3, 56), fast_pace=(3, 50), hr_note="~165-170",
+                           description="HM-tempo (laatste 8 km)")
+
+    total_secs = int(16000/pace_to_speed(5, 0) + 8000/pace_to_speed(3, 53))
+
+    return RunningWorkout(
+        workoutName="Hardlopen: 24 km progressief (laatste 8 km op 3:53/km)",
+        estimatedDurationInSecs=total_secs,
+        description=(
+            "16 km rustig op 4:25-5:15/km (HS<155), dan laatste 8 km op "
+            "3:50-3:56/km (HM-doeltempo, HS~165-170). Progressieve long run, "
+            "geen aparte cooling-down."
+        ),
+        workoutSegments=[
+            WorkoutSegment(
+                segmentOrder=1,
+                sportType={"sportTypeId": 1, "sportTypeKey": "running"},
+                workoutSteps=[easy, race_pace],
+            )
+        ],
+    )
+
+
 def build_hm_surge_float():
     """15 km HM-tempo surge/float: 2 km inlopen op 4:40/km, dan 4x (2 km op
     HM-tempo 3:53/km + 1 km float-herstel), waarbij het laatste blok een
@@ -843,6 +879,7 @@ WORKOUT_BUILDERS = {
     "long_run_18k": build_long_run_18k,
     "4x1000_race_pace": build_4x1000_race_pace,
     "4x500_sharpening": build_4x500_sharpening,
+    "long_run_24k_progressive": build_long_run_24k_progressive,
     "generale_16k_race_pace": build_generale_16k_race_pace,
     "4x1000_taper": build_4x1000_taper,
     "3k_race_pace": build_3k_race_pace,

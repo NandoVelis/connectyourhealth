@@ -41,6 +41,7 @@ on:
           - long_run_18k
           - 4x1000_race_pace
           - 4x500_sharpening
+          - long_run_24k_progressive
           - generale_16k_race_pace
           - 4x1000_taper
           - 3k_race_pace
