@@ -897,10 +897,7 @@ def unschedule_workout_on_date(garmin, date_str):
 
     d = date_cls.fromisoformat(date_str)
     scheduled = garmin.get_scheduled_workouts(d.year, d.month)
-    entries = scheduled if isinstance(scheduled, list) else (
-        scheduled.get("workouts") or scheduled.get("scheduledWorkouts") or
-        scheduled.get("items") or []
-    )
+    entries = scheduled if isinstance(scheduled, list) else (scheduled or {}).get("calendarItems") or []
     removed = 0
     for entry in entries:
         entry_date = (
@@ -933,10 +930,7 @@ def list_scheduled_workouts_on_date(garmin, date_str):
 
     d = date_cls.fromisoformat(date_str)
     scheduled = garmin.get_scheduled_workouts(d.year, d.month)
-    entries = scheduled if isinstance(scheduled, list) else (
-        scheduled.get("workouts") or scheduled.get("scheduledWorkouts") or
-        scheduled.get("items") or []
-    )
+    entries = scheduled if isinstance(scheduled, list) else (scheduled or {}).get("calendarItems") or []
     found = 0
     for entry in entries:
         entry_date = (
@@ -959,16 +953,24 @@ def list_scheduled_workouts_on_date(garmin, date_str):
 
 
 def dump_raw_month(garmin, year_month):
-    """Debug-hulpmiddel: print de RAW respons van get_scheduled_workouts voor
-    een maand (YYYY-MM), zodat we kunnen zien wat Garmin daadwerkelijk
-    teruggeeft i.p.v. te gokken naar veldnamen. Wijzigt niets."""
+    """Debug-hulpmiddel: analyseert de respons van get_scheduled_workouts voor
+    een maand (YYYY-MM) -- het echte veld bleek 'calendarItems' te zijn
+    (i.p.v. workouts/scheduledWorkouts/items), met verschillende itemType's
+    (event, weight, workout, ...). Print per itemType een samenvatting +
+    volledige inhoud van alle niet-event/weight items, zodat we precies zien
+    wat de "losse trainingen" (oranje balkjes in de Garmin-app) zijn."""
     import json as json_mod
+    from collections import Counter
     year, month = (int(x) for x in year_month.split("-"))
     scheduled = garmin.get_scheduled_workouts(year, month)
-    print(f"  type(scheduled) = {type(scheduled).__name__}")
-    dumped = json_mod.dumps(scheduled, default=str)
-    print(f"  lengte raw JSON: {len(dumped)} tekens")
-    print(dumped[:6000])
+    items = (scheduled or {}).get("calendarItems") or []
+    print(f"  {len(items)} calendarItems gevonden voor {year_month}.")
+    print(f"  itemType-verdeling: {dict(Counter(i.get('itemType') for i in items))}")
+    for item in items:
+        if item.get("itemType") in ("event", "weight"):
+            continue
+        print(f"  --- {item.get('date')} (itemType={item.get('itemType')}) ---")
+        print(f"  {json_mod.dumps(item, default=str)[:1500]}")
 
 
 def main():

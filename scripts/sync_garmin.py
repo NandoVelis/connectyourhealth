@@ -295,11 +295,14 @@ def sync_planned_trainings(garmin, owner, today, window_days=14):
     entries_by_date = {}
     for y, m in months:
         scheduled = safe(garmin.get_scheduled_workouts, y, m)
-        entries = scheduled if isinstance(scheduled, list) else (
-            (scheduled or {}).get("workouts") or (scheduled or {}).get("scheduledWorkouts") or
-            (scheduled or {}).get("items") or []
-        )
+        entries = scheduled if isinstance(scheduled, list) else (scheduled or {}).get("calendarItems") or []
         for entry in entries:
+            # "event" (races) en "weight" (weegmomenten) zijn geen trainingen
+            # -- zie dump_raw_month in create_garmin_workout.py, die dit
+            # itemType-onderscheid blootlegde (het echte veld bleek
+            # calendarItems te zijn, met event/weight/workout als itemType).
+            if entry.get("itemType") in ("event", "weight"):
+                continue
             d = (
                 entry.get("calendarDate") or entry.get("date") or
                 entry.get("startDate") or entry.get("workoutDate")
