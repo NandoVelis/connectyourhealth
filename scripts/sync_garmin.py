@@ -260,19 +260,38 @@ def extract_distance_km(entry):
     return round(total_m / 1000, 2) if total_m else None
 
 
+# Titels met deze woorden noemen alleen het hoofdblok (drempel/interval/
+# race-tempo), niet de losse tijd-gestuurde warming-up/cooling-down erom
+# heen (bv. "10 km drempel" = 10 km tempo + ~15 min in-/uitlopen die niet in
+# de titel staan). Op verzoek (12 okt) een vaste +3 km als ruwe schatting
+# voor die ontbrekende in-/uitloop -- Garmin's workout-detail-endpoint geeft
+# een 404 voor deze workout-ID's, dus de exacte stappen zijn niet op te
+# halen om dit precies te berekenen.
+BLOCK_ONLY_KEYWORDS = ("drempel", "race-tempo", "wedstrijdtempo", "taper", "sharpening", "interval")
+
+
 def parse_km_from_title(title):
     """De titel van een workout-calendarItem bevat zelf meestal de afstand als
     platte tekst (bv. "12 km Z2", "15 km HM surge/float", "16 km generale
     (12 km op 3:53/km)" -- de EERSTE "N km" in de titel is steeds de
-    totaalafstand, dus dat is betrouwbaarder dan de (vrijwel altijd lege)
-    gestructureerde afstandvelden. "hm"/"halve marathon" en "marathon" als
-    los woord in de titel worden als veelgebruikte afkortingen herkend."""
+    (hoofdblok- of totaal-)afstand, betrouwbaarder dan de (vrijwel altijd
+    lege) gestructureerde afstandvelden. "hm"/"halve marathon" en "marathon"
+    als los woord worden als veelgebruikte afkortingen herkend. Een
+    "NxNNNNm"-patroon (bv. "6x1000m") zonder los genoemde km-afstand wordt
+    als hoofdblok-afstand uitgerekend."""
     if not title:
         return None
-    m = re.search(r"(\d+(?:[.,]\d+)?)\s*km", title, re.IGNORECASE)
-    if m:
-        return float(m.group(1).replace(",", "."))
     t = title.lower()
+    m = re.search(r"(\d+(?:[.,]\d+)?)\s*km\b", title, re.IGNORECASE)
+    if m:
+        main_km = float(m.group(1).replace(",", "."))
+        if any(k in t for k in BLOCK_ONLY_KEYWORDS):
+            return round(main_km + 3, 1)
+        return main_km
+    reps_m = re.search(r"(\d+)\s*x\s*(\d+)\s*m\b", t)
+    if reps_m:
+        reps, per_rep = int(reps_m.group(1)), int(reps_m.group(2))
+        return round(reps * per_rep / 1000 + 3, 1)
     if re.search(r"\bhm\b", t) or "halve marathon" in t:
         return 21.1
     if re.search(r"\bmarathon\b", t):
