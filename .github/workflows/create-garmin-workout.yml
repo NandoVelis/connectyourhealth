@@ -23,6 +23,10 @@ on:
         description: 'Verwijdert alleen de kalenderinplanning op deze datum (YYYY-MM-DD), maakt niets aan (negeert de andere velden hierboven)'
         required: false
         type: string
+      list_date:
+        description: 'Toont alleen wat er in Garmin gepland staat op deze datum (YYYY-MM-DD), wijzigt niets (negeert de andere velden hierboven)'
+        required: false
+        type: string
       workout_type:
         description: 'Welke training aanmaken (alleen als workout_id leeg is)'
         required: false
@@ -70,5 +74,6 @@ jobs:
           WORKOUT_ID: ${{ inputs.workout_id }}
           WORKOUT_TYPE: ${{ inputs.workout_type }}
           UNSCHEDULE_DATE: ${{ inputs.unschedule_date }}
+          LIST_DATE: ${{ inputs.list_date }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: python3 scripts/create_garmin_workout.py

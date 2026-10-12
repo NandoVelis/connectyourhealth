@@ -925,6 +925,39 @@ def unschedule_workout_on_date(garmin, date_str):
     return removed
 
 
+def list_scheduled_workouts_on_date(garmin, date_str):
+    """Alleen-lezen: print exact wat er in Garmin's agenda staat op date_str,
+    zonder iets te wijzigen. Zelfde robuuste veldnaam-aanpak als
+    unschedule_workout_on_date."""
+    from datetime import date as date_cls
+
+    d = date_cls.fromisoformat(date_str)
+    scheduled = garmin.get_scheduled_workouts(d.year, d.month)
+    entries = scheduled if isinstance(scheduled, list) else (
+        scheduled.get("workouts") or scheduled.get("scheduledWorkouts") or
+        scheduled.get("items") or []
+    )
+    found = 0
+    for entry in entries:
+        entry_date = (
+            entry.get("calendarDate") or entry.get("date") or
+            entry.get("startDate") or entry.get("workoutDate")
+        )
+        if not entry_date or entry_date[:10] != date_str:
+            continue
+        name = entry.get("workoutName") or entry.get("name") or "?"
+        scheduled_id = (
+            entry.get("workoutScheduleId") or entry.get("scheduleId") or
+            entry.get("id") or entry.get("scheduledWorkoutId")
+        )
+        workout_id = entry.get("workoutId") or entry.get("workoutID")
+        print(f"  Gepland op {date_str}: '{name}' (scheduleId={scheduled_id}, workoutId={workout_id})")
+        found += 1
+    if found == 0:
+        print(f"  Niets gepland gevonden op {date_str}.")
+    return found
+
+
 def main():
     owner = os.environ["GARMIN_OWNER"]
     email = os.environ["GARMIN_EMAIL"]
@@ -934,8 +967,13 @@ def main():
     existing_workout_id = os.environ.get("WORKOUT_ID") or None  # als gezet: niet opnieuw aanmaken, alleen inplannen
     workout_type = os.environ.get("WORKOUT_TYPE") or "progressive_15k"
     unschedule_date = os.environ.get("UNSCHEDULE_DATE") or None  # YYYY-MM-DD: verwijdert alleen de kalenderinplanning die dag
+    list_date = os.environ.get("LIST_DATE") or None  # YYYY-MM-DD: toont alleen wat er gepland staat, wijzigt niets
 
     garmin = login(owner, email, password, mfa_code)
+
+    if list_date:
+        list_scheduled_workouts_on_date(garmin, list_date)
+        return
 
     if unschedule_date:
         unschedule_workout_on_date(garmin, unschedule_date)
