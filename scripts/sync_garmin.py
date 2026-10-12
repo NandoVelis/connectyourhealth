@@ -214,6 +214,120 @@ def upsert_weight(owner, rows):
         raise RuntimeError(f"Opslaan gewicht mislukt ({resp.status_code}): {resp.text[:500]}")
 
 
+def upsert_planned_trainings(owner, rows):
+    if not rows:
+        return
+    resp = requests.post(
+        f"{SUPABASE_URL}/rest/v1/planned_trainings",
+        headers={**supabase_headers(), "Prefer": "resolution=merge-duplicates"},
+        params={"on_conflict": "owner,training_date"},
+        json=rows,
+        timeout=30,
+    )
+    if not resp.ok:
+        raise RuntimeError(f"Opslaan planned_trainings mislukt ({resp.status_code}): {resp.text[:500]}")
+
+
+def delete_planned_training(owner, date_str):
+    resp = requests.delete(
+        f"{SUPABASE_URL}/rest/v1/planned_trainings",
+        headers=supabase_headers(),
+        params={"owner": f"eq.{owner}", "training_date": f"eq.{date_str}"},
+        timeout=15,
+    )
+    if not resp.ok:
+        print(f"  WAARSCHUWING: verwijderen planned_trainings {date_str} mislukt ({resp.status_code}): {resp.text[:300]}")
+
+
+def extract_distance_km(entry):
+    """Probeert de geplande afstand direct uit het kalender-entry te lezen
+    (Garmin geeft dit soms al top-level mee voor structured workouts), anders
+    door de embedded stappen (indien aanwezig) bij elkaar op te tellen."""
+    for key in ("estimatedDistanceInMeters", "totalDistance", "distanceInMeters", "distanceMeter"):
+        val = entry.get(key)
+        if val:
+            return round(val / 1000, 2)
+    segments = entry.get("workoutSegments") or (entry.get("workout") or {}).get("workoutSegments") or []
+    total_m = 0
+    for seg in segments:
+        for step in seg.get("workoutSteps") or []:
+            cond = step.get("endCondition") or {}
+            if cond.get("conditionTypeKey") == "distance":
+                total_m += step.get("endConditionValue") or 0
+    return round(total_m / 1000, 2) if total_m else None
+
+
+def fetch_full_workout_distance_km(garmin, workout_id):
+    """Fallback als het kalender-entry zelf geen afstand bevat: haalt de volledige
+    trainingsdefinitie op en telt de afstand-gestuurde stappen bij elkaar op.
+    Probeert meerdere mogelijke methodenamen (library-versie-afhankelijk)."""
+    for method_name in ("get_workout_by_id", "get_workout"):
+        method = getattr(garmin, method_name, None)
+        if method is None:
+            continue
+        try:
+            full = method(workout_id)
+        except Exception:
+            continue
+        if not isinstance(full, dict):
+            continue
+        total_m = 0
+        for seg in full.get("workoutSegments") or []:
+            for step in seg.get("workoutSteps") or []:
+                cond = step.get("endCondition") or {}
+                if cond.get("conditionTypeKey") == "distance":
+                    total_m += step.get("endConditionValue") or 0
+        if total_m:
+            return round(total_m / 1000, 2)
+    return None
+
+
+def sync_planned_trainings(garmin, owner, today, window_days=14):
+    """Leest exact wat er in Garmin's agenda gepland staat voor de komende
+    window_days dagen en zet dat in planned_trainings (voor de "verwachte
+    kcal"-berekening in de app) -- i.p.v. dat handmatig bij te houden. Dagen
+    in het venster zonder Garmin-training worden expliciet leeggemaakt, zodat
+    een verwijderde/verzette training niet als stale rij blijft hangen."""
+    dates_in_window = [(today + timedelta(days=i)).isoformat() for i in range(window_days)]
+    end_date = today + timedelta(days=window_days - 1)
+    months = {(today.year, today.month), (end_date.year, end_date.month)}
+
+    entries_by_date = {}
+    for y, m in months:
+        scheduled = safe(garmin.get_scheduled_workouts, y, m)
+        entries = scheduled if isinstance(scheduled, list) else (
+            (scheduled or {}).get("workouts") or (scheduled or {}).get("scheduledWorkouts") or
+            (scheduled or {}).get("items") or []
+        )
+        for entry in entries:
+            d = (
+                entry.get("calendarDate") or entry.get("date") or
+                entry.get("startDate") or entry.get("workoutDate")
+            )
+            if not d:
+                continue
+            entries_by_date.setdefault(d[:10], entry)
+
+    rows, cleared = [], 0
+    for d_str in dates_in_window:
+        entry = entries_by_date.get(d_str)
+        if entry is None:
+            delete_planned_training(owner, d_str)
+            cleared += 1
+            continue
+        name = entry.get("workoutName") or entry.get("name") or "Training"
+        workout_id = entry.get("workoutId") or entry.get("workoutID")
+        distance_km = extract_distance_km(entry)
+        if distance_km is None and workout_id:
+            distance_km = safe(fetch_full_workout_distance_km, garmin, workout_id)
+        rows.append({
+            "owner": owner, "training_date": d_str,
+            "description": name, "estimated_distance_km": distance_km,
+        })
+    upsert_planned_trainings(owner, rows)
+    print(f"  Geplande trainingen (Garmin-agenda): {len(rows)} dag(en) met training, {cleared} dag(en) leeggemaakt.")
+
+
 def replace_training_for_date(owner, date_str, rows):
     resp = requests.delete(
         f"{SUPABASE_URL}/rest/v1/training",
@@ -651,6 +765,10 @@ def main():
             }])
             print(f"  {d_str}: geen activiteit (rustdag), rest_kcal/total_kcal={rest_kcal} weggeschreven")
         d += timedelta(days=1)
+
+    # ---- GEPLANDE TRAININGEN (voor "verwachte kcal") ----
+    print("Geplande trainingen (Garmin-agenda) ophalen...")
+    safe(sync_planned_trainings, garmin, owner, today)
 
     print("Klaar.")
 
