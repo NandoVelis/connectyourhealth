@@ -958,6 +958,19 @@ def list_scheduled_workouts_on_date(garmin, date_str):
     return found
 
 
+def dump_raw_month(garmin, year_month):
+    """Debug-hulpmiddel: print de RAW respons van get_scheduled_workouts voor
+    een maand (YYYY-MM), zodat we kunnen zien wat Garmin daadwerkelijk
+    teruggeeft i.p.v. te gokken naar veldnamen. Wijzigt niets."""
+    import json as json_mod
+    year, month = (int(x) for x in year_month.split("-"))
+    scheduled = garmin.get_scheduled_workouts(year, month)
+    print(f"  type(scheduled) = {type(scheduled).__name__}")
+    dumped = json_mod.dumps(scheduled, default=str)
+    print(f"  lengte raw JSON: {len(dumped)} tekens")
+    print(dumped[:6000])
+
+
 def main():
     owner = os.environ["GARMIN_OWNER"]
     email = os.environ["GARMIN_EMAIL"]
@@ -968,8 +981,13 @@ def main():
     workout_type = os.environ.get("WORKOUT_TYPE") or "progressive_15k"
     unschedule_date = os.environ.get("UNSCHEDULE_DATE") or None  # YYYY-MM-DD: verwijdert alleen de kalenderinplanning die dag
     list_date = os.environ.get("LIST_DATE") or None  # YYYY-MM-DD: toont alleen wat er gepland staat, wijzigt niets
+    dump_month = os.environ.get("DUMP_MONTH") or None  # YYYY-MM: print raw get_scheduled_workouts-respons, wijzigt niets
 
     garmin = login(owner, email, password, mfa_code)
+
+    if dump_month:
+        dump_raw_month(garmin, dump_month)
+        return
 
     if list_date:
         list_scheduled_workouts_on_date(garmin, list_date)
