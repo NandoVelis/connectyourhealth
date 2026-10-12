@@ -350,6 +350,7 @@
         <h3>Balans vandaag</h3>
         <div class="balans-number" id="balansNum">0</div>
         <div class="balans-sub" id="balansSub">kcal ingenomen &minus; verbrand</div>
+        <div class="balans-sub" id="balansStepsTip" style="margin-top:4px;" hidden></div>
       </div>
       <div class="card">
         <h3>Training</h3>
@@ -3159,6 +3160,21 @@ async function renderDashboard(){
     : burned!==null
       ? 'kcal ingenomen \u2212 verbrand (training)'
       : 'kcal ingenomen (training nog niet opgehaald)') + noMealsSuffix;
+
+  // Sta je in de plus (meer gegeten dan verbrand), toon dan hoeveel extra
+  // stappen nodig zijn om op netto 0 uit te komen -- zelfde formule als
+  // extraKcalFromSteps()/KCAL_PER_STEP_PER_KG, nu omgekeerd opgelost naar
+  // stappen i.p.v. kcal. Bij een tekort geeft generateNutritionTip() al
+  // een eet-tip, dus dit stappen-tipje toont alleen bij balans>0.
+  const stepsTipEl = document.getElementById('balansStepsTip');
+  if(balans>0 && stepsWeightKg){
+    const kcalPerStep = KCAL_PER_STEP_PER_KG * stepsWeightKg;
+    const extraSteps = Math.ceil(balans / kcalPerStep);
+    stepsTipEl.textContent = `\u{1F6B6} +${extraSteps.toLocaleString('nl-NL')} stappen om op netto 0 uit te komen`;
+    stepsTipEl.hidden = false;
+  } else {
+    stepsTipEl.hidden = true;
+  }
 
   const vitals = await loadVitalsWithGarminFallback(owner, dateStr);
   document.getElementById('vitalHrRest').textContent = (vitals && vitals.hrRest!=null) ? vitals.hrRest+' bpm' : '\u2014';
