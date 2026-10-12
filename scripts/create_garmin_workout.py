@@ -973,6 +973,27 @@ def dump_raw_month(garmin, year_month):
         print(f"  {json_mod.dumps(item, default=str)[:1500]}")
 
 
+def dump_workout(garmin, workout_id):
+    """Debug-hulpmiddel: probeert verschillende methodenamen om de volledige
+    stapdefinitie van 1 workout op te halen (nodig om de totale afstand incl.
+    warming-up/cooling-down te berekenen i.p.v. alleen de titel-tekst te
+    parsen, die vaak alleen het hoofdblok noemt)."""
+    import json as json_mod
+    workout_id = int(workout_id)
+    for method_name in ("get_workout_by_id", "get_workout", "download_workout"):
+        method = getattr(garmin, method_name, None)
+        print(f"  methode '{method_name}': {'bestaat' if method else 'bestaat niet'}")
+        if method is None:
+            continue
+        try:
+            result = method(workout_id)
+        except Exception as e:
+            print(f"    fout bij aanroepen: {e}")
+            continue
+        print(f"    type: {type(result).__name__}")
+        print(f"    {json_mod.dumps(result, default=str)[:3000]}")
+
+
 def main():
     owner = os.environ["GARMIN_OWNER"]
     email = os.environ["GARMIN_EMAIL"]
@@ -984,8 +1005,13 @@ def main():
     unschedule_date = os.environ.get("UNSCHEDULE_DATE") or None  # YYYY-MM-DD: verwijdert alleen de kalenderinplanning die dag
     list_date = os.environ.get("LIST_DATE") or None  # YYYY-MM-DD: toont alleen wat er gepland staat, wijzigt niets
     dump_month = os.environ.get("DUMP_MONTH") or None  # YYYY-MM: print raw get_scheduled_workouts-respons, wijzigt niets
+    dump_workout_id = os.environ.get("DUMP_WORKOUT") or None  # workout-ID: print volledige stapdefinitie, wijzigt niets
 
     garmin = login(owner, email, password, mfa_code)
+
+    if dump_workout_id:
+        dump_workout(garmin, dump_workout_id)
+        return
 
     if dump_month:
         dump_raw_month(garmin, dump_month)
