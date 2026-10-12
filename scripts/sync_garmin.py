@@ -22,6 +22,7 @@ Actions met de mfa_code-input ingevuld (code uit je e-mail/authenticator-app).
 Alle volgende (geplande) runs hergebruiken daarna de opgeslagen sessie.
 """
 import os
+import re
 import sys
 from datetime import date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
@@ -242,7 +243,9 @@ def delete_planned_training(owner, date_str):
 def extract_distance_km(entry):
     """Probeert de geplande afstand direct uit het kalender-entry te lezen
     (Garmin geeft dit soms al top-level mee voor structured workouts), anders
-    door de embedded stappen (indien aanwezig) bij elkaar op te tellen."""
+    door de embedded stappen (indien aanwezig) bij elkaar op te tellen. Voor
+    de calendarItems-vorm (itemType=workout) blijkt dit in de praktijk
+    zelden gevuld -- zie parse_km_from_title hieronder voor de werkende bron."""
     for key in ("estimatedDistanceInMeters", "totalDistance", "distanceInMeters", "distanceMeter"):
         val = entry.get(key)
         if val:
@@ -257,28 +260,23 @@ def extract_distance_km(entry):
     return round(total_m / 1000, 2) if total_m else None
 
 
-def fetch_full_workout_distance_km(garmin, workout_id):
-    """Fallback als het kalender-entry zelf geen afstand bevat: haalt de volledige
-    trainingsdefinitie op en telt de afstand-gestuurde stappen bij elkaar op.
-    Probeert meerdere mogelijke methodenamen (library-versie-afhankelijk)."""
-    for method_name in ("get_workout_by_id", "get_workout"):
-        method = getattr(garmin, method_name, None)
-        if method is None:
-            continue
-        try:
-            full = method(workout_id)
-        except Exception:
-            continue
-        if not isinstance(full, dict):
-            continue
-        total_m = 0
-        for seg in full.get("workoutSegments") or []:
-            for step in seg.get("workoutSteps") or []:
-                cond = step.get("endCondition") or {}
-                if cond.get("conditionTypeKey") == "distance":
-                    total_m += step.get("endConditionValue") or 0
-        if total_m:
-            return round(total_m / 1000, 2)
+def parse_km_from_title(title):
+    """De titel van een workout-calendarItem bevat zelf meestal de afstand als
+    platte tekst (bv. "12 km Z2", "15 km HM surge/float", "16 km generale
+    (12 km op 3:53/km)" -- de EERSTE "N km" in de titel is steeds de
+    totaalafstand, dus dat is betrouwbaarder dan de (vrijwel altijd lege)
+    gestructureerde afstandvelden. "hm"/"halve marathon" en "marathon" als
+    los woord in de titel worden als veelgebruikte afkortingen herkend."""
+    if not title:
+        return None
+    m = re.search(r"(\d+(?:[.,]\d+)?)\s*km", title, re.IGNORECASE)
+    if m:
+        return float(m.group(1).replace(",", "."))
+    t = title.lower()
+    if re.search(r"\bhm\b", t) or "halve marathon" in t:
+        return 21.1
+    if re.search(r"\bmarathon\b", t):
+        return 42.2
     return None
 
 
@@ -297,11 +295,13 @@ def sync_planned_trainings(garmin, owner, today, window_days=14):
         scheduled = safe(garmin.get_scheduled_workouts, y, m)
         entries = scheduled if isinstance(scheduled, list) else (scheduled or {}).get("calendarItems") or []
         for entry in entries:
-            # "event" (races) en "weight" (weegmomenten) zijn geen trainingen
-            # -- zie dump_raw_month in create_garmin_workout.py, die dit
+            # Alleen itemType "workout" telt als geplande training -- de
+            # calendarItems-array bevat ook "event" (races), "weight"
+            # (weegmomenten), "activity" (al voltooide trainingen) en "nap".
+            # Zie dump_raw_month in create_garmin_workout.py, die dit
             # itemType-onderscheid blootlegde (het echte veld bleek
-            # calendarItems te zijn, met event/weight/workout als itemType).
-            if entry.get("itemType") in ("event", "weight"):
+            # calendarItems te zijn, niet workouts/scheduledWorkouts).
+            if entry.get("itemType") != "workout":
                 continue
             d = (
                 entry.get("calendarDate") or entry.get("date") or
@@ -318,11 +318,11 @@ def sync_planned_trainings(garmin, owner, today, window_days=14):
             delete_planned_training(owner, d_str)
             cleared += 1
             continue
-        name = entry.get("workoutName") or entry.get("name") or "Training"
-        workout_id = entry.get("workoutId") or entry.get("workoutID")
-        distance_km = extract_distance_km(entry)
-        if distance_km is None and workout_id:
-            distance_km = safe(fetch_full_workout_distance_km, garmin, workout_id)
+        # "title" is het echte veld voor calendarItems (workoutName/name
+        # bestaan hier niet -- die namen klopten bij de oude, verkeerde
+        # aanname over de API-vorm).
+        name = entry.get("title") or entry.get("workoutName") or entry.get("name") or "Training"
+        distance_km = extract_distance_km(entry) or parse_km_from_title(name)
         rows.append({
             "owner": owner, "training_date": d_str,
             "description": name, "estimated_distance_km": distance_km,
