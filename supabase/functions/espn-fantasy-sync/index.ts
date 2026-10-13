@@ -1329,6 +1329,19 @@ Deno.serve(async (req: Request) => {
     // Ochtendcheck prijsdrempelmodel) zorgde voor ruis van spelers die
     // vrijwel nooit daadwerkelijk wijzigen, dus die filteren we hier eruit.
     //
+    // Op verzoek (13 okt) ook basis=gemeten vereist: analyse liet zien dat
+    // spelers met basis=geschat (nog nooit een ECHTE wijziging gezien sinds
+    // tracking begon) hun net_since_change nooit resetten -- dat is dan
+    // gewoon de seizoens-cumulatieve nettotransfers, vergeleken met een
+    // drempel bedoeld voor kortetermijn-schommelingen. Zodra zo'n speler de
+    // drempel 1x passeert blijft progress voor altijd oplopen (tot 800%+
+    // gezien) zonder ooit een echte wijziging te triggeren -- 153 van de 350
+    // openstaande 90%-waarschuwingen stonden al >7 dagen (gemiddeld 12 dagen)
+    // open, en van de 176 huidige 90%+-kandidaten was 75% basis=geschat
+    // terwijl maar 13 van de 255 ooit-waargenomen wijzigingen ooit een
+    // eerste-wijziging-voor-die-speler was. basis=gemeten (een echte eerder
+    // gemeten wijziging als baseline) is de enige betrouwbare groep.
+    //
     // De mail is op verzoek (13 okt) verplaatst naar 1x per dag in de
     // avond (espn-evening-price-alert) -- deze real-time check (elke 15
     // min) stuurde voorheen een aparte mail zodra een NIEUWE speler over
@@ -1338,7 +1351,7 @@ Deno.serve(async (req: Request) => {
     // verwachting-combinatie).
     try {
       const boardRes = await fetch(
-        `${SB_URL}/rest/v1/espn_price_board?select=id,web_name,team_short,now_cost,verwachting,progress,owners&progress=gte.0.9&owners=gt.0`,
+        `${SB_URL}/rest/v1/espn_price_board?select=id,web_name,team_short,now_cost,verwachting,progress,owners&progress=gte.0.9&owners=gt.0&basis=eq.gemeten`,
         { headers: sbHeaders() },
       );
       if (boardRes.ok) {

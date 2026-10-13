@@ -95,7 +95,7 @@ Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   try {
     const board: any[] = await sbGet(
-      "espn_price_board?select=id,web_name,team_short,now_cost,verwachting,progress,owners&verwachting=neq.stabiel&verwachting=neq.onbekend",
+      "espn_price_board?select=id,web_name,team_short,now_cost,verwachting,progress,owners,basis&verwachting=neq.stabiel&verwachting=neq.onbekend",
     );
     if (!board.length) {
       return new Response(JSON.stringify({ ok: true, skipped: true, reason: "Geen dreigende wijzigingen" }), {
@@ -129,7 +129,17 @@ Deno.serve(async (req: Request) => {
     // progress>=90% opnieuw mailen (progress loopt na 100% gewoon door tot
     // de prijs echt wijzigt, dus "90%+" is zonder dedup vrijwel de hele
     // stijgt/daalt-lijst, niet alleen de nieuwe/net overschreden spelers).
-    const highProgressAll = board.filter((b) => (b.progress || 0) >= 0.9 && (b.owners || 0) > 0);
+    //
+    // Ook basis=gemeten vereist (op verzoek, 13 okt, zie espn-fantasy-sync
+    // voor de volledige analyse): spelers met basis=geschat (nog nooit een
+    // ECHTE wijziging gezien) resetten hun net_since_change nooit, dus
+    // progress loopt voor hen voor altijd op (tot 800%+ gezien) zonder ooit
+    // een echte wijziging te triggeren -- 75% van alle huidige 90%+-
+    // kandidaten was basis=geschat, en 153 van 350 historische waarschuwingen
+    // stonden al >7 dagen (gemiddeld 12 dagen) open zonder resultaat.
+    const highProgressAll = board.filter((b) =>
+      (b.progress || 0) >= 0.9 && (b.owners || 0) > 0 && b.basis === "gemeten"
+    );
     let highProgress: any[] = [];
     let mailSent = false;
     const resendKey = Deno.env.get("RESEND_API_KEY");
