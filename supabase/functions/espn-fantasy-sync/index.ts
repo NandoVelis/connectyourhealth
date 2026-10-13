@@ -1320,78 +1320,60 @@ Deno.serve(async (req: Request) => {
     }
 
     // ---- ALGEMENE 90%-WAARSCHUWING (los van eigen team) ----
-    // Mailt Nando zodra ÉÉN willekeurige speler (ook een die hij niet
+    // Pusht Nando zodra ÉÉN willekeurige speler (ook een die hij niet
     // bezit) 90% of meer van de drempel van een prijswijziging heeft
     // bereikt. Gebruikt dezelfde dedup-tabel als de team-waarschuwingen
-    // hierboven, dus een speler die al gemaild is (bv. omdat hij ook in
-    // een van de gevolgde teams zit) wordt niet dubbel gemaild.
-    // Op verzoek, 8 okt: alleen spelers met owners > 0 -- de bekende
-    // lage-/nul-bezit-stuck-lijst (zie Ochtendcheck prijsdrempelmodel)
-    // zorgde voor ruis van spelers die vrijwel nooit daadwerkelijk
-    // wijzigen, dus die filteren we hier eruit.
-    if (resendKey) {
-      try {
-        const boardRes = await fetch(
-          `${SB_URL}/rest/v1/espn_price_board?select=id,web_name,team_short,now_cost,verwachting,progress,owners&progress=gte.0.9&owners=gt.0`,
-          { headers: sbHeaders() },
-        );
-        if (boardRes.ok) {
-          const board: any[] = await boardRes.json();
-          if (board.length) {
-            const alreadyRes = await fetch(
-              `${SB_URL}/rest/v1/espn_price_alerts_sent?select=player_id,verwachting&alert_email=eq.${
-                encodeURIComponent(GLOBAL_WATCH_EMAIL)
-              }&player_id=in.(${board.map((t) => t.id).join(",")})`,
-              { headers: sbHeaders() },
+    // hierboven (alleen om herhaalde push te voorkomen, geen mail meer
+    // hier -- zie hieronder). Op verzoek, 8 okt: alleen spelers met
+    // owners > 0 -- de bekende lage-/nul-bezit-stuck-lijst (zie
+    // Ochtendcheck prijsdrempelmodel) zorgde voor ruis van spelers die
+    // vrijwel nooit daadwerkelijk wijzigen, dus die filteren we hier eruit.
+    //
+    // De mail is op verzoek (13 okt) verplaatst naar 1x per dag in de
+    // avond (espn-evening-price-alert) -- deze real-time check (elke 15
+    // min) stuurde voorheen een aparte mail zodra een NIEUWE speler over
+    // 90% ging, wat bij meerdere spelers op 1 dag tot meerdere losse
+    // mails leidde. Push blijft hier wel real-time (minder opdringerig
+    // dan losse mails, en dedup voorkomt herhaling voor dezelfde speler/
+    // verwachting-combinatie).
+    try {
+      const boardRes = await fetch(
+        `${SB_URL}/rest/v1/espn_price_board?select=id,web_name,team_short,now_cost,verwachting,progress,owners&progress=gte.0.9&owners=gt.0`,
+        { headers: sbHeaders() },
+      );
+      if (boardRes.ok) {
+        const board: any[] = await boardRes.json();
+        if (board.length) {
+          const alreadyRes = await fetch(
+            `${SB_URL}/rest/v1/espn_price_alerts_sent?select=player_id,verwachting&alert_email=eq.${
+              encodeURIComponent(GLOBAL_WATCH_EMAIL)
+            }&player_id=in.(${board.map((t) => t.id).join(",")})`,
+            { headers: sbHeaders() },
+          );
+          const already: any[] = alreadyRes.ok ? await alreadyRes.json() : [];
+          const alreadySet = new Set(already.map((a) => `${a.player_id}:${a.verwachting}`));
+          const toAlert = board.filter((t) => !alreadySet.has(`${t.id}:${t.verwachting}`));
+          if (toAlert.length) {
+            await sendPush(
+              GLOBAL_WATCH_EMAIL,
+              `${toAlert.length} speler(s) op 90%+ richting een prijswijziging`,
+              toAlert.map((t) => `${t.web_name}: ${t.verwachting}`).join(", "),
             );
-            const already: any[] = alreadyRes.ok ? await alreadyRes.json() : [];
-            const alreadySet = new Set(already.map((a) => `${a.player_id}:${a.verwachting}`));
-            const toAlert = board.filter((t) => !alreadySet.has(`${t.id}:${t.verwachting}`));
-            if (toAlert.length) {
-              const lines = toAlert.map((t) =>
-                `- ${t.web_name} (${t.team_short}): ${t.verwachting} (${
-                  Math.round((t.progress || 0) * 100)
-                }% van de drempel, huidige prijs €${(t.now_cost / 10).toFixed(1)})`
-              ).join("\n");
-              const mailRes = await fetch("https://api.resend.com/emails", {
-                method: "POST",
-                headers: {
-                  Authorization: `Bearer ${resendKey}`,
-                  "Content-Type": "application/json",
-                },
-                body: JSON.stringify({
-                  from: "ConnectYourHealth <onboarding@resend.dev>",
-                  to: [GLOBAL_WATCH_EMAIL],
-                  subject: `ESPN Fantasy: ${toAlert.length} speler(s) op 90%+ richting een prijswijziging`,
-                  text:
-                    `Deze spelers staan op 90% of meer richting een prijswijziging (ongeacht of ze in een van jullie teams zitten):\n\n${lines}\n\nBekijk het overzicht: https://connectyourhealth.vercel.app/overig`,
-                }),
-              });
-              await sendPush(
-                GLOBAL_WATCH_EMAIL,
-                `${toAlert.length} speler(s) op 90%+ richting een prijswijziging`,
-                toAlert.map((t) => `${t.web_name}: ${t.verwachting}`).join(", "),
-              );
-              if (mailRes.ok) {
-                await sbPost(
-                  "espn_price_alerts_sent",
-                  toAlert.map((t) => ({
-                    alert_email: GLOBAL_WATCH_EMAIL,
-                    player_id: t.id,
-                    verwachting: t.verwachting,
-                    sent_at: capturedAt,
-                  })),
-                  "return=minimal,resolution=merge-duplicates",
-                );
-              } else {
-                console.warn(`90%-waarschuwing-mail mislukt: ${mailRes.status} ${await mailRes.text()}`);
-              }
-            }
+            await sbPost(
+              "espn_price_alerts_sent",
+              toAlert.map((t) => ({
+                alert_email: GLOBAL_WATCH_EMAIL,
+                player_id: t.id,
+                verwachting: t.verwachting,
+                sent_at: capturedAt,
+              })),
+              "return=minimal,resolution=merge-duplicates",
+            );
           }
         }
-      } catch (e) {
-        console.warn(`Algemene 90%-waarschuwing mislukt: ${String(e)}`);
       }
+    } catch (e) {
+      console.warn(`Algemene 90%-waarschuwing mislukt: ${String(e)}`);
     }
 
     // ---- GROTE TRANSFERBEWEGING LAATSTE UUR ----

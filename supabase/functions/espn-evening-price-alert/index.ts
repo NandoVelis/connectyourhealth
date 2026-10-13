@@ -1,14 +1,29 @@
-// Dagelijkse avond-pushmelding met de prijsverwachting voor de nacht --
-// draait via pg_cron om 21:45 UTC, dus ná het dagelijkse piekvenster van
+// Dagelijkse avond-melding met de prijsverwachting voor de nacht -- draait
+// via pg_cron om 21:00 UTC, dus ná het dagelijkse piekvenster van
 // transferactiviteit (14:00-21:00 UTC, ontdekt via analyse van de 15-min-
 // snapshots) en vlak vóór de nachtelijke prijsronde (~02:30-02:45 UTC). Op
 // dat moment is het grootste deel van de dagelijkse opbouw al binnen, dus
-// is dit de meest betrouwbare voorspelling van de dag -- en als pushmelding
-// i.p.v. alleen data in de app, zodat 'm niet mist wie voor 22u slaapt.
+// is dit de meest betrouwbare voorspelling van de dag -- push i.p.v. alleen
+// data in de app, zodat 'm niet mist wie voor 22u slaapt.
+//
+// Bevat ook de 90%+-mail (op verzoek, 13 okt): dit was voorheen een losse
+// real-time check in espn-fantasy-sync die elke 15 min draaide en zodra een
+// NIEUWE speler over 90% progress heen ging meteen apart mailde -- bij meerdere
+// spelers op verschillende momenten op 1 dag gaf dat meerdere losse mails.
+// Nu 1x per dag, hier, met alle spelers die op dit moment 90%+ staan in 1
+// mail, inclusief duidelijke richting (omhoog/omlaag) i.p.v. alleen het
+// technische "stijgt"/"daalt"-label.
 const SB_URL = Deno.env.get("SUPABASE_URL")!;
 const SB_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const GLOBAL_WATCH_EMAIL = "nandovelis@gmail.com";
 const MY_TEAMS_EMAILS = ["nandovelis@gmail.com", "duncanvelis@ziggo.nl"];
+
+const RICHTING: Record<string, string> = {
+  "stijgt": "omhoog",
+  "stijgt bijna": "omhoog (bijna)",
+  "daalt": "omlaag",
+  "daalt bijna": "omlaag (bijna)",
+};
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -62,7 +77,7 @@ Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   try {
     const board: any[] = await sbGet(
-      "espn_price_board?select=web_name,team_short,now_cost,verwachting&verwachting=neq.stabiel&verwachting=neq.onbekend",
+      "espn_price_board?select=id,web_name,team_short,now_cost,verwachting,progress,owners&verwachting=neq.stabiel&verwachting=neq.onbekend",
     );
     if (!board.length) {
       return new Response(JSON.stringify({ ok: true, skipped: true, reason: "Geen dreigende wijzigingen" }), {
@@ -89,6 +104,38 @@ Deno.serve(async (req: Request) => {
       await sendPush(email, title, body.slice(0, 300));
     }
 
+    // ---- 90%+-MAIL (1x per dag, i.p.v. de oude real-time versie) ----
+    const highProgress = board
+      .filter((b) => (b.progress || 0) >= 0.9 && (b.owners || 0) > 0)
+      .sort((a, b) => (b.progress || 0) - (a.progress || 0));
+    let mailSent = false;
+    const resendKey = Deno.env.get("RESEND_API_KEY");
+    if (resendKey && highProgress.length) {
+      const lines = highProgress.map((t) =>
+        `- ${t.web_name} (${t.team_short}): ${RICHTING[t.verwachting] ?? t.verwachting} (${
+          Math.round((t.progress || 0) * 100)
+        }% van de drempel, huidige prijs €${(t.now_cost / 10).toFixed(1)})`
+      ).join("\n");
+      const omhoog = highProgress.filter((t) => t.verwachting.startsWith("stijgt")).length;
+      const omlaag = highProgress.filter((t) => t.verwachting.startsWith("daalt")).length;
+      const mailRes = await fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${resendKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          from: "ConnectYourHealth <onboarding@resend.dev>",
+          to: [GLOBAL_WATCH_EMAIL],
+          subject:
+            `ESPN Fantasy: ${highProgress.length} speler(s) op 90%+ richting een prijswijziging (${omhoog}x omhoog, ${omlaag}x omlaag)`,
+          text:
+            `Deze spelers staan op 90% of meer richting een prijswijziging (ongeacht of ze in een van jullie teams zitten):\n\n${lines}\n\nBekijk het overzicht: https://connectyourhealth.vercel.app/overig`,
+        }),
+      });
+      mailSent = mailRes.ok;
+      if (!mailRes.ok) {
+        console.warn(`90%-waarschuwing-mail mislukt: ${mailRes.status} ${await mailRes.text()}`);
+      }
+    }
+
     return new Response(
       JSON.stringify({
         ok: true,
@@ -96,6 +143,8 @@ Deno.serve(async (req: Request) => {
         dalers: dalers.length,
         bijna_stijgers: bijnaStijgers.length,
         bijna_dalers: bijnaDalers.length,
+        high_progress: highProgress.length,
+        mail_sent: mailSent,
       }),
       { headers: { ...CORS, "Content-Type": "application/json" } },
     );
