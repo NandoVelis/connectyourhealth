@@ -17,6 +17,14 @@ const SB_URL = Deno.env.get("SUPABASE_URL")!;
 const SB_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const GLOBAL_WATCH_EMAIL = "nandovelis@gmail.com";
 const MY_TEAMS_EMAILS = ["nandovelis@gmail.com", "duncanvelis@ziggo.nl"];
+// Eigen dedup-sleutel (niet GLOBAL_WATCH_EMAIL zelf) -- espn-fantasy-sync
+// schrijft ZELF ook naar espn_price_alerts_sent (voor de real-time push-
+// dedup, alert_email=GLOBAL_WATCH_EMAIL). Dezelfde sleutel hergebruiken zou
+// betekenen dat een speler die al push-gedupt is (overdag) 's avonds
+// stilzwijgend uit de mail valt, nog vóór hij ooit gemaild is -- vandaar een
+// losse sleutel, zodat de dagelijkse mail-dedup onafhankelijk van de
+// real-time push-dedup bijhoudt wie al gemaild is.
+const EMAIL_DEDUP_KEY = `${GLOBAL_WATCH_EMAIL}#daily-digest`;
 
 const RICHTING: Record<string, string> = {
   "stijgt": "omhoog",
@@ -44,6 +52,16 @@ async function sbGet(path: string) {
   const r = await fetch(`${SB_URL}/rest/v1/${path}`, { headers: sbHeaders() });
   if (!r.ok) throw new Error(`GET ${path} -> ${r.status} ${await r.text()}`);
   return await r.json();
+}
+
+async function sbPost(path: string, rows: unknown[], prefer = "return=minimal") {
+  if (!rows.length) return;
+  const r = await fetch(`${SB_URL}/rest/v1/${path}`, {
+    method: "POST",
+    headers: sbHeaders({ Prefer: prefer }),
+    body: JSON.stringify(rows),
+  });
+  if (!r.ok) throw new Error(`POST ${path} -> ${r.status} ${await r.text()}`);
 }
 
 async function sendPush(alertEmail: string, title: string, body: string, url = "/overig") {
@@ -105,34 +123,63 @@ Deno.serve(async (req: Request) => {
     }
 
     // ---- 90%+-MAIL (1x per dag, i.p.v. de oude real-time versie) ----
-    const highProgress = board
-      .filter((b) => (b.progress || 0) >= 0.9 && (b.owners || 0) > 0)
-      .sort((a, b) => (b.progress || 0) - (a.progress || 0));
+    // Alleen spelers die nog niet eerder gemaild zijn voor hun huidige
+    // verwachting (zelfde dedup-tabel/-aanpak als voorheen in
+    // espn-fantasy-sync) -- anders zou dit elke avond alle ~170 spelers met
+    // progress>=90% opnieuw mailen (progress loopt na 100% gewoon door tot
+    // de prijs echt wijzigt, dus "90%+" is zonder dedup vrijwel de hele
+    // stijgt/daalt-lijst, niet alleen de nieuwe/net overschreden spelers).
+    const highProgressAll = board.filter((b) => (b.progress || 0) >= 0.9 && (b.owners || 0) > 0);
+    let highProgress: any[] = [];
     let mailSent = false;
     const resendKey = Deno.env.get("RESEND_API_KEY");
-    if (resendKey && highProgress.length) {
-      const lines = highProgress.map((t) =>
-        `- ${t.web_name} (${t.team_short}): ${RICHTING[t.verwachting] ?? t.verwachting} (${
-          Math.round((t.progress || 0) * 100)
-        }% van de drempel, huidige prijs €${(t.now_cost / 10).toFixed(1)})`
-      ).join("\n");
-      const omhoog = highProgress.filter((t) => t.verwachting.startsWith("stijgt")).length;
-      const omlaag = highProgress.filter((t) => t.verwachting.startsWith("daalt")).length;
-      const mailRes = await fetch("https://api.resend.com/emails", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${resendKey}`, "Content-Type": "application/json" },
-        body: JSON.stringify({
-          from: "ConnectYourHealth <onboarding@resend.dev>",
-          to: [GLOBAL_WATCH_EMAIL],
-          subject:
-            `ESPN Fantasy: ${highProgress.length} speler(s) op 90%+ richting een prijswijziging (${omhoog}x omhoog, ${omlaag}x omlaag)`,
-          text:
-            `Deze spelers staan op 90% of meer richting een prijswijziging (ongeacht of ze in een van jullie teams zitten):\n\n${lines}\n\nBekijk het overzicht: https://connectyourhealth.vercel.app/overig`,
-        }),
-      });
-      mailSent = mailRes.ok;
-      if (!mailRes.ok) {
-        console.warn(`90%-waarschuwing-mail mislukt: ${mailRes.status} ${await mailRes.text()}`);
+    if (resendKey && highProgressAll.length) {
+      const alreadyRes = await fetch(
+        `${SB_URL}/rest/v1/espn_price_alerts_sent?select=player_id,verwachting&alert_email=eq.${
+          encodeURIComponent(EMAIL_DEDUP_KEY)
+        }&player_id=in.(${highProgressAll.map((t) => t.id).join(",")})`,
+        { headers: sbHeaders() },
+      );
+      const already: any[] = alreadyRes.ok ? await alreadyRes.json() : [];
+      const alreadySet = new Set(already.map((a) => `${a.player_id}:${a.verwachting}`));
+      highProgress = highProgressAll
+        .filter((t) => !alreadySet.has(`${t.id}:${t.verwachting}`))
+        .sort((a, b) => (b.progress || 0) - (a.progress || 0));
+      if (highProgress.length) {
+        const lines = highProgress.map((t) =>
+          `- ${t.web_name} (${t.team_short}): ${RICHTING[t.verwachting] ?? t.verwachting} (${
+            Math.round((t.progress || 0) * 100)
+          }% van de drempel, huidige prijs €${(t.now_cost / 10).toFixed(1)})`
+        ).join("\n");
+        const omhoog = highProgress.filter((t) => t.verwachting.startsWith("stijgt")).length;
+        const omlaag = highProgress.filter((t) => t.verwachting.startsWith("daalt")).length;
+        const mailRes = await fetch("https://api.resend.com/emails", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${resendKey}`, "Content-Type": "application/json" },
+          body: JSON.stringify({
+            from: "ConnectYourHealth <onboarding@resend.dev>",
+            to: [GLOBAL_WATCH_EMAIL],
+            subject:
+              `ESPN Fantasy: ${highProgress.length} speler(s) op 90%+ richting een prijswijziging (${omhoog}x omhoog, ${omlaag}x omlaag)`,
+            text:
+              `Deze spelers staan op 90% of meer richting een prijswijziging (ongeacht of ze in een van jullie teams zitten):\n\n${lines}\n\nBekijk het overzicht: https://connectyourhealth.vercel.app/overig`,
+          }),
+        });
+        mailSent = mailRes.ok;
+        if (mailRes.ok) {
+          await sbPost(
+            "espn_price_alerts_sent",
+            highProgress.map((t) => ({
+              alert_email: EMAIL_DEDUP_KEY,
+              player_id: t.id,
+              verwachting: t.verwachting,
+              sent_at: new Date().toISOString(),
+            })),
+            "return=minimal,resolution=merge-duplicates",
+          );
+        } else {
+          console.warn(`90%-waarschuwing-mail mislukt: ${mailRes.status} ${await mailRes.text()}`);
+        }
       }
     }
 
@@ -143,7 +190,8 @@ Deno.serve(async (req: Request) => {
         dalers: dalers.length,
         bijna_stijgers: bijnaStijgers.length,
         bijna_dalers: bijnaDalers.length,
-        high_progress: highProgress.length,
+        high_progress_total: highProgressAll.length,
+        high_progress_new: highProgress.length,
         mail_sent: mailSent,
       }),
       { headers: { ...CORS, "Content-Type": "application/json" } },
