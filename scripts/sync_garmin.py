@@ -132,7 +132,7 @@ def load_existing_raw(owner, week_start, today):
     preserved_cols = [
         "steps_training", "training_status", "training_feedback",
         "training_load_acute", "training_load_chronic", "training_load_ratio",
-        "acwr_status", "training_balance_feedback",
+        "acwr_status", "training_balance_feedback", "vo2max",
     ]
     resp = requests.get(
         f"{SUPABASE_URL}/rest/v1/garmin_metrics",
@@ -500,7 +500,11 @@ def main():
         return per_date.setdefault(d, {
             "owner": owner,
             "metric_date": d,
-            "vo2max": None,
+            # vo2max is een traag veranderende waarde -- behoud de laatst
+            # bekende stand i.p.v. terug te vallen op None zodra
+            # get_max_metrics_range voor die dag niets teruggeeft (zie
+            # vangnet hieronder voor waarom dat is gaan gebeuren).
+            "vo2max": existing_preserved.get("vo2max"),
             "resting_hr": None,
             "hrv": None,
             "sleep_minutes": None,
@@ -584,7 +588,8 @@ def main():
             row = bucket(d)
             generic = entry.get("generic") or {}
             vo2 = entry.get("vo2MaxPreciseValue") or entry.get("vo2MaxValue") or generic.get("vo2MaxPreciseValue") or generic.get("vo2MaxValue")
-            row["vo2max"] = vo2
+            if vo2 is not None:
+                row["vo2max"] = vo2
             row["raw"]["max_metrics"] = entry
 
     if training_status:
@@ -592,12 +597,20 @@ def main():
         row["training_status"] = str(
             training_status.get("trainingStatus") or training_status.get("status") or training_status
         )[:200]
-        # Vangnet voor VO2max op vandaag: staat ook in de training-status-
-        # respons (mostRecentVO2Max), ook als get_max_metrics_range niets
-        # bruikbaars teruggaf.
-        if row["vo2max"] is None:
-            most_recent_vo2 = (training_status.get("mostRecentVO2Max") or {}).get("generic") or {}
-            row["vo2max"] = most_recent_vo2.get("vo2MaxPreciseValue") or most_recent_vo2.get("vo2MaxValue")
+        # Vangnet voor VO2max: staat ook in de training-status-respons
+        # (mostRecentVO2Max). get_max_metrics_range bleek sinds 20 sept
+        # structureel een lege lijst terug te geven (geen foutmelding, dus
+        # onopgemerkt) -- waardoor vo2max voor alle dagen leeg bleef. Dit
+        # vangnet vult daarom niet meer alleen "vandaag", maar elke dag in
+        # dit venster die nog geen waarde heeft (vo2max verandert traag,
+        # dus de meest recente bekende stand is een redelijke schatting
+        # voor de laatste dagen i.p.v. helemaal leeg).
+        most_recent_vo2 = (training_status.get("mostRecentVO2Max") or {}).get("generic") or {}
+        fallback_vo2 = most_recent_vo2.get("vo2MaxPreciseValue") or most_recent_vo2.get("vo2MaxValue")
+        if fallback_vo2 is not None:
+            for d_str, r in per_date.items():
+                if r["vo2max"] is None:
+                    r["vo2max"] = fallback_vo2
 
         # Garmin's eigen equivalent van ATL/CTL/ACWR (Runalyze-achtige
         # trainingsbelasting-metrics) zit genest onder een per-apparaat key
