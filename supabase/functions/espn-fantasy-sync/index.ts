@@ -1243,18 +1243,29 @@ Deno.serve(async (req: Request) => {
         // echt wijzigt), zodat dezelfde dreigende wijziging niet elke 15 min
         // opnieuw mailt -- en niet gedeeld tussen teams, anders mist de een
         // een mail omdat de ander 'm al kreeg voor dezelfde speler.
+        //
+        // Gate op verwacht stijg/daalmoment (15 okt, op verzoek): "bijna"
+        // in espn_price_board wordt al bepaald op basis van een 48u-ETA bij
+        // het huidige transfer-tempo, niet op voortgang-% -- dus een speler
+        // kon hier al op 28% voortgang mailen zolang het tempo hoog genoeg
+        // was. Dat is te vroeg voor een losse mail. Nu pas mailen als
+        // eta_at (het model se eigen verwachte moment van de wijziging)
+        // binnen 24 uur ligt -- in de praktijk de eerstvolgende dagelijkse
+        // prijsronde, niet een willekeurige latere.
         if (resendKey && picks?.picks?.length) {
           const elementIds = picks.picks.map((p: any) => p.element);
           const boardRes = await fetch(
-            `${SB_URL}/rest/v1/espn_price_board?select=id,web_name,team_short,now_cost,verwachting,progress&id=in.(${
+            `${SB_URL}/rest/v1/espn_price_board?select=id,web_name,team_short,now_cost,verwachting,progress,eta_at&id=in.(${
               elementIds.join(",")
             })`,
             { headers: sbHeaders() },
           );
           if (boardRes.ok) {
             const board: any[] = await boardRes.json();
+            const etaSoonCutoff = Date.now() + 24 * 60 * 60 * 1000;
             const threatened = board.filter((b) =>
-              b.verwachting && b.verwachting !== "stabiel" && b.verwachting !== "onbekend"
+              b.verwachting && b.verwachting !== "stabiel" && b.verwachting !== "onbekend" &&
+              b.eta_at && new Date(b.eta_at).getTime() <= etaSoonCutoff
             );
             // Elk gekoppeld e-mailadres van dit team (bv. zowel Duncan als
             // Nando bij Duncan's team) krijgt zijn eigen, los bijgehouden
@@ -1273,9 +1284,17 @@ Deno.serve(async (req: Request) => {
               const toAlert = threatened.filter((t) => !alreadySet.has(`${t.id}:${t.verwachting}`));
               if (toAlert.length) {
                 const lines = toAlert.map((t) =>
-                  `- ${t.web_name} (${t.team_short}): ${t.verwachting} (${
-                    Math.round((t.progress || 0) * 100)
-                  }% van de drempel, huidige prijs €${(t.now_cost / 10).toFixed(1)})`
+                  `- ${t.web_name} (${t.team_short}): ${t.verwachting}, verwacht rond ${
+                    new Date(t.eta_at).toLocaleString("nl-NL", {
+                      timeZone: "Europe/Amsterdam",
+                      day: "numeric",
+                      month: "short",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })
+                  } (${Math.round((t.progress || 0) * 100)}% van de drempel, huidige prijs €${
+                    (t.now_cost / 10).toFixed(1)
+                  })`
                 ).join("\n");
                 const mailRes = await fetch("https://api.resend.com/emails", {
                   method: "POST",
