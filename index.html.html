@@ -2086,6 +2086,24 @@ function matchPaceZone(paceMinPerKm, zones){
     Math.abs(paceMinPerKm - z.mid) < Math.abs(paceMinPerKm - best.mid) ? z : best
   );
 }
+// Hartslaggrenzen per zone (eigen Garmin HR-zones, opgegeven 15 okt): Z1/Z2
+// vallen samen onder "E", Z3 dekt zowel M als T (Garmin maakt dat onderscheid
+// niet), Z4=I, Z5=R (alles erboven). Dus een HR-zone "M/T" is geen afwijking
+// t.o.v. een tempo-match op M of T -- alleen een echt andere letter is een
+// signaal dat tempo en hartslag niet overeenkomen.
+function hrZoneForBpm(hr){
+  if(hr==null) return null;
+  if(hr <= 141) return { code: 'E', label: 'Rustig (Easy)' };
+  if(hr <= 161) return { code: 'M/T', label: 'Marathon/Tempo' };
+  if(hr <= 172) return { code: 'I', label: 'Interval (VO2max)' };
+  return { code: 'R', label: 'Herhaling (snelheid)' };
+}
+function paceHrZonesAgree(paceZoneCode, hrZoneCode){
+  if(!paceZoneCode || !hrZoneCode) return true;
+  if(paceZoneCode === hrZoneCode) return true;
+  if(hrZoneCode === 'M/T' && (paceZoneCode === 'M' || paceZoneCode === 'T')) return true;
+  return false;
+}
 // Vast wekelijks trainingsschema (typische opbouw richting een tijdsdoel):
 // 1x interval, 1x tempo, 1x lange duurloop, rest rust/herstel. De tempo's
 // per type zijn een indicatieve vuistregel t.o.v. het doeltempo, geen exacte
@@ -2392,6 +2410,7 @@ async function renderTrainingProgressTable(activities, days, owner){
       cluster: c,
       sorted,
       lastPace: sorted[sorted.length-1].minutes/sorted[sorted.length-1].km,
+      lastHr: sorted[sorted.length-1].avgHeartrate,
       trendPct: paceTrendPct(sorted),
       hrFirst: hrOf(first), hrLast: hrOf(last),
     };
@@ -2407,7 +2426,7 @@ async function renderTrainingProgressTable(activities, days, owner){
   // daadwerkelijke duur van die activiteit in uren/minuten, via
   // formatMinutes -- de hoofdtabel zelf toont alleen tempo, geen tijd), en
   // hartslag.
-  const rows = rowsData.map(({cluster:c, sorted, lastPace, trendPct, hrFirst, hrLast}, idx)=>{
+  const rows = rowsData.map(({cluster:c, sorted, lastPace, lastHr, trendPct, hrFirst, hrLast}, idx)=>{
     let trendHtml = '<span style="color:var(--ink-soft);" title="Onvoldoende data">&mdash;</span>';
     if(trendPct!=null){
       if(trendPct > 2) trendHtml = `<span style="color:#1E9E4A;font-size:16px;" title="${trendPct.toFixed(1)}% sneller geworden">&#9650;</span>`;
@@ -2415,9 +2434,18 @@ async function renderTrainingProgressTable(activities, days, owner){
       else trendHtml = `<span style="color:#D68A00;font-size:18px;" title="Stabiel (${trendPct.toFixed(1)}%)">&#9679;</span>`;
     }
     const hrText = (hrFirst!=null || hrLast!=null) ? `${fmtHr(hrFirst)}&rarr;${fmtHr(hrLast)} &#9829;` : '&mdash;';
+    // Tempo en hartslag kunnen een verschillende zone aanwijzen (bv. hoge HR
+    // op een "E"-tempo door hitte/terrein/vermoeidheid) -- geen van beide is
+    // leidend, dus bij afwijking tonen we gewoon allebei i.p.v. er 1 te kiezen.
     const zoneMatch = matchPaceZone(lastPace, paceZones);
-    const zoneBadge = zoneMatch
-      ? `<span style="font-size:9px;color:var(--ink-soft);border:1px solid var(--line);border-radius:3px;padding:0 3px;white-space:nowrap;" title="${escapeHtml(zoneMatch.label)}">${escapeHtml(zoneMatch.code)}</span>`
+    const hrZone = hrZoneForBpm(lastHr);
+    const agree = paceHrZonesAgree(zoneMatch && zoneMatch.code, hrZone && hrZone.code);
+    const zoneBadgeText = zoneMatch ? (agree ? zoneMatch.code : `${zoneMatch.code}/${hrZone.code}`) : '';
+    const zoneBadgeTitle = zoneMatch
+      ? (agree ? zoneMatch.label : `Tempo: ${zoneMatch.label} · Hartslag: ${hrZone.label}`)
+      : '';
+    const zoneBadge = zoneBadgeText
+      ? `<span style="font-size:9px;color:var(--ink-soft);border:1px solid var(--line);border-radius:3px;padding:0 3px;white-space:nowrap;" title="${escapeHtml(zoneBadgeTitle)}">${escapeHtml(zoneBadgeText)}</span>`
       : '';
     const tempoCell = `
       <div style="display:flex;align-items:center;gap:6px;">
