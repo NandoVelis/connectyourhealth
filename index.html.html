@@ -2045,6 +2045,47 @@ function formatPaceMinPerKm(paceMinPerKm){
   if(sec>=60){ sec -= 60; min += 1; }
   return `${min}:${String(sec).padStart(2,'0')}/km`;
 }
+// Koppelt een tempo (min/km) aan de dichtstbijzijnde trainingstempo-zone uit
+// training_pace_zones (E/M/T/I/R), zodat de voortgangstabel niet alleen een
+// los getal toont maar ook waar dat tempo in het eigen schema valt.
+let _paceZonesCache = null;
+async function loadPaceZonesForOwner(owner){
+  if(_paceZonesCache && _paceZonesCache.owner===owner) return _paceZonesCache.zones;
+  try{
+    const { data, error } = await supabaseClient
+      .from('training_pace_zones')
+      .select('zone_code,zone_label,pace_per_km')
+      .eq('owner', owner)
+      .order('sort_order', { ascending: true });
+    const zones = (!error && data) ? data : [];
+    _paceZonesCache = { owner, zones };
+    return zones;
+  }catch(e){ console.warn('Trainingstempo-zones laden (koppeling) mislukt', e); return []; }
+}
+function parsePaceZoneRange(str){
+  const matches = (str||'').match(/\d+:\d{2}/g);
+  if(!matches || !matches.length) return null;
+  const vals = matches.map(m=>{ const [mm,ss]=m.split(':').map(Number); return mm+ss/60; });
+  return vals.length>=2 ? { lo: vals[0], hi: vals[1] } : { lo: vals[0], hi: vals[0] };
+}
+function matchPaceZone(paceMinPerKm, zones){
+  if(paceMinPerKm==null || !zones || !zones.length) return null;
+  const parsed = zones.map(z=>{
+    const r = parsePaceZoneRange(z.pace_per_km);
+    if(!r) return null;
+    const isRange = r.hi > r.lo;
+    // Eenpunts-zones (M/T/I/R) krijgen ~9 sec speelruimte zodat een tempo dat
+    // er net naast valt toch aan de juiste zone koppelt i.p.v. "geen match".
+    const tol = isRange ? 0 : 0.15;
+    return { code: z.zone_code, label: z.zone_label, lo: r.lo - tol, hi: r.hi + tol, mid: (r.lo+r.hi)/2 };
+  }).filter(Boolean);
+  if(!parsed.length) return null;
+  const exact = parsed.filter(z => paceMinPerKm >= z.lo && paceMinPerKm <= z.hi);
+  if(exact.length) return exact.reduce((a,b)=> (b.hi-b.lo) < (a.hi-a.lo) ? b : a);
+  return parsed.reduce((best,z)=>
+    Math.abs(paceMinPerKm - z.mid) < Math.abs(paceMinPerKm - best.mid) ? z : best
+  );
+}
 // Vast wekelijks trainingsschema (typische opbouw richting een tijdsdoel):
 // 1x interval, 1x tempo, 1x lange duurloop, rest rust/herstel. De tempo's
 // per type zijn een indicatieve vuistregel t.o.v. het doeltempo, geen exacte
@@ -2321,7 +2362,7 @@ function paceSparklineSvg(sortedRuns, days){
   const line = points.length>1 ? `<polyline points="${linePts}" fill="none" stroke="var(--ink-soft)" stroke-width="1.5"/>` : '';
   return `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" style="display:block;overflow:visible;">${line}${dots}</svg>`;
 }
-function renderTrainingProgressTable(activities, days){
+async function renderTrainingProgressTable(activities, days, owner){
   const el = document.getElementById('trainingProgressTable');
   if(!el) return;
   const runs = (activities||[]).filter(a => a.type==='hardlopen' && a.km>0 && a.minutes>0);
@@ -2329,6 +2370,7 @@ function renderTrainingProgressTable(activities, days){
     el.innerHTML = '<div class="empty">Nog geen hardloopdata om voortgang te tonen.</div>';
     return;
   }
+  const paceZones = owner ? await loadPaceZonesForOwner(owner) : [];
   // Geen minimum van 2 runs meer per type -- een halve marathon of marathon
   // loop je meestal maar 1x per periode, en die wil je dan ook gewoon zien
   // staan (met huidig tempo, zonder trend) i.p.v. dat hij stil verdwijnt.
@@ -2373,10 +2415,15 @@ function renderTrainingProgressTable(activities, days){
       else trendHtml = `<span style="color:#D68A00;font-size:18px;" title="Stabiel (${trendPct.toFixed(1)}%)">&#9679;</span>`;
     }
     const hrText = (hrFirst!=null || hrLast!=null) ? `${fmtHr(hrFirst)}&rarr;${fmtHr(hrLast)} &#9829;` : '&mdash;';
+    const zoneMatch = matchPaceZone(lastPace, paceZones);
+    const zoneBadge = zoneMatch
+      ? `<span style="font-size:9px;color:var(--ink-soft);border:1px solid var(--line);border-radius:3px;padding:0 3px;white-space:nowrap;" title="${escapeHtml(zoneMatch.label)}">${escapeHtml(zoneMatch.code)}</span>`
+      : '';
     const tempoCell = `
       <div style="display:flex;align-items:center;gap:6px;">
         ${paceSparklineSvg(sorted, days)}
         <span style="font-size:10px;color:var(--ink);white-space:nowrap;">${formatPaceMinPerKm(lastPace)}</span>
+        ${zoneBadge}
       </div>`;
     const activityRows = [...sorted].reverse().map(a=>{
       const d = new Date(a.date+'T12:00:00');
@@ -3366,7 +3413,7 @@ async function renderDashboard(){
   // valt zodra een run buiten de laatste 4 weken valt.
   const progressDays = 90;
   const recentTrainingForProgress = progressDays===trainingTipDays ? recentTrainingForTip : await loadRecentTrainingForTip(progressDays);
-  renderTrainingProgressTable(recentTrainingForProgress, progressDays);
+  await renderTrainingProgressTable(recentTrainingForProgress, progressDays, owner);
 
   syncTeamEntry(dateStr, {
     dagscore: dagscoreVal,
