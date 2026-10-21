@@ -3690,22 +3690,20 @@ async function loadKcalSchuld(owner){
   if(error || !data) return null;
   return data;
 }
-// Alleen specifieke "extra" hardloopactiviteiten tellen mee voor het
-// wegwerken van de kcal-schuld (zie kcal_schuld_credits-view): doordeweeks
-// voor 8:00/na 17:00, in het weekend elke activiteit na de eerste die dag
-// -- in plaats van de hele dagbalans, want een los rondje is een vaststaand
-// feit zodra gesynchroniseerd (i.t.t. de nog onzekere rest van de dag).
-async function loadKcalSchuldCreditSum(owner, afterDateStr, uptoDateStr){
+// De hele dagbalans (inname min totaal verbruik -- incl. avondwandelingen,
+// die niet apart getimed worden) telt mee zodra een dag is afgesloten
+// (kcal_balans_daily). Terug naar deze eenvoudigere aanpak i.p.v. het
+// uitpluizen van losse hardloop-tijdstippen.
+async function loadKcalBalansSum(owner, afterDateStr, uptoDateStr){
   if(!owner) return 0;
   const { data, error } = await supabaseClient
-    .from('kcal_schuld_credits')
-    .select('kcal')
+    .from('kcal_balans_daily')
+    .select('kcal_balans')
     .eq('owner', owner)
-    .eq('telt_als_extra', true)
-    .gt('training_date', afterDateStr)
-    .lte('training_date', uptoDateStr);
+    .gt('dag', afterDateStr)
+    .lte('dag', uptoDateStr);
   if(error || !data) return 0;
-  return data.reduce((sum, r) => sum + (Number(r.kcal) || 0), 0);
+  return data.reduce((sum, r) => sum + (Number(r.kcal_balans) || 0), 0);
 }
 function addDaysToDateStr(dateStr, days){
   const d = new Date(dateStr+'T00:00:00');
@@ -3721,13 +3719,15 @@ async function renderKcalSchuld(owner, dateStr, balansSoFar, weightKg, runningSt
   if(dateStr !== fmtDate(new Date())){ cardEl.style.display = 'none'; return; }
   const schuld = await loadKcalSchuld(owner);
   if(!schuld){ cardEl.style.display = 'none'; return; }
-  // Credits tellen t/m 31 okt (ivm de halve marathon op 1 nov) en meteen
-  // zodra een kwalificerende activiteit binnen is -- i.t.t. de hele-dag-
-  // balans is dit een vaststaand feit, geen schatting die nog kan omslaan.
+  // Vandaag telt pas mee zodra de dag is afgesloten (morgenochtend) --
+  // rest_kcal is al een volledige-dag-schatting, dus een tussentijdse
+  // vergelijking met de inname-tot-nu-toe oogt kunstmatig negatief.
+  // Credits tellen t/m 31 okt (ivm de halve marathon op 1 nov).
   const creditEindDatum = '2026-10-31';
-  const uptoVoorCredits = dateStr < creditEindDatum ? dateStr : creditEindDatum;
-  const afgewerktTotNu = await loadKcalSchuldCreditSum(owner, schuld.startdatum, uptoVoorCredits);
-  const resterend = Math.max(0, Number(schuld.startbedrag) - afgewerktTotNu);
+  const yesterday = addDaysToDateStr(dateStr, -1);
+  const uptoVoorCredits = yesterday < creditEindDatum ? yesterday : creditEindDatum;
+  const afgewerktTotNu = await loadKcalBalansSum(owner, schuld.startdatum, uptoVoorCredits);
+  const resterend = Math.max(0, Number(schuld.startbedrag) + afgewerktTotNu);
   cardEl.style.display = '';
   if(resterend <= 0){
     detailEl.innerHTML = `
@@ -3756,9 +3756,9 @@ async function renderKcalSchuld(owner, dateStr, balansSoFar, weightKg, runningSt
     ${kmVandaag ? `
     <div class="stat-row" style="border-bottom:none;">
       <span class="stat-label">\u{1F3C3} Komt neer op</span>
-      <span class="stat-val">~${kmVandaag} km extra hardlopen vandaag</span>
+      <span class="stat-val">~${kmVandaag} km extra hardlopen/wandelen vandaag</span>
     </div>` : ''}
-    <div class="meal-meta" style="margin-top:4px;">Telt mee: hardlopen voor 8:00/na 17:00 doordeweeks, in het weekend elke activiteit na de 1e die dag. Al ${Math.round(afgewerktTotNu)} kcal afgewerkt sinds ${schuld.startdatum}.</div>
+    <div class="meal-meta" style="margin-top:4px;">Netto kcal-balans sinds ${schuld.startdatum} (afgesloten dagen): ${afgewerktTotNu>=0?'+':''}${Math.round(afgewerktTotNu)} kcal.${balansSoFar!=null ? ` Balans tot nu toe vandaag: ${balansSoFar>=0?'+':''}${Math.round(balansSoFar)} kcal (telt morgen pas mee).` : ''}</div>
     ${schuld.omschrijving ? `<div class="meal-meta" style="margin-top:4px;">${escapeHtml(schuld.omschrijving)}</div>` : ''}`;
 }
 async function saveWeight(dateStr, kg){
