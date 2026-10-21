@@ -3690,16 +3690,22 @@ async function loadKcalSchuld(owner){
   if(error || !data) return null;
   return data;
 }
-async function loadKcalBalansSum(owner, afterDateStr, uptoDateStr){
+// Alleen specifieke "extra" hardloopactiviteiten tellen mee voor het
+// wegwerken van de kcal-schuld (zie kcal_schuld_credits-view): doordeweeks
+// voor 8:00/na 17:00, in het weekend elke activiteit na de eerste die dag
+// -- in plaats van de hele dagbalans, want een los rondje is een vaststaand
+// feit zodra gesynchroniseerd (i.t.t. de nog onzekere rest van de dag).
+async function loadKcalSchuldCreditSum(owner, afterDateStr, uptoDateStr){
   if(!owner) return 0;
   const { data, error } = await supabaseClient
-    .from('kcal_balans_daily')
-    .select('kcal_balans')
+    .from('kcal_schuld_credits')
+    .select('kcal')
     .eq('owner', owner)
-    .gt('dag', afterDateStr)
-    .lte('dag', uptoDateStr);
+    .eq('telt_als_extra', true)
+    .gt('training_date', afterDateStr)
+    .lte('training_date', uptoDateStr);
   if(error || !data) return 0;
-  return data.reduce((sum, r) => sum + (Number(r.kcal_balans) || 0), 0);
+  return data.reduce((sum, r) => sum + (Number(r.kcal) || 0), 0);
 }
 function addDaysToDateStr(dateStr, days){
   const d = new Date(dateStr+'T00:00:00');
@@ -3715,14 +3721,13 @@ async function renderKcalSchuld(owner, dateStr, balansSoFar, weightKg, runningSt
   if(dateStr !== fmtDate(new Date())){ cardEl.style.display = 'none'; return; }
   const schuld = await loadKcalSchuld(owner);
   if(!schuld){ cardEl.style.display = 'none'; return; }
-  const yesterday = addDaysToDateStr(dateStr, -1);
-  const afgewerktTotNu = await loadKcalBalansSum(owner, schuld.startdatum, yesterday);
-  // Vandaag telt pas mee zodra de dag is afgesloten (morgenochtend, via
-  // kcal_balans_daily) -- rest_kcal is al een volledige-dag-schatting,
-  // dus een tussentijdse vergelijking met de inname-tot-nu-toe oogt
-  // kunstmatig negatief terwijl de dag nog van alles kan brengen. De
-  // "balans tot nu toe"-regel hieronder blijft puur informatief.
-  const resterend = Math.max(0, Number(schuld.startbedrag) + afgewerktTotNu);
+  // Credits tellen t/m 31 okt (ivm de halve marathon op 1 nov) en meteen
+  // zodra een kwalificerende activiteit binnen is -- i.t.t. de hele-dag-
+  // balans is dit een vaststaand feit, geen schatting die nog kan omslaan.
+  const creditEindDatum = '2026-10-31';
+  const uptoVoorCredits = dateStr < creditEindDatum ? dateStr : creditEindDatum;
+  const afgewerktTotNu = await loadKcalSchuldCreditSum(owner, schuld.startdatum, uptoVoorCredits);
+  const resterend = Math.max(0, Number(schuld.startbedrag) - afgewerktTotNu);
   cardEl.style.display = '';
   if(resterend <= 0){
     detailEl.innerHTML = `
@@ -3733,30 +3738,27 @@ async function renderKcalSchuld(owner, dateStr, balansSoFar, weightKg, runningSt
       ${schuld.omschrijving ? `<div class="meal-meta" style="margin-top:4px;">${escapeHtml(schuld.omschrijving)}</div>` : ''}`;
     return;
   }
-  // Doeleinddatum: 10 dagen na de startdatum tenzij anders aangegeven in de
-  // omschrijving -- hier simpel vast op 31 okt gehouden, de einddatum die
-  // Nando zelf noemde toen deze schuld werd aangemaakt.
-  const eindDatum = '2026-10-31';
-  const dagenResterend = Math.max(1, Math.round((new Date(eindDatum+'T00:00:00') - new Date(dateStr+'T00:00:00')) / 86400000) + 1);
+  // Doeleinddatum vast op 31 okt (ivm halve marathon 1 nov) -- zie ook
+  // creditEindDatum hierboven, dezelfde datum.
+  const dagenResterend = Math.max(1, Math.round((new Date(creditEindDatum+'T00:00:00') - new Date(dateStr+'T00:00:00')) / 86400000) + 1);
   const dagdoel = Math.round(resterend / dagenResterend);
   const kcalPerKm = runningStats ? runningStats.kcalPerKm : null;
   const kmVandaag = estimateRunKmToBurn(dagdoel, weightKg, kcalPerKm);
-  const balansVandaagKcal = balansSoFar!=null ? Math.round(balansSoFar) : null;
   detailEl.innerHTML = `
     <div class="stat-row">
       <span class="stat-label">Resterend saldo</span>
       <span class="stat-val" style="font-weight:700;">${Math.round(resterend)} kcal</span>
     </div>
     <div class="stat-row">
-      <span class="stat-label">Nog ${dagenResterend} dag${dagenResterend===1?'':'en'} t/m ${eindDatum}</span>
+      <span class="stat-label">Nog ${dagenResterend} dag${dagenResterend===1?'':'en'} t/m ${creditEindDatum}</span>
       <span class="stat-val">~${dagdoel} kcal/dag extra</span>
     </div>
     ${kmVandaag ? `
     <div class="stat-row" style="border-bottom:none;">
       <span class="stat-label">\u{1F3C3} Komt neer op</span>
-      <span class="stat-val">~${kmVandaag} km extra hardlopen/wandelen vandaag</span>
+      <span class="stat-val">~${kmVandaag} km extra hardlopen vandaag</span>
     </div>` : ''}
-    ${balansVandaagKcal!=null ? `<div class="meal-meta" style="margin-top:4px;">Balans tot nu toe vandaag: ${balansVandaagKcal>=0?'+':''}${balansVandaagKcal} kcal</div>` : ''}
+    <div class="meal-meta" style="margin-top:4px;">Telt mee: hardlopen voor 8:00/na 17:00 doordeweeks, in het weekend elke activiteit na de 1e die dag. Al ${Math.round(afgewerktTotNu)} kcal afgewerkt sinds ${schuld.startdatum}.</div>
     ${schuld.omschrijving ? `<div class="meal-meta" style="margin-top:4px;">${escapeHtml(schuld.omschrijving)}</div>` : ''}`;
 }
 async function saveWeight(dateStr, kg){
