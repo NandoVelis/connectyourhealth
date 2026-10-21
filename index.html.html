@@ -3717,6 +3717,11 @@ async function renderKcalSchuld(owner, dateStr, balansSoFar, weightKg, runningSt
   if(!schuld){ cardEl.style.display = 'none'; return; }
   const yesterday = addDaysToDateStr(dateStr, -1);
   const afgewerktTotNu = await loadKcalBalansSum(owner, schuld.startdatum, yesterday);
+  // Vandaag telt pas mee zodra de dag is afgesloten (morgenochtend, via
+  // kcal_balans_daily) -- rest_kcal is al een volledige-dag-schatting,
+  // dus een tussentijdse vergelijking met de inname-tot-nu-toe oogt
+  // kunstmatig negatief terwijl de dag nog van alles kan brengen. De
+  // "balans tot nu toe"-regel hieronder blijft puur informatief.
   const resterend = Math.max(0, Number(schuld.startbedrag) + afgewerktTotNu);
   cardEl.style.display = '';
   if(resterend <= 0){
