@@ -50,11 +50,6 @@ on:
         description: 'MFA-code (alleen nodig bij eerste login of na sessieverval)'
         required: false
         type: string
-      debug_raw:
-        description: 'Print ruwe Personal API-respons in de logs (debug)'
-        required: false
-        type: boolean
-        default: false
 
 jobs:
   sync-garmin:
@@ -76,6 +71,5 @@ jobs:
           GARMIN_EMAIL: ${{ secrets.GARMIN_EMAIL_NANDO }}
           GARMIN_PASSWORD: ${{ secrets.GARMIN_PASSWORD_NANDO }}
           GARMIN_MFA_CODE: ${{ inputs.mfa_code }}
-          GARMIN_DEBUG_RAW: ${{ inputs.debug_raw }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: python3 scripts/sync_garmin.py

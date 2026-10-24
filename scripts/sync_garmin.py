@@ -113,8 +113,10 @@ class PersonalApiClient:
         rows, d = [], start
         while d <= end:
             values = self._get("/sleep-service/sleep/dailySleep", {"date": d.isoformat()})
-            if os.environ.get("GARMIN_DEBUG_RAW") and d == end:
-                print(f"DEBUG dailySleep({d.isoformat()}): {str(values)[:2000]}")
+            if isinstance(values, dict) and values.get("sleepScore") is None:
+                # Personal API nest de totaalscore onder sleepScores.overall.value
+                # i.p.v. een los top-level "sleepScore"-veld (onofficiele API-vorm).
+                values["sleepScore"] = (values.get("sleepScores") or {}).get("overall", {}).get("value")
             rows.append({"calendarDate": d.isoformat(), "values": values})
             d += timedelta(days=1)
         return rows
@@ -146,26 +148,22 @@ class PersonalApiClient:
                 total_steps = steps_row[key]
                 break
 
-        # Kcal-totalen (totaal/actief/bmr) staan niet in een eigen daily-
-        # stat-endpoint -- alleen genest in v2/dailysummaries (CaloriesV2DTO
-        # volgens het schema-overzicht). Exacte veldnamen daarbinnen zijn
-        # niet bevestigd, dus dit blijft best-effort: ontbrekende kcal-
-        # velden komen als None terug i.p.v. te crashen.
+        # Kcal-totalen (totaal/actief/rust) staan niet in een eigen daily-
+        # stat-endpoint -- alleen genest in v2/dailysummaries, onder
+        # data[0].calories.{burnedResting,burnedActive,burnedTotal}
+        # (bevestigd via GARMIN_DEBUG_RAW-logging op 24 okt 2026).
         summary_data = self._get(
             "/usersummary-service/v2/dailysummaries",
             {"startDate": calendar_date, "endDate": calendar_date},
         )
-        summary_rows = summary_data if isinstance(summary_data, list) else (summary_data or {}).get("dailySummaries") or []
+        summary_rows = summary_data if isinstance(summary_data, list) else (summary_data or {}).get("data") or []
         summary_row = summary_rows[0] if summary_rows else {}
-        if os.environ.get("GARMIN_DEBUG_RAW"):
-            print(f"DEBUG v2/dailysummaries({calendar_date}) raw: {str(summary_data)[:2000]}")
-            print(f"DEBUG v2/dailysummaries({calendar_date}) row: {str(summary_row)[:2000]}")
         calories = summary_row.get("calories") or {}
         return {
             "totalSteps": total_steps,
-            "totalKilocalories": calories.get("totalKilocalories") or calories.get("total"),
-            "activeKilocalories": calories.get("activeKilocalories") or calories.get("active"),
-            "bmrKilocalories": calories.get("bmrKilocalories") or calories.get("bmr"),
+            "totalKilocalories": calories.get("burnedTotal"),
+            "activeKilocalories": calories.get("burnedActive"),
+            "bmrKilocalories": calories.get("burnedResting"),
         }
 
     def get_activities_by_date(self, start_date, end_date, activity_type=None):
