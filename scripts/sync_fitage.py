@@ -337,11 +337,17 @@ def main():
     measurements = safe(fetch_all_measurements, token, user_id) or []
 
     # Per dag de meest recente meting bewaren (meerdere wegingen op een dag
-    # zijn mogelijk, bv. ochtend en avond) -- expliciet de meting met de
-    # hoogste time_stamp bewaren i.p.v. "wie het laatst in de lijst staat"
-    # (de gepagineerde respons levert niet gegarandeerd chronologisch aan
-    # binnen 1 dag, dat gaf op 24 okt 2026 een oudere meting van die dag
-    # i.p.v. de laatste).
+    # zijn mogelijk, bv. een korte "snel-weeg"-meting zonder lichaams-
+    # samenstelling 's ochtends vroeg, gevolgd door een volledige meting
+    # later op de dag). Een volledige meting (met vetpercentage) wint altijd
+    # van een onvolledige, ongeacht tijdstip -- anders zou een latere
+    # snel-weging een eerdere volledige meting overschrijven met lege
+    # vet/spier/water/etc-velden. Bij gelijke volledigheid wint de laatste
+    # (hoogste time_stamp) -- de gepagineerde respons levert niet
+    # gegarandeerd chronologisch aan binnen 1 dag.
+    def is_complete(m):
+        return m.get("bodyfat") is not None
+
     by_date = {}
     for m in measurements:
         if not isinstance(m, dict):
@@ -350,7 +356,14 @@ def main():
         if not d:
             continue
         existing = by_date.get(d)
-        if existing is None or (m.get("time_stamp") or 0) >= (existing.get("time_stamp") or 0):
+        if existing is None:
+            by_date[d] = m
+            continue
+        m_complete, e_complete = is_complete(m), is_complete(existing)
+        if m_complete != e_complete:
+            if m_complete:
+                by_date[d] = m
+        elif (m.get("time_stamp") or 0) >= (existing.get("time_stamp") or 0):
             by_date[d] = m
 
     body_comp_rows = []
