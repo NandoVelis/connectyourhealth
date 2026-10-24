@@ -337,11 +337,11 @@ def main():
     measurements = safe(fetch_all_measurements, token, user_id) or []
 
     # Per dag de meest recente meting bewaren (meerdere wegingen op een dag
-    # zijn mogelijk, bv. ochtend en avond) -- latere item in de lijst wint
-    # ervan uitgaande dat de API chronologisch aflevert; bij twijfel wint
-    # toch de laatste upsert, dus dit is vooral om niet 2x dezelfde dag in
-    # 1 bulk-insert te hebben (PostgREST staat dat niet toe op dezelfde
-    # conflict-sleutel).
+    # zijn mogelijk, bv. ochtend en avond) -- expliciet de meting met de
+    # hoogste time_stamp bewaren i.p.v. "wie het laatst in de lijst staat"
+    # (de gepagineerde respons levert niet gegarandeerd chronologisch aan
+    # binnen 1 dag, dat gaf op 24 okt 2026 een oudere meting van die dag
+    # i.p.v. de laatste).
     by_date = {}
     for m in measurements:
         if not isinstance(m, dict):
@@ -349,7 +349,9 @@ def main():
         d = extract_measurement_date(m)
         if not d:
             continue
-        by_date[d] = m
+        existing = by_date.get(d)
+        if existing is None or (m.get("time_stamp") or 0) >= (existing.get("time_stamp") or 0):
+            by_date[d] = m
 
     body_comp_rows = []
     weight_rows = []
