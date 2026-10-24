@@ -390,10 +390,10 @@
           <span class="stat-val" id="vitalWeight">&mdash;</span>
           <span class="meal-meta" id="vitalWeightWeek">week gem. &mdash;</span>
         </div>
-        <div class="stat-row" id="vitalBodyCompRow" style="display:none;border-bottom:none;flex-direction:column;align-items:flex-start;">
-          <span class="stat-label">&#129496; Lichaamssamenstelling</span>
-          <span class="stat-val" id="vitalBodyComp">&mdash;</span>
-          <span class="meal-meta" id="vitalBodyCompDate"></span>
+        <div class="stat-row" id="vitalWeightCheckRow" style="display:none;border-bottom:none;flex-direction:column;align-items:flex-start;">
+          <span class="stat-label">&#9878;&#65039; Gewicht vs. kcal-balans</span>
+          <span class="stat-val" id="vitalWeightCheck">&mdash;</span>
+          <span class="meal-meta" id="vitalWeightCheckHint"></span>
         </div>
         <div class="stat-row" style="border-bottom:none;flex-direction:column;align-items:flex-start;">
           <span class="stat-label">&#128267; Body Battery herstel</span>
@@ -3488,17 +3488,31 @@ async function renderDashboard(){
 
   document.getElementById('vitalWeightWeek').innerHTML = 'week gem. ' + (weekWeightAvg!=null ? weekWeightAvg+' kg' : '\u2014') + deltaBadgeInverted(weightDelta);
 
-  const bodyComp = await loadMostRecentBodyComposition(dateStr);
-  const bodyCompRowEl = document.getElementById('vitalBodyCompRow');
-  if(bodyComp && (bodyComp.bodyfat_pct!=null || bodyComp.muscle_pct!=null)){
-    bodyCompRowEl.style.display = '';
-    document.getElementById('vitalBodyComp').textContent = bodyComp.bodyfat_pct!=null ? `${bodyComp.bodyfat_pct}% vet` : '\u2014';
-    const metaParts = [];
-    if(bodyComp.muscle_pct!=null) metaParts.push(`${bodyComp.muscle_pct}% spier`);
-    metaParts.push(bodyComp.measurement_date !== dateStr ? `laatste meting: ${bodyComp.measurement_date}` : 'FITAGE');
-    document.getElementById('vitalBodyCompDate').textContent = metaParts.join(' \u00b7 ');
+  // Eigen "klopt dit"-check: het gewichtsverschil met gisteren vergeleken
+  // met gisterens kcal-balans (vuistregel ~7700 kcal per kg vet). Een groot
+  // gewichtsverschil bij een kleine kcal-balans is vocht/glycogeen, geen
+  // echte vet-verandering -- precies wat vet%/spier% (voorheen hier) ook al
+  // liet zien, maar nu rechtstreeks gekoppeld aan iets dat je zelf bestuurt
+  // (eten) i.p.v. een los body-comp-cijfer.
+  const weightCheckRowEl = document.getElementById('vitalWeightCheckRow');
+  const yesterdayStr = addDaysToDateStr(dateStr, -1);
+  const [weightToday, weightYesterday] = await Promise.all([
+    loadWeight(dateStr), loadWeight(yesterdayStr)
+  ]);
+  if(weightToday && weightToday.kg != null && weightYesterday && weightYesterday.kg != null){
+    const actualChange = Math.round((weightToday.kg - weightYesterday.kg) * 100) / 100;
+    const yesterdayBalans = await loadKcalBalansSum(owner, addDaysToDateStr(dateStr, -2), yesterdayStr);
+    const expectedChange = Math.round((yesterdayBalans / 7700) * 100) / 100;
+    weightCheckRowEl.style.display = '';
+    document.getElementById('vitalWeightCheck').textContent = (actualChange>=0?'+':'') + actualChange + ' kg';
+    const gap = Math.abs(actualChange - expectedChange);
+    const uitleg = gap < 0.15
+      ? 'komt overeen met de kcal-balans'
+      : 'grotendeels vocht/glycogeen, geen echte vet-verandering';
+    document.getElementById('vitalWeightCheckHint').textContent =
+      `gisteren ${yesterdayBalans>=0?'+':''}${Math.round(yesterdayBalans)} kcal (verwacht ${expectedChange>=0?'+':''}${expectedChange} kg) \u2192 ${uitleg}`;
   } else {
-    bodyCompRowEl.style.display = 'none';
+    weightCheckRowEl.style.display = 'none';
   }
 
   const {score: dagscoreVal, parts: dagscoreParts} = computeDagscore(totals.kcal, training, vitals);
@@ -3814,24 +3828,6 @@ async function loadMostRecentWeight(dateStr){
     .maybeSingle();
   if(error || !data) return null;
   return { kg: data.kg };
-}
-
-// Lichaamssamenstelling (FITAGE-weegschaal, scripts/sync_fitage.py) --
-// niet elke dag een nieuwe meting, dus net als loadMostRecentWeight de
-// meest recente t/m dateStr pakken i.p.v. alleen exact die dag.
-async function loadMostRecentBodyComposition(dateStr){
-  const owner = currentOwner();
-  if(!owner) return null;
-  const { data, error } = await supabaseClient
-    .from('body_composition')
-    .select('measurement_date, bodyfat_pct, muscle_pct')
-    .eq('owner', owner)
-    .lte('measurement_date', dateStr)
-    .order('measurement_date', { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  if(error || !data) return null;
-  return data;
 }
 
 // Kcal-schuld: handmatig gezette "af te werken" overschotten (bv. na een
