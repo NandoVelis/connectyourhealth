@@ -152,6 +152,40 @@ def fitage_get(token, path, extra_params=None):
     return result
 
 
+def fetch_all_measurements(token, user_id):
+    """PATH_MEASUREMENTS is cursor-gepagineerd: de respons geeft zelf
+    last_updated_at/last_measurement_id terug (door te geven als params van
+    de volgende aanroep) plus een finish_flag die 0 blijft zolang er meer
+    pagina's zijn. Zonder dit door te lopen (ontdekt via GARMIN_DEBUG_RAW-
+    achtige logging op 24 okt 2026) kreeg je stilzwijgend alleen de EERSTE
+    pagina -- in de praktijk de oudste ~350 dagen, niet de meest recente
+    metingen waar het eigenlijk om gaat."""
+    all_measurements = []
+    last_updated_at, last_measurement_id = 0, "0"
+    for _ in range(100):  # veiligheidslimiet i.p.v. een eventuele oneindige lus
+        data = fitage_get(
+            token, PATH_MEASUREMENTS,
+            {"user_id": user_id, "last_updated_at": last_updated_at, "last_measurement_id": last_measurement_id},
+        )
+        if not isinstance(data, dict):
+            break
+        batch = data.get("measurements")
+        if isinstance(batch, list):
+            all_measurements.extend(batch)
+        if os.environ.get("FITAGE_DEBUG_RAW"):
+            print(f"DEBUG pagina: {len(batch) if isinstance(batch, list) else 0} meting(en), finish_flag={data.get('finish_flag')}")
+        if str(data.get("finish_flag")) in ("1", "True", "true") or not batch:
+            break
+        next_updated_at = data.get("last_updated_at")
+        next_measurement_id = data.get("last_measurement_id")
+        if next_updated_at == last_updated_at and next_measurement_id == last_measurement_id:
+            # Cursor schuift niet meer op -- stoppen i.p.v. oneindig dezelfde
+            # pagina opvragen.
+            break
+        last_updated_at, last_measurement_id = next_updated_at, next_measurement_id
+    return all_measurements
+
+
 def safe(fn, *args):
     try:
         return fn(*args)
@@ -295,25 +329,12 @@ def main():
     print(f"Ingelogd bij FITAGE (user_id={user_id}).")
 
     print("Metingen ophalen...")
-    # last_updated_at=0 / last_measurement_id="0" vraagt de volledige
-    # geschiedenis op -- geen cursor-opslag, simpelweg elke run opnieuw
-    # ophalen en per dag upserten (de "weight"/"body_composition"-tabellen
-    # zijn toch al idempotent op owner+datum).
-    measurements_data = safe(
-        fitage_get, token, PATH_MEASUREMENTS, {"user_id": user_id, "last_updated_at": 0, "last_measurement_id": "0"}
-    ) or {}
-    if os.environ.get("FITAGE_DEBUG_RAW"):
-        if isinstance(measurements_data, dict):
-            print(f"DEBUG measurements-respons top-level keys: {list(measurements_data.keys())}")
-            for k, v in measurements_data.items():
-                if k != "measurements":
-                    print(f"DEBUG   {k} = {v}")
-        else:
-            print(f"DEBUG measurements-respons type: {type(measurements_data).__name__}")
-    measurements = measurements_data.get("measurements") if isinstance(measurements_data, dict) else measurements_data
-    if not isinstance(measurements, list):
-        print("  geen (geldige) metingen gevonden in de respons.")
-        measurements = []
+    # Geen cursor-opslag tussen runs -- simpelweg elke run de volledige
+    # (doorgepagineerde) geschiedenis opnieuw ophalen en per dag upserten (de
+    # "weight"/"body_composition"-tabellen zijn toch al idempotent op
+    # owner+datum). Zie fetch_all_measurements() voor waarom dit paginering
+    # nodig heeft.
+    measurements = safe(fetch_all_measurements, token, user_id) or []
 
     # Per dag de meest recente meting bewaren (meerdere wegingen op een dag
     # zijn mogelijk, bv. ochtend en avond) -- latere item in de lijst wint
