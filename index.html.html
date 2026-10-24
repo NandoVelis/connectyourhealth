@@ -5952,10 +5952,46 @@ document
 
   });
 
+// Ververst het dashboard alleen als er ECHT iets wijzigt in Supabase
+// (Garmin-sync, Tredict-sync, een andere sessie die iets logt) i.p.v. een
+// vaste interval-poll -- via Supabase Realtime (postgres_changes) op de
+// tabellen die buiten deze tab om kunnen veranderen. Een hele sync-run kan
+// meerdere rijen in korte tijd raken (bv. 7 dagen metrics in 1x, of een
+// delete+insert per activiteit in "training"), dus de render wordt
+// gedebounced i.p.v. per los event opnieuw te draaien.
+let _autoRefreshChannel = null;
+let _autoRefreshDebounce = null;
+const AUTO_REFRESH_TABLES = ['garmin_metrics','training','weight','vitals','meals','kcal_schuld'];
+function startAutoRefresh(){
+  const owner = currentOwner();
+  if(!owner || _autoRefreshChannel) return;
+  const scheduleRefresh = () => {
+    clearTimeout(_autoRefreshDebounce);
+    _autoRefreshDebounce = setTimeout(() => {
+      if(document.visibilityState === 'visible' && currentOwner()) renderDashboard();
+    }, 1500);
+  };
+  let channel = supabaseClient.channel('dashboard-live-' + owner);
+  AUTO_REFRESH_TABLES.forEach(table => {
+    channel = channel.on('postgres_changes',
+      { event: '*', schema: 'public', table, filter: 'owner=eq.' + owner },
+      scheduleRefresh
+    );
+  });
+  channel.subscribe();
+  _autoRefreshChannel = channel;
+  // Als het tabblad lang verborgen was kan de websocket-verbinding
+  // weggevallen zijn -- bij terugkeer meteen een keer verversen als vangnet.
+  document.addEventListener('visibilitychange', () => {
+    if(document.visibilityState === 'visible' && currentOwner()) renderDashboard();
+  });
+}
+
 async function startApp(){
   updateOverigLinkVisibility();
   await checkTredictSyncStatus();
   await renderDashboard();
+  startAutoRefresh();
 }
 
 bootGate();
