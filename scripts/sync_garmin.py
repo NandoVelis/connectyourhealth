@@ -20,6 +20,12 @@ MFA-verzoeken/rate-limiting). Vereist Multi-Factor-Authenticatie bij de
 EERSTE login? Start de workflow dan handmatig via "Run workflow" in GitHub
 Actions met de mfa_code-input ingevuld (code uit je e-mail/authenticator-app).
 Alle volgende (geplande) runs hergebruiken daarna de opgeslagen sessie.
+
+Sinds okt 2026 bestaat Garmin's officiele, self-service "Personal API" ook --
+zet de GitHub Actions-secret GARMIN_PERSONAL_API_KEY en dit script gebruikt
+die automatisch i.p.v. de onofficiele garminconnect-login hierboven (geen
+MFA/sessiebeheer/curl_cffi meer nodig). Zonder die secret blijft de
+garminconnect-login hierboven de fallback. Zie PersonalApiClient hieronder.
 """
 import os
 import re
@@ -31,6 +37,157 @@ from garminconnect import Garmin, GarminConnectAuthenticationError
 import requests
 
 AMSTERDAM = ZoneInfo("Europe/Amsterdam")
+
+# Garmin's nieuwe (okt 2026) officiele, self-service "Personal API"
+# (developer.garmin.com/gc-developer-program/personal/) -- gebruikt i.p.v.
+# de onofficiele garminconnect-library (hierboven) zodra GARMIN_PERSONAL_API_KEY
+# gezet is, met de oude email/wachtwoord-login als fallback zolang dat niet
+# zo is. Paden hieronder zijn bevestigd tegen de officiele swagger-docs
+# (developer.garmin.com/gc-developer-program/personal/swagger-docs/,
+# gecontroleerd 24 okt 2026) -- deze API heeft GEEN endpoint voor VO2max,
+# trainingstatus/trainingsbelasting (ACWR e.d.) of een agenda/calendar-
+# service (geplande trainingen). Die drie dingen blijven dus leeg zodra
+# deze sleutel actief is: vo2max/trainingstatus-kolommen houden via de
+# bestaande carry-forward-logica hun laatst bekende waarde (zie
+# existing_preserved in main()), en de geplande-trainingen-sync wordt
+# expliciet overgeslagen i.p.v. per ongeluk de bestaande rijen te wissen.
+GARMIN_PERSONAL_API_BASE = "https://personal.connectapi.garmin.com"
+GARMIN_PERSONAL_API_TOKEN_PATH = "/personalapitoken-service/personal-api/personal-api-key/token"
+
+
+class GarminPersonalApiError(Exception):
+    pass
+
+
+def obtain_personal_api_token(api_key):
+    resp = requests.post(
+        f"{GARMIN_PERSONAL_API_BASE}{GARMIN_PERSONAL_API_TOKEN_PATH}",
+        headers={"Authorization": f"ApiKey {api_key}", "Accept": "*/*"},
+        timeout=20,
+    )
+    resp.raise_for_status()
+    token = resp.text.strip()
+    if not token:
+        raise GarminPersonalApiError("Garmin Personal API gaf een lege bearer-token terug")
+    return token
+
+
+class PersonalApiClient:
+    """Dunne wrapper rond de Personal API die dezelfde methode-namen/-vormen
+    teruggeeft als garminconnect.Garmin hieronder, zodat main() zelf
+    ongewijzigd blijft -- alleen login() kiest welke van de twee clients
+    gebruikt wordt."""
+
+    def __init__(self, api_key):
+        self.token = obtain_personal_api_token(api_key)
+        self.session = requests.Session()
+        self.session.headers["Authorization"] = f"Bearer {self.token}"
+
+    def _get(self, path, params=None):
+        resp = self.session.get(f"{GARMIN_PERSONAL_API_BASE}{path}", params=params, timeout=20)
+        resp.raise_for_status()
+        return resp.json()
+
+    def get_rhr_daily(self, start_date, end_date):
+        start = datetime.strptime(start_date, "%Y-%m-%d").date()
+        end = datetime.strptime(end_date, "%Y-%m-%d").date()
+        rows, d = [], start
+        while d <= end:
+            hr = self._get("/wellness-service/wellness/dailyHeartRate", {"date": d.isoformat()})
+            rows.append({
+                "calendarDate": d.isoformat(),
+                "restingHeartRate": hr.get("restingHeartRate") if isinstance(hr, dict) else None,
+            })
+            d += timedelta(days=1)
+        return rows
+
+    def get_hrv_data_range(self, start_date, end_date):
+        data = self._get(f"/hrv-service/hrv/daily/{start_date}/{end_date}")
+        if isinstance(data, dict):
+            return data.get("hrvSummaries") or data.get("hrvSummary") or []
+        return data if isinstance(data, list) else []
+
+    def get_sleep_daily(self, start_date, end_date):
+        start = datetime.strptime(start_date, "%Y-%m-%d").date()
+        end = datetime.strptime(end_date, "%Y-%m-%d").date()
+        rows, d = [], start
+        while d <= end:
+            values = self._get("/sleep-service/sleep/dailySleep", {"date": d.isoformat()})
+            rows.append({"calendarDate": d.isoformat(), "values": values})
+            d += timedelta(days=1)
+        return rows
+
+    def get_max_metrics_range(self, start_date, end_date):
+        # VO2max/trainingstatus staan NIET in Garmin's officiele Personal
+        # API-swagger (developer.garmin.com/gc-developer-program/personal/
+        # swagger-docs/, gecontroleerd 24 okt 2026) -- dus geen gok-endpoint
+        # meer aanroepen (die altijd 404 zou geven), gewoon direct leeg
+        # teruggeven. De bestaande carry-forward-logica in main()
+        # (existing_preserved) houdt de laatst bekende vo2max/
+        # trainingstatus-waarden hierdoor vast i.p.v. ze leeg te maken.
+        return []
+
+    def get_training_status(self, calendar_date):
+        return None
+
+    def get_stats(self, calendar_date):
+        # Aparte, bevestigde stappen-endpoint (StepsDailyStatDTO) i.p.v. het
+        # gokken op veldnamen in de geneste v2/dailysummaries-respons.
+        steps_data = self._get(
+            "/usersummary-service/stats/steps/daily/{0}/{0}".format(calendar_date)
+        )
+        steps_rows = steps_data if isinstance(steps_data, list) else (steps_data or {}).get("stats") or []
+        steps_row = steps_rows[0] if steps_rows else {}
+        total_steps = None
+        for key in ("totalSteps", "steps", "value"):
+            if steps_row.get(key) is not None:
+                total_steps = steps_row[key]
+                break
+
+        # Kcal-totalen (totaal/actief/bmr) staan niet in een eigen daily-
+        # stat-endpoint -- alleen genest in v2/dailysummaries (CaloriesV2DTO
+        # volgens het schema-overzicht). Exacte veldnamen daarbinnen zijn
+        # niet bevestigd, dus dit blijft best-effort: ontbrekende kcal-
+        # velden komen als None terug i.p.v. te crashen.
+        summary_data = self._get(
+            "/usersummary-service/v2/dailysummaries",
+            {"startDate": calendar_date, "endDate": calendar_date},
+        )
+        summary_rows = summary_data if isinstance(summary_data, list) else (summary_data or {}).get("dailySummaries") or []
+        summary_row = summary_rows[0] if summary_rows else {}
+        calories = summary_row.get("calories") or {}
+        return {
+            "totalSteps": total_steps,
+            "totalKilocalories": calories.get("totalKilocalories") or calories.get("total"),
+            "activeKilocalories": calories.get("activeKilocalories") or calories.get("active"),
+            "bmrKilocalories": calories.get("bmrKilocalories") or calories.get("bmr"),
+        }
+
+    def get_activities_by_date(self, start_date, end_date, activity_type=None):
+        params = {"startDate": start_date, "endDate": end_date, "start": 0, "limit": 200}
+        if activity_type:
+            params["activityType"] = activity_type
+        data = self._get("/activitylist-service/activities/search/activities", params)
+        return data if isinstance(data, list) else (data or {}).get("activityList") or []
+
+    def get_body_composition(self, start_date, end_date):
+        data = self._get(f"/weight-service/weight/range/{start_date}/{end_date}", {"includeAll": "true"})
+        if isinstance(data, list):
+            return {"dateWeightList": data}
+        if isinstance(data, dict):
+            for key in ("dateWeightList", "weightList", "weightMeasurements"):
+                if key in data:
+                    return {"dateWeightList": data[key]}
+        return {"dateWeightList": []}
+
+    def get_scheduled_workouts(self, year, month):
+        # Geen calendar-service in de officiele Personal API-swagger --
+        # geplande trainingen (Garmin-agenda) zijn via deze API niet op te
+        # halen. NotImplementedError (i.p.v. gewoon leeg teruggeven) zodat
+        # main() dit expliciet kan overslaan -- anders zou sync_planned_
+        # trainings elke lege respons als "geen training gepland" lezen en
+        # alle planned_trainings-rijen actief wegstrepen.
+        raise NotImplementedError("Geplande trainingen (calendar-service) bestaan niet in de Personal API")
 
 # Zelfde sportnaam-mapping als de (nu grotendeels buiten werking) Tredict-sync
 # (supabase/functions/sync-tredict/index.ts), zodat activity_type-waarden in
@@ -407,7 +564,13 @@ def calculate_rest_kcal(weight_kg, height_cm, birth_date, at_date):
     return round(bmr * 1.11)
 
 
-def login(owner, email, password, mfa_code):
+def login(owner, email, password, mfa_code, personal_api_key):
+    if personal_api_key:
+        print("Inloggen bij Garmin's Personal API (officiele sleutel, okt 2026)...")
+        client = PersonalApiClient(personal_api_key)
+        print("Ingelogd bij Garmin Personal API.")
+        return client
+
     # return_on_mfa/prompt_mfa horen bij de Garmin(...)-constructor in deze
     # library-versie, niet bij login() zelf. Met prompt_mfa ingesteld (als er
     # een mfa_code is meegegeven) rondt garmin.login() een eventuele
@@ -450,11 +613,12 @@ def safe(fn, *args):
 
 def main():
     owner = os.environ["GARMIN_OWNER"]
-    email = os.environ["GARMIN_EMAIL"]
-    password = os.environ["GARMIN_PASSWORD"]
+    personal_api_key = os.environ.get("GARMIN_PERSONAL_API_KEY") or None
+    email = os.environ.get("GARMIN_EMAIL")
+    password = os.environ.get("GARMIN_PASSWORD")
     mfa_code = os.environ.get("GARMIN_MFA_CODE") or None
 
-    garmin = login(owner, email, password, mfa_code)
+    garmin = login(owner, email, password, mfa_code, personal_api_key)
 
     today = date.today()
     week_start = today - timedelta(days=7)
@@ -802,8 +966,15 @@ def main():
         d += timedelta(days=1)
 
     # ---- GEPLANDE TRAININGEN (voor "verwachte kcal") ----
-    print("Geplande trainingen (Garmin-agenda) ophalen...")
-    safe(sync_planned_trainings, garmin, owner, today)
+    if isinstance(garmin, PersonalApiClient):
+        # Geen calendar-service in de Personal API -- NIET aanroepen: anders
+        # leest sync_planned_trainings elke lege respons als "geen training
+        # gepland" en streept het alle bestaande planned_trainings-rijen
+        # actief weg (zie get_scheduled_workouts hierboven).
+        print("Geplande trainingen (Garmin-agenda): overgeslagen, bestaat niet in de Personal API.")
+    else:
+        print("Geplande trainingen (Garmin-agenda) ophalen...")
+        safe(sync_planned_trainings, garmin, owner, today)
 
     print("Klaar.")
 

@@ -7,12 +7,18 @@ name: Auto-sync Garmin
 # edge function.
 #
 # Vereiste repo-secrets (Settings -> Secrets and variables -> Actions):
-#   GARMIN_EMAIL_NANDO, GARMIN_PASSWORD_NANDO  (je gewone Garmin Connect-login)
+#   GARMIN_PERSONAL_API_KEY  (Garmin's nieuwe officiele Personal API-sleutel,
+#     aangemaakt via connect.garmin.com/app/settings/personalApiToken) --
+#     als deze gezet is, gebruikt sync_garmin.py die i.p.v. onderstaande.
+#   GARMIN_EMAIL_NANDO, GARMIN_PASSWORD_NANDO  (fallback: je gewone Garmin
+#     Connect-login, alleen nog gebruikt zolang GARMIN_PERSONAL_API_KEY niet
+#     gezet is)
 #
-# Bij de EERSTE run kan Garmin een MFA-code vragen. Start de workflow dan
-# handmatig via "Run workflow" hierboven met de mfa_code-input ingevuld
-# (code uit je Garmin-e-mail/authenticator-app). Daarna hergebruikt elke
-# geplande run de opgeslagen sessie, geen MFA meer nodig totdat die verloopt.
+# Bij de EERSTE run via de garminconnect-fallback kan Garmin een MFA-code
+# vragen. Start de workflow dan handmatig via "Run workflow" hierboven met
+# de mfa_code-input ingevuld (code uit je Garmin-e-mail/authenticator-app).
+# Daarna hergebruikt elke geplande run de opgeslagen sessie, geen MFA meer
+# nodig totdat die verloopt. De Personal API-sleutel kent dit probleem niet.
 
 on:
   schedule:
@@ -61,6 +67,7 @@ jobs:
       - name: Sync Garmin voor Nando
         env:
           GARMIN_OWNER: Nando
+          GARMIN_PERSONAL_API_KEY: ${{ secrets.GARMIN_PERSONAL_API_KEY }}
           GARMIN_EMAIL: ${{ secrets.GARMIN_EMAIL_NANDO }}
           GARMIN_PASSWORD: ${{ secrets.GARMIN_PASSWORD_NANDO }}
           GARMIN_MFA_CODE: ${{ inputs.mfa_code }}
