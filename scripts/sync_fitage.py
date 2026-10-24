@@ -302,6 +302,14 @@ def main():
     measurements_data = safe(
         fitage_get, token, PATH_MEASUREMENTS, {"user_id": user_id, "last_updated_at": 0, "last_measurement_id": "0"}
     ) or {}
+    if os.environ.get("FITAGE_DEBUG_RAW"):
+        if isinstance(measurements_data, dict):
+            print(f"DEBUG measurements-respons top-level keys: {list(measurements_data.keys())}")
+            for k, v in measurements_data.items():
+                if k != "measurements":
+                    print(f"DEBUG   {k} = {v}")
+        else:
+            print(f"DEBUG measurements-respons type: {type(measurements_data).__name__}")
     measurements = measurements_data.get("measurements") if isinstance(measurements_data, dict) else measurements_data
     if not isinstance(measurements, list):
         print("  geen (geldige) metingen gevonden in de respons.")
