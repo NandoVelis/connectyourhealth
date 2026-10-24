@@ -3743,7 +3743,8 @@ async function renderKcalSchuld(owner, dateStr, balansSoFar, weightKg, runningSt
   const dagenResterend = Math.max(1, Math.round((new Date(creditEindDatum+'T00:00:00') - new Date(dateStr+'T00:00:00')) / 86400000) + 1);
   const dagdoel = Math.round(resterend / dagenResterend);
   const kcalPerKm = runningStats ? runningStats.kcalPerKm : null;
-  const kmVandaag = estimateRunKmToBurn(dagdoel, weightKg, kcalPerKm);
+  const kmHardlopen = estimateRunKmToBurn(dagdoel, weightKg, kcalPerKm);
+  const kmWandelen = estimateWalkKmToBurn(dagdoel, weightKg);
   detailEl.innerHTML = `
     <div class="stat-row">
       <span class="stat-label">Resterend saldo</span>
@@ -3753,10 +3754,15 @@ async function renderKcalSchuld(owner, dateStr, balansSoFar, weightKg, runningSt
       <span class="stat-label">Nog ${dagenResterend} dag${dagenResterend===1?'':'en'} t/m ${creditEindDatum}</span>
       <span class="stat-val">~${dagdoel} kcal/dag extra</span>
     </div>
-    ${kmVandaag ? `
-    <div class="stat-row" style="border-bottom:none;">
+    ${kmHardlopen ? `
+    <div class="stat-row">
       <span class="stat-label">\u{1F3C3} Komt neer op</span>
-      <span class="stat-val">~${kmVandaag} km extra hardlopen/wandelen vandaag</span>
+      <span class="stat-val">~${kmHardlopen} km extra hardlopen</span>
+    </div>` : ''}
+    ${kmWandelen ? `
+    <div class="stat-row" style="border-bottom:none;">
+      <span class="stat-label">\u{1F6B6} Of</span>
+      <span class="stat-val">~${kmWandelen} km extra wandelen</span>
     </div>` : ''}
     <div class="meal-meta" style="margin-top:4px;">Netto kcal-balans sinds ${schuld.startdatum} (afgesloten dagen): ${afgewerktTotNu>=0?'+':''}${Math.round(afgewerktTotNu)} kcal.${balansSoFar!=null ? ` Balans tot nu toe vandaag: ${balansSoFar>=0?'+':''}${Math.round(balansSoFar)} kcal (telt morgen pas mee).` : ''}</div>
     ${schuld.omschrijving ? `<div class="meal-meta" style="margin-top:4px;">${escapeHtml(schuld.omschrijving)}</div>` : ''}`;
@@ -3789,6 +3795,17 @@ const KCAL_PER_STEP_PER_KG = 0.00047;
 function extraKcalFromSteps(steps, weightKg){
   if(!steps || !weightKg) return 0;
   return Math.round(steps * KCAL_PER_STEP_PER_KG * weightKg);
+}
+// Gemiddelde paslengte bij wandeltempo (~75-80cm/stap) -- generieke schatting,
+// niet uit eigen data gekalibreerd zoals KCAL_PER_STEP_PER_KG zelf. Gebruikt
+// om een kcal-doel om te rekenen naar een wandelafstand, los van het
+// hardloop-equivalent (dat een stuk korter uitvalt bij hetzelfde aantal kcal).
+const WALK_STEPS_PER_KM = 1300;
+function estimateWalkKmToBurn(kcalToBurn, weightKg){
+  if(!kcalToBurn || kcalToBurn<=0 || !weightKg) return null;
+  const kcalPerKm = WALK_STEPS_PER_KM * KCAL_PER_STEP_PER_KG * weightKg;
+  if(!kcalPerKm) return null;
+  return Math.round(kcalToBurn / kcalPerKm * 10) / 10;
 }
 
 function trainingDistanceKm(training){
