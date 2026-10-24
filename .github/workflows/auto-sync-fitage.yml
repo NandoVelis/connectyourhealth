@@ -7,6 +7,11 @@ name: Auto-sync FITAGE
 #
 # Vereiste repo-secrets (Settings -> Secrets and variables -> Actions):
 #   FITAGE_EMAIL_NANDO, FITAGE_PASSWORD_NANDO  (je gewone FITAGE-app-login)
+#   GARMIN_EMAIL_NANDO, GARMIN_PASSWORD_NANDO  (al aanwezig sinds de oude
+#     Garmin-sync -- hergebruikt hier om de meest recente FITAGE-weging
+#     terug te schrijven naar Garmin, zie sync_fitage.py bovenaan voor
+#     waarom dit de oude onofficiele garminconnect-login nodig heeft i.p.v.
+#     de (alleen-lezen) Personal API)
 #
 # Een weegschaal wordt doorgaans hooguit een paar keer per dag gebruikt --
 # in tegenstelling tot Garmin's doorlopende activiteiten-/vitals-stroom is

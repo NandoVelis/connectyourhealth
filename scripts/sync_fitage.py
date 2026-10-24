@@ -19,6 +19,19 @@ Actions -- controleer de eerste paar runs/Supabase-rijen extra goed.
 Vereist GitHub Actions-secrets FITAGE_EMAIL_NANDO / FITAGE_PASSWORD_NANDO
 (zie .github/workflows/auto-sync-fitage.yml) en hergebruikt
 SUPABASE_SERVICE_ROLE_KEY.
+
+FITAGE is leidend voor gewicht (op verzoek, i.p.v. het 2x moeten invoeren):
+na het opslaan in Supabase wordt de meest recente FITAGE-weging ook
+teruggeschreven naar Garmin Connect zelf (garmin.add_weigh_in), zodat
+Garmin's eigen gewichtsgeschiedenis -- en alles dat daar binnen Garmin op
+voortbouwt -- de FITAGE-waarde overneemt i.p.v. zelf een weegschaal nodig
+te hebben. Dit gebruikt bewust de OUDE, onofficiele garminconnect-library
+(met e-mail/wachtwoord-login + sessie-hergebruik via de garmin_session-
+tabel, exact zoals sync_garmin.py dat deed voor de Personal API-migratie) --
+niet de nieuwe Personal API, want die is alleen-lezen (geen enkel
+schrijf-endpoint in de officiele swagger-docs). Dit is dus de enige plek
+in dit project waar die kwetsbaarheid (bot-detectie/MFA/sessiebeheer)
+bewust terugkomt, puur voor deze ene write-actie.
 """
 import base64
 import os
@@ -29,6 +42,7 @@ from zoneinfo import ZoneInfo
 import requests
 from Crypto.Cipher import PKCS1_v1_5
 from Crypto.PublicKey import RSA
+from garminconnect import Garmin, GarminConnectAuthenticationError
 
 AMSTERDAM = ZoneInfo("Europe/Amsterdam")
 
@@ -204,6 +218,65 @@ def upsert_weight(owner, rows):
         raise RuntimeError(f"Opslaan gewicht mislukt ({resp.status_code}): {resp.text[:500]}")
 
 
+def load_garmin_push_state(owner):
+    resp = requests.get(
+        f"{SUPABASE_URL}/rest/v1/garmin_session",
+        headers=supabase_headers(),
+        params={"owner": f"eq.{owner}", "select": "session_json,garmin_weight_push_date,garmin_weight_push_kg"},
+        timeout=15,
+    )
+    resp.raise_for_status()
+    rows = resp.json()
+    return rows[0] if rows else {}
+
+
+def save_garmin_push_state(owner, session_json, pushed_date, pushed_kg):
+    resp = requests.post(
+        f"{SUPABASE_URL}/rest/v1/garmin_session",
+        headers={**supabase_headers(), "Prefer": "resolution=merge-duplicates"},
+        json={
+            "owner": owner,
+            "session_json": session_json,
+            "updated_at": datetime.now(AMSTERDAM).date().isoformat(),
+            "garmin_weight_push_date": pushed_date,
+            "garmin_weight_push_kg": pushed_kg,
+        },
+        timeout=15,
+    )
+    if not resp.ok:
+        print(f"  WAARSCHUWING: opslaan Garmin-sessie/push-status mislukt ({resp.status_code}): {resp.text[:300]}")
+
+
+def push_latest_weight_to_garmin(owner, latest_date, latest_kg, garmin_email, garmin_password):
+    """Schrijft de meest recente FITAGE-weging terug naar Garmin Connect,
+    maar alleen als die datum+gewicht nog niet eerder gepusht is -- anders
+    zou elke 2-uurlijkse run dezelfde dag telkens als nieuwe (duplicaat)
+    handmatige weging in Garmin aanmaken (Garmins weigh-in-endpoint is
+    puur toevoegend, geen upsert op datum)."""
+    if latest_kg is None or not garmin_email or not garmin_password:
+        return
+    state = load_garmin_push_state(owner)
+    if state.get("garmin_weight_push_date") == latest_date and state.get("garmin_weight_push_kg") == latest_kg:
+        print(f"  Garmin heeft {latest_date} ({latest_kg} kg) al -- niet opnieuw gepusht.")
+        return
+
+    print(f"  Terugschrijven naar Garmin: {latest_date} -> {latest_kg} kg...")
+    garmin = Garmin(email=garmin_email, password=garmin_password)
+    stored_session = state.get("session_json")
+    try:
+        garmin.login(tokenstore=stored_session)
+    except GarminConnectAuthenticationError as e:
+        print(f"  WAARSCHUWING: kon niet inloggen bij Garmin om gewicht terug te schrijven ({e}) -- overgeslagen.")
+        return
+    try:
+        garmin.add_weigh_in(weight=latest_kg, unitKey="kg", timestamp=f"{latest_date}T08:00:00")
+    except Exception as e:
+        print(f"  WAARSCHUWING: terugschrijven naar Garmin mislukt ({e}).")
+        return
+    save_garmin_push_state(owner, garmin.client.dumps(), latest_date, latest_kg)
+    print("  Gewicht teruggeschreven naar Garmin.")
+
+
 def main():
     owner = os.environ["FITAGE_OWNER"]
     email = os.environ["FITAGE_EMAIL"]
@@ -272,6 +345,13 @@ def main():
     print(f"{len(body_comp_rows)} dag(en) met metingen gevonden, opslaan in Supabase...")
     upsert_body_composition(owner, body_comp_rows)
     upsert_weight(owner, weight_rows)
+
+    if weight_rows:
+        latest_date = max(r["weight_date"] for r in weight_rows)
+        latest_kg = next(r["kg"] for r in weight_rows if r["weight_date"] == latest_date)
+        garmin_email = os.environ.get("GARMIN_EMAIL")
+        garmin_password = os.environ.get("GARMIN_PASSWORD")
+        safe(push_latest_weight_to_garmin, owner, latest_date, latest_kg, garmin_email, garmin_password)
 
     print("Klaar.")
 
