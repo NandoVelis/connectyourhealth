@@ -400,6 +400,7 @@
     <div class="grid">
       <div class="card">
         <h3>Macro's</h3>
+        <div id="intakeProgress" style="margin-bottom:14px;"></div>
         <div class="macro-bars" id="macroBars"></div>
         <div style="margin-top:16px;">
           <div class="stat-row"><span class="stat-label">Totaal kcal ingenomen</span><span class="stat-val" id="consumedVal">0</span></div>
@@ -458,6 +459,7 @@
 
     <div class="card" style="margin-bottom:16px;">
       <h3>Maaltijden</h3>
+      <div id="dashboardQuickAdds" style="margin-bottom:14px;"></div>
       <div id="mealList"><div class="empty">Nog geen maaltijden ingevoerd voor deze dag.</div></div>
     </div>
 
@@ -1525,6 +1527,90 @@ async function loadPlannedTrainingForDate(owner, dateStr){
     return data || null;
   }catch(e){ console.error('Laden geplande training', e); return null; }
 }
+// Vult lege dagen in planned_trainings automatisch met een eenvoudig
+// voorstel -- sinds de Garmin Personal API-migratie (okt 2026) bestaat er
+// geen agenda/calendar-service meer om Garmin's eigen geplande trainingen
+// te synchroniseren (zie "Geplande trainingen (Garmin-agenda): overgeslagen"
+// in scripts/sync_garmin.py), dus zonder dit zou deze tabel structureel leeg
+// blijven. Vult alleen dagen zonder bestaande planned_trainings-rij EN
+// zonder al gelogde training (nooit een echte/handmatige rij overschrijven),
+// in een venster van vandaag tot en met 21 dagen vooruit -- lang genoeg om
+// altijd een paar dagen vooruit te plannen, kort genoeg om niet te proberen
+// een heel marathonschema voor te berekenen (dat schuift dagelijks gewoon
+// mee doordat dit elke dag opnieuw draait). Elke beschrijving begint met
+// "Voorstel: " zodat dit visueel te onderscheiden blijft van een echte
+// (Garmin-/handmatig-)geplande training.
+// Taper-logica (laatste 8 dagen voor de halve marathon) en, voor data NA de
+// halve marathon, een simpele hersteldag->opbouw-naar-marathon-overgang
+// (marathon-doeltempo uit race_goals) op verzoek van 24 okt 2026.
+const PLANNED_TRAININGS_AUTOFILL_WINDOW_DAYS = 21;
+const daysBetweenDateStrs = (fromStr, toStr) => Math.round((new Date(toStr+'T00:00:00') - new Date(fromStr+'T00:00:00')) / 86400000);
+// Werkt met ELKE reeks races uit race_goals (chronologisch gesorteerd), i.p.v.
+// vast "halve marathon dan marathon" aan te nemen -- op verzoek (24 okt 2026,
+// na toevoeging van een tussenliggende 2e halve marathon): voor een gegeven
+// datum wordt steeds de eerstvolgende race (voor taper) en de meest recente
+// voorbije race (voor een hersteldagvenster erna) opgezocht, zodat een
+// toekomstige extra race vanzelf meegenomen wordt zonder codewijziging.
+function suggestTrainingForDate(dateStr, races){
+  const nextRace = races.find(r => r.race_date >= dateStr);
+  const prevRace = [...races].reverse().find(r => r.race_date < dateStr);
+  if(nextRace && nextRace.race_date === dateStr) return null; // wedstrijddag zelf, geen voorstel nodig
+
+  if(prevRace){
+    const daysSincePrev = daysBetweenDateStrs(prevRace.race_date, dateStr);
+    if(daysSincePrev <= 7){
+      return { description: `Voorstel: Hersteldag na ${prevRace.race_name}, evt. korte rustige wandeling/jog`, estimated_distance_km: 3 };
+    }
+  }
+  if(nextRace){
+    const daysUntilNext = daysBetweenDateStrs(dateStr, nextRace.race_date);
+    if(daysUntilNext <= 8){
+      if(daysUntilNext === 1) return { description: `Voorstel: Rustdag (${nextRace.race_name} morgen)`, estimated_distance_km: null };
+      if(daysUntilNext <= 3) return { description: 'Voorstel: Kort rustig loopje, E-tempo', estimated_distance_km: 5 };
+      if(daysUntilNext === 5) return { description: `Voorstel: Korte inloop op wedstrijdtempo (${nextRace.target_pace_per_km||'wedstrijdtempo'})`, estimated_distance_km: 3.5 };
+      return { description: 'Voorstel: Rustige duurloop, E-tempo', estimated_distance_km: 7 };
+    }
+    // Buiten het taper-venster: generieke rustige opbouw, met de eerstvolgende
+    // wedstrijd als losse referentie (geen opgelegd schema).
+    const paceHint = nextRace.target_pace_per_km ? ` (opbouw richting ${nextRace.race_name}, ${nextRace.target_pace_per_km})` : '';
+    return { description: `Voorstel: Rustige duurloop, E-tempo${paceHint}`, estimated_distance_km: 8 };
+  }
+  return null; // geen bekende races meer, geen voorstel
+}
+async function autoFillPlannedTrainings(owner){
+  if(!owner) return;
+  const todayStr = fmtDate(new Date());
+  const storageKey = `plannedTrainingsAutoFill:${owner}:${todayStr}`;
+  try{ if(localStorage.getItem(storageKey)) return; }catch(e){}
+  try{
+    const { data: races } = await supabaseClient
+      .from('race_goals')
+      .select('race_name, race_date, target_pace_per_km')
+      .eq('owner', owner)
+      .order('race_date', { ascending: true });
+    if(!races || !races.length){ try{ localStorage.setItem(storageKey, '1'); }catch(e){} return; }
+
+    const windowEnd = addDaysToDateStr(todayStr, PLANNED_TRAININGS_AUTOFILL_WINDOW_DAYS);
+    const [{ data: existingPlanned }, { data: existingTraining }] = await Promise.all([
+      supabaseClient.from('planned_trainings').select('training_date').eq('owner', owner).gte('training_date', todayStr).lte('training_date', windowEnd),
+      supabaseClient.from('training').select('training_date').eq('owner', owner).gte('training_date', todayStr).lte('training_date', windowEnd)
+    ]);
+    const taken = new Set([...(existingPlanned||[]), ...(existingTraining||[])].map(r=>r.training_date));
+
+    const newRows = [];
+    for(let d = todayStr; d <= windowEnd; d = addDaysToDateStr(d, 1)){
+      if(taken.has(d)) continue;
+      const suggestion = suggestTrainingForDate(d, races);
+      if(suggestion) newRows.push({ owner, training_date: d, ...suggestion });
+    }
+    if(newRows.length){
+      const { error } = await supabaseClient.from('planned_trainings').insert(newRows);
+      if(error) console.warn('Automatisch invullen planned_trainings mislukt', error);
+    }
+    try{ localStorage.setItem(storageKey, '1'); }catch(e){}
+  }catch(e){ console.warn('autoFillPlannedTrainings mislukt', e); }
+}
+
 // Ruwe schatting van trainings-kcal uit afstand: ~0,95 kcal/kg/km, gekalibreerd
 // op de werkelijke Garmin-activiteit-kcal van eerdere hardlooprondes (zie
 // chat 24 sept) -- puur indicatief, de echte Garmin-meting na de training
@@ -3054,6 +3140,7 @@ async function renderDashboard(){
 
   renderRaceGoals(owner);
   renderTrainingPaceZones(owner);
+  renderDashboardQuickAdds();
 
   const meals = await loadMeals(dateStr);
   const totals = macroKcal(meals);
@@ -3143,6 +3230,42 @@ async function renderDashboard(){
   }
 
   document.getElementById('consumedVal').textContent = totals.kcal + ' kcal';
+
+  // Macro-streefwaarden hier (i.p.v. pas verderop bij de macro-balkjes)
+  // berekend, zodat de dagdoel-voortgangsbalk hieronder er meteen gebruik
+  // van kan maken -- targetKcal is simpelweg "burned" (wat je vandaag
+  // verbrandt/hebt verbrand): opeten tot dat getal houdt de balans op 0.
+  let targetProtein = null, targetFat = null, targetCarbs = null;
+  if(weightEntry && weightEntry.kg){
+    let proteinFactor = 1.8;
+    if(training && training.restKcal && burned){
+      const scaleFactor = Math.min(1.5, Math.max(1, burned/training.restKcal));
+      proteinFactor = 1.8*scaleFactor;
+    }
+    targetProtein = Math.round(weightEntry.kg*proteinFactor);
+    targetFat = Math.round(weightEntry.kg*1.0);
+  }
+  const targetKcal = burned || null;
+  if(targetKcal && targetProtein!=null && targetFat!=null){
+    targetCarbs = Math.max(0, Math.round((targetKcal - targetProtein*4 - targetFat*9)/4));
+  }
+  const pctOf = (actual, target) => target ? Math.round(actual/target*100) : null;
+  const pctLabel = (actual, target) => target ? ` <span style="color:var(--ink-soft);font-weight:400;">(${Math.round(actual/target*100)}%)</span>` : '';
+
+  const intakeProgressEl = document.getElementById('intakeProgress');
+  if(intakeProgressEl){
+    if(targetKcal){
+      const pct = Math.max(0, Math.min(100, Math.round(totals.kcal/targetKcal*100)));
+      const over = totals.kcal > targetKcal;
+      intakeProgressEl.innerHTML = `
+        <div class="macro-track" style="height:14px;">
+          <div class="macro-fill" style="width:${pct}%;background:${over?'var(--clay)':'var(--pine)'}"></div>
+        </div>
+        <div class="meal-meta" style="margin-top:4px;">${totals.kcal} / ${targetKcal} kcal (${pct}%)${over?' — boven dagdoel':''}</div>`;
+    } else {
+      intakeProgressEl.innerHTML = `<div class="meal-meta">${totals.kcal} kcal gegeten — dagdoel nog onbekend (geen training/verbruik voor vandaag).</div>`;
+    }
+  }
 
   const detailEl = document.getElementById('trainingDetail');
   const distanceKm = trainingDistanceKm(training);
@@ -3363,25 +3486,8 @@ async function renderDashboard(){
         <span class="stat-val">${p.score.toFixed(1)}</span>
       </div>`).join('') : '<div class="empty">Nog onvoldoende data voor deze dag.</div>';
 
-  let targetProtein = null, targetFat = null, targetCarbs = null;
-  if(weightEntry && weightEntry.kg){
-    let proteinFactor = 1.8;
-    if(training && training.restKcal && burned){
-      const scaleFactor = Math.min(1.5, Math.max(1, burned/training.restKcal));
-      proteinFactor = 1.8*scaleFactor;
-    }
-    targetProtein = Math.round(weightEntry.kg*proteinFactor);
-    targetFat = Math.round(weightEntry.kg*1.0);
-    const targetKcal = burned || null;
-    if(targetKcal){
-      targetCarbs = Math.max(0, Math.round((targetKcal - targetProtein*4 - targetFat*9)/4));
-    }
-  }
-  const pctOf = (actual, target) => target ? Math.round(actual/target*100) : null;
-  const pctProteinVal = pctOf(totals.protein, targetProtein);
-  const pctCarbsVal = pctOf(totals.carbs, targetCarbs);
-  const pctFatVal = pctOf(totals.fat, targetFat);
-  const pctLabel = (actual, target) => target ? ` <span style="color:var(--ink-soft);font-weight:400;">(${Math.round(actual/target*100)}%)</span>` : '';
+  // Macro-streefwaarden (targetProtein/targetFat/targetCarbs/pctOf/pctLabel)
+  // staan nu eerder in deze functie, bij de dagdoel-voortgangsbalk.
 
   // Herstel t.o.v. weekgemiddelde, voor de tip
   let recoveryConcern = false;
@@ -3419,9 +3525,18 @@ async function renderDashboard(){
     runningStatsForTip,
     customItemsForTip
   );
+  const kcalBalansRowsForTip = await loadRecentKcalBalans(owner, 14);
+  const kcalStreakForTip = computeKcalBalansStreak(kcalBalansRowsForTip, dateStr);
+  const nearestRaceForTip = await loadNearestRace(owner);
+  const trendTipsHtml = generateTrendAndRaceTips({
+    hrvDelta, hrRestDelta, sleepDelta,
+    kcalStreak: kcalStreakForTip,
+    nearestRace: nearestRaceForTip
+  });
+
   const tipEl = document.getElementById('nutritionTip');
   if(tipEl){
-    let fullTipHtml = tipText;
+    let fullTipHtml = trendTipsHtml + tipText;
     if(trainingHadActivity){
       const garminForTip = await loadLatestGarminMetrics(owner);
       const postWorkoutHtml = generatePostWorkoutTip(training, weightForTip, garminForTip, dateStr);
@@ -3494,6 +3609,7 @@ async function renderDashboard(){
         <div class="meal-item">
           <div>
             <div class="meal-desc">${getFoodEmoji(m.desc)} ${escapeHtml(m.desc)}</div>
+            ${(m.protein||m.carbs||m.fat) ? `<div class="meal-meta" style="font-size:11px;">${[m.protein?Math.round(m.protein)+'g eiwit':null, m.carbs?Math.round(m.carbs)+'g koolh.':null, m.fat?Math.round(m.fat)+'g vet':null].filter(Boolean).join(' &middot; ')}</div>` : ''}
             <div class="meal-meta">
               <select class="mealTypeSelect" data-idx="${m.origIdx}" style="font-size:12px;padding:3px 6px;border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--ink-soft);font-family:'Archivo',sans-serif;">
                 ${mealOrder.map(opt=>`<option value="${opt}" ${m.mealType===opt?'selected':''}>${opt}</option>`).join('')}
@@ -3690,6 +3806,85 @@ async function loadKcalSchuld(owner){
   if(error || !data) return null;
   return data;
 }
+// ---- Echte trend-/wedstrijd-tips (i.p.v. alleen de dagelijkse voedingstip) ----
+// Kijkt naar afgesloten dagen in kcal_balans_daily om te zien of de balans
+// een aantal dagen op rij dezelfde kant op staat -- "vandaag" telt bewust
+// niet mee (zie renderKcalSchuld hierboven: een lopende dag is nog geen
+// afgesloten meting).
+async function loadRecentKcalBalans(owner, days){
+  if(!owner) return [];
+  const { data, error } = await supabaseClient
+    .from('kcal_balans_daily')
+    .select('dag, kcal_balans')
+    .eq('owner', owner)
+    .order('dag', { ascending: false })
+    .limit(days);
+  return (error || !data) ? [] : data;
+}
+function computeKcalBalansStreak(rows, todayDateStr){
+  const closed = rows.filter(r => r.dag !== todayDateStr).sort((a,b)=>b.dag.localeCompare(a.dag));
+  if(!closed.length) return null;
+  const sign = Number(closed[0].kcal_balans) >= 0 ? 'positive' : 'negative';
+  let count = 0;
+  for(const r of closed){
+    const s = Number(r.kcal_balans) >= 0 ? 'positive' : 'negative';
+    if(s !== sign) break;
+    count++;
+  }
+  return { sign, count };
+}
+async function loadNearestRace(owner){
+  if(!owner) return null;
+  const today = fmtDate(new Date());
+  const { data, error } = await supabaseClient
+    .from('race_goals')
+    .select('*')
+    .eq('owner', owner)
+    .gte('race_date', today)
+    .order('race_date', { ascending: true })
+    .limit(1);
+  return (error || !data || !data.length) ? null : data[0];
+}
+// Prioriteitslijst van korte, op data gebaseerde signalen -- geen generieke
+// "AI-tip", gewoon een paar harde, uitlegbare condities op trend-data
+// (kcal-balans-reeks, hersteldelta's t.o.v. vorige week) en de eerstvolgende
+// wedstrijd (taper-venster = laatste 7 dagen voor de wedstrijd).
+function generateTrendAndRaceTips({ hrvDelta, hrRestDelta, sleepDelta, kcalStreak, nearestRace }){
+  const lines = [];
+  if(nearestRace){
+    const raceDate = new Date(nearestRace.race_date + 'T00:00:00');
+    const daysUntil = Math.ceil((raceDate - new Date()) / 86400000);
+    if(daysUntil <= 7 && daysUntil >= 0){
+      if(daysUntil <= 1){
+        lines.push(`${nearestRace.race_name} is ${daysUntil===0?'vandaag':'morgen'}: niets nieuws proberen (schoenen/voeding), op tijd slapen en je gewone ontbijt.`);
+      } else if(daysUntil <= 3){
+        lines.push(`Nog ${daysUntil} dagen tot ${nearestRace.race_name}: verhoog koolhydraten, bouw het trainingsvolume verder af en blijf goed gehydrateerd.`);
+      } else {
+        lines.push(`Nog ${daysUntil} dagen tot ${nearestRace.race_name}: tijd om af te bouwen (taper) -- rustiger en korter, geen nieuwe pieken meer.`);
+      }
+    }
+  }
+  if(kcalStreak && kcalStreak.count >= 3){
+    if(kcalStreak.sign === 'negative'){
+      lines.push(`Je kcal-balans staat al ${kcalStreak.count} dagen op rij in het tekort -- let op dat je genoeg blijft eten, zeker met een wedstrijd in zicht.`);
+    } else {
+      lines.push(`Je kcal-balans staat al ${kcalStreak.count} dagen op rij in de plus -- prima als je bewust lading aan het opbouwen bent, anders de inname wat terugbrengen.`);
+    }
+  }
+  if(hrvDelta!=null && hrvDelta <= -10){
+    lines.push(`Je HRV-weekgemiddelde ligt ${Math.abs(hrvDelta)}% lager dan vorige week -- mogelijk signaal voor vermoeidheid, extra herstel kan geen kwaad.`);
+  }
+  if(hrRestDelta!=null && hrRestDelta >= 10){
+    lines.push(`Je rust-hartslag-weekgemiddelde ligt ${hrRestDelta}% hoger dan vorige week -- vaak een vroeg signaal van onvoldoende herstel of een beginnende verkoudheid.`);
+  }
+  if(sleepDelta!=null && sleepDelta <= -10){
+    lines.push(`Je slaapt deze week gemiddeld ${Math.abs(sleepDelta)}% minder dan vorige week -- probeer dit weer wat op te bouwen, zeker richting een wedstrijd.`);
+  }
+  if(!lines.length) return '';
+  return `<div class="tip-row tip-total" style="margin-bottom:8px;"><strong>Trend &amp; wedstrijd:</strong></div>` +
+    lines.map(l => `<div class="tip-row">${escapeHtml(l)}</div>`).join('');
+}
+
 // De hele dagbalans (inname min totaal verbruik -- incl. avondwandelingen,
 // die niet apart getimed worden) telt mee zodra een dag is afgesloten
 // (kcal_balans_daily). Terug naar deze eenvoudigere aanpak i.p.v. het
@@ -4860,6 +5055,38 @@ async function quickAdd(meal, statusEl, btn){
   renderDashboard();
 }
 
+// Toont een handvol eigen "Snel toevoegen"-items direct op het dashboard
+// (i.p.v. dat je eerst naar het tabblad Invoer moet) -- op verzoek, om
+// loggen van een vaak gegeten item met 1 klik te doen i.p.v. eerst te
+// moeten wisselen van tabblad. Items die bij dit moment van de dag horen
+// (zelfde tijdvensters als de sectie-in-/uitklap-logica hieronder) staan
+// vooraan, aangevuld tot een handvol knoppen. Logt op de opgeslagen
+// basishoeveelheid -- voor een aangepaste hoeveelheid (g/ml/stuks) is het
+// tabblad Invoer nog steeds nodig.
+async function renderDashboardQuickAdds(){
+  const el = document.getElementById('dashboardQuickAdds');
+  if(!el) return;
+  const owner = currentOwner();
+  if(!owner){ el.innerHTML = ''; return; }
+  const list = await loadCustomQuickAdds();
+  if(!list.length){ el.innerHTML = ''; return; }
+  const hour = currentAmsterdamHour();
+  const relevant = list.filter(m => isQaGroupOpenByTime(m.mealType, hour));
+  const rest = list.filter(m => !isQaGroupOpenByTime(m.mealType, hour));
+  const shown = [...relevant, ...rest].slice(0, 6);
+  el.innerHTML = `
+    <div class="meal-meta" style="margin-bottom:6px;">Snel toevoegen</div>
+    <div style="display:flex;flex-wrap:wrap;gap:6px;">
+      ${shown.map((m,i)=>`<button class="btn-secondary dashboardQuickAddBtn" data-idx="${i}" style="font-size:12px;padding:6px 10px;">${getFoodEmoji(m.desc)} ${escapeHtml(m.desc)} &middot; ${m.kcal} kcal</button>`).join('')}
+    </div>
+    <div id="dashboardQuickAddStatus" class="status-msg" style="margin-top:6px;"></div>`;
+  el.querySelectorAll('.dashboardQuickAddBtn').forEach(btn=>{
+    btn.addEventListener('click', (e)=>{
+      quickAdd({...shown[Number(e.target.dataset.idx)]}, document.getElementById('dashboardQuickAddStatus'), e.target);
+    });
+  });
+}
+
 // ---- Snel toevoegen: door de gebruiker zelf bewaarde opties ----
 // Persoonlijk per naam, opgeslagen in Supabase zodat het overal beschikbaar
 // is (niet gebonden aan één apparaat/browser zoals bij localStorage).
@@ -5992,6 +6219,7 @@ async function startApp(){
   await checkTredictSyncStatus();
   await renderDashboard();
   startAutoRefresh();
+  autoFillPlannedTrainings(currentOwner());
 }
 
 bootGate();
