@@ -346,7 +346,10 @@ def main():
     # (hoogste time_stamp) -- de gepagineerde respons levert niet
     # gegarandeerd chronologisch aan binnen 1 dag.
     def is_complete(m):
-        return m.get("bodyfat") is not None
+        # Een snel-weging zet bodyfat niet op None maar op 0.0 (bevestigd
+        # tegen echte data op 24 okt 2026) -- een vetpercentage van exact 0
+        # komt bij een mens niet voor, dus truthy-check i.p.v. is-not-None.
+        return bool(m.get("bodyfat"))
 
     by_date = {}
     for m in measurements:
@@ -366,6 +369,12 @@ def main():
         elif (m.get("time_stamp") or 0) >= (existing.get("time_stamp") or 0):
             by_date[d] = m
 
+    def or_none_if_zero(value):
+        # Zie is_complete() hierboven: bij een snel-weging zet FITAGE deze
+        # velden op 0.0 i.p.v. leeg -- 0 is fysiek onmogelijk voor deze
+        # metingen, dus dan liever expliciet leeg dan een misleidende 0.
+        return value if value else None
+
     body_comp_rows = []
     weight_rows = []
     for d, m in by_date.items():
@@ -374,13 +383,13 @@ def main():
             "owner": owner,
             "measurement_date": d,
             "kg": kg,
-            "bodyfat_pct": m.get("bodyfat"),
-            "muscle_pct": m.get("muscle"),
-            "water_pct": m.get("water"),
-            "bone_kg": m.get("bone"),
-            "bmi": m.get("bmi"),
-            "bmr": round(m["bmr"]) if m.get("bmr") is not None else None,
-            "visceral_fat": m.get("visfat"),
+            "bodyfat_pct": or_none_if_zero(m.get("bodyfat")),
+            "muscle_pct": or_none_if_zero(m.get("muscle")),
+            "water_pct": or_none_if_zero(m.get("water")),
+            "bone_kg": or_none_if_zero(m.get("bone")),
+            "bmi": or_none_if_zero(m.get("bmi")),
+            "bmr": round(m["bmr"]) if m.get("bmr") else None,
+            "visceral_fat": or_none_if_zero(m.get("visfat")),
             "raw": m,
         })
         if kg is not None:
