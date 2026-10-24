@@ -459,7 +459,6 @@
 
     <div class="card" style="margin-bottom:16px;">
       <h3>Maaltijden</h3>
-      <div id="dashboardQuickAdds" style="margin-bottom:14px;"></div>
       <div id="mealList"><div class="empty">Nog geen maaltijden ingevoerd voor deze dag.</div></div>
     </div>
 
@@ -3140,7 +3139,6 @@ async function renderDashboard(){
 
   renderRaceGoals(owner);
   renderTrainingPaceZones(owner);
-  renderDashboardQuickAdds();
 
   const meals = await loadMeals(dateStr);
   const totals = macroKcal(meals);
@@ -5053,38 +5051,6 @@ async function quickAdd(meal, statusEl, btn){
   }
   btn.disabled = false;
   renderDashboard();
-}
-
-// Toont een handvol eigen "Snel toevoegen"-items direct op het dashboard
-// (i.p.v. dat je eerst naar het tabblad Invoer moet) -- op verzoek, om
-// loggen van een vaak gegeten item met 1 klik te doen i.p.v. eerst te
-// moeten wisselen van tabblad. Items die bij dit moment van de dag horen
-// (zelfde tijdvensters als de sectie-in-/uitklap-logica hieronder) staan
-// vooraan, aangevuld tot een handvol knoppen. Logt op de opgeslagen
-// basishoeveelheid -- voor een aangepaste hoeveelheid (g/ml/stuks) is het
-// tabblad Invoer nog steeds nodig.
-async function renderDashboardQuickAdds(){
-  const el = document.getElementById('dashboardQuickAdds');
-  if(!el) return;
-  const owner = currentOwner();
-  if(!owner){ el.innerHTML = ''; return; }
-  const list = await loadCustomQuickAdds();
-  if(!list.length){ el.innerHTML = ''; return; }
-  const hour = currentAmsterdamHour();
-  const relevant = list.filter(m => isQaGroupOpenByTime(m.mealType, hour));
-  const rest = list.filter(m => !isQaGroupOpenByTime(m.mealType, hour));
-  const shown = [...relevant, ...rest].slice(0, 6);
-  el.innerHTML = `
-    <div class="meal-meta" style="margin-bottom:6px;">Snel toevoegen</div>
-    <div style="display:flex;flex-wrap:wrap;gap:6px;">
-      ${shown.map((m,i)=>`<button class="btn-secondary dashboardQuickAddBtn" data-idx="${i}" style="font-size:12px;padding:6px 10px;">${getFoodEmoji(m.desc)} ${escapeHtml(m.desc)} &middot; ${m.kcal} kcal</button>`).join('')}
-    </div>
-    <div id="dashboardQuickAddStatus" class="status-msg" style="margin-top:6px;"></div>`;
-  el.querySelectorAll('.dashboardQuickAddBtn').forEach(btn=>{
-    btn.addEventListener('click', (e)=>{
-      quickAdd({...shown[Number(e.target.dataset.idx)]}, document.getElementById('dashboardQuickAddStatus'), e.target);
-    });
-  });
 }
 
 // ---- Snel toevoegen: door de gebruiker zelf bewaarde opties ----
