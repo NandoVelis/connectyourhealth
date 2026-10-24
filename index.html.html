@@ -3778,13 +3778,14 @@ async function saveWeight(dateStr, kg){
 // sedentair, geen dagelijkse basisbeweging erin verrekend) -- dus geen
 // aparte "gratis" baseline aan stappen meer nodig om dubbeltelling te
 // voorkomen: ELKE gelogde stap telt hier gewoon mee.
-// Op 4 okt verlaagd van 0.0005 naar 0.0004 (-20%, conservatieve eerste stap):
-// 12 dagen sinds de 1.13-calibratie (22 sept-3 okt) laten op hoge-stappendagen
-// een gemiddeld +24kcal/dag overschatting zien t.o.v. Garmins eigen dagtotaal,
-// met een matige correlatie (r=0.58) tussen hoeveelheid losse stappen en de
-// overschatting -- dus eerst voorzichtig bijstellen, bij de volgende wekelijkse
-// kalibraties verder verfijnen op basis van meer data.
-const KCAL_PER_STEP_PER_KG = 0.0004;
+// Op 4 okt verlaagd van 0.0005 naar 0.0004 (-20%), maar dat bleek juist een
+// structurele onderschatting te geven: over de 27 vergelijkbare dagen van
+// 24 sept-23 okt (met trainingsdata, Garmin-dagtotaal en gewicht) zat 0.0004
+// gemiddeld ~44 kcal/dag te laag t.o.v. Garmins eigen dagtotaal. Op 24 okt
+// herijkt naar 0.00047 (som-verhouding over die 27 dagen, na uitsluiting van
+// 11 okt -- die dag had een ongelogd hardloop-rondje terug van de 4 Mijl
+// Groningen, wat de kalibratie anders zou vertekenen).
+const KCAL_PER_STEP_PER_KG = 0.00047;
 function extraKcalFromSteps(steps, weightKg){
   if(!steps || !weightKg) return 0;
   return Math.round(steps * KCAL_PER_STEP_PER_KG * weightKg);
