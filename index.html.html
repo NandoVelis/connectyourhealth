@@ -3503,6 +3503,7 @@ async function renderDashboard(){
     const actualChange = Math.round((weightToday.kg - weightYesterday.kg) * 100) / 100;
     const yesterdayBalans = await loadKcalBalansSum(owner, addDaysToDateStr(dateStr, -2), yesterdayStr);
     const expectedChange = Math.round((yesterdayBalans / 7700) * 100) / 100;
+    const expectedWeight = Math.round((weightYesterday.kg + expectedChange) * 100) / 100;
     weightCheckRowEl.style.display = '';
     document.getElementById('vitalWeightCheck').textContent = (actualChange>=0?'+':'') + actualChange + ' kg';
     const gap = Math.abs(actualChange - expectedChange);
@@ -3510,7 +3511,7 @@ async function renderDashboard(){
       ? 'komt overeen met de kcal-balans'
       : 'grotendeels vocht/glycogeen, geen echte vet-verandering';
     document.getElementById('vitalWeightCheckHint').textContent =
-      `gisteren ${yesterdayBalans>=0?'+':''}${Math.round(yesterdayBalans)} kcal (verwacht ${expectedChange>=0?'+':''}${expectedChange} kg) \u2192 ${uitleg}`;
+      `verwacht ${expectedWeight} kg (obv gisteren ${yesterdayBalans>=0?'+':''}${Math.round(yesterdayBalans)} kcal), werkelijk ${weightToday.kg} kg \u2192 ${uitleg}`;
   } else {
     weightCheckRowEl.style.display = 'none';
   }
