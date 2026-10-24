@@ -33,12 +33,14 @@ jobs:
           python-version: '3.12'
 
       - name: Installeer dependencies
-        run: pip install --upgrade pycryptodome requests
+        run: pip install --upgrade pycryptodome requests garminconnect curl_cffi
 
       - name: Sync FITAGE voor Nando
         env:
           FITAGE_OWNER: Nando
           FITAGE_EMAIL: ${{ secrets.FITAGE_EMAIL_NANDO }}
           FITAGE_PASSWORD: ${{ secrets.FITAGE_PASSWORD_NANDO }}
+          GARMIN_EMAIL: ${{ secrets.GARMIN_EMAIL_NANDO }}
+          GARMIN_PASSWORD: ${{ secrets.GARMIN_PASSWORD_NANDO }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: python3 scripts/sync_fitage.py
