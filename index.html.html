@@ -3385,21 +3385,23 @@ async function renderDashboard(){
     ? (Math.floor(vitals.sleepMinutes/60)+'u'+String(vitals.sleepMinutes%60).padStart(2,'0')+'m') + (gToday && gToday.sleep_score!=null ? ` (${Math.round(gToday.sleep_score)})` : '')
     : '\u2014';
 
-  // Body Battery: de sync vult vooralsnog alleen "hersteld/verbruikt
-  // vannacht" (body_battery_change, uit de slaapdata) -- een echte
-  // max-van-vandaag-waarde (body_battery_max) wordt momenteel niet
-  // opgehaald door sync_garmin.py, dus die kolom staat altijd leeg. Toon
-  // daarom de nachtelijke verandering zelf als hoofdgetal i.p.v. een
-  // permanent "\u2014" met de eigenlijke info alleen in de subtekst.
+  // Body Battery: sinds de Garmin Personal API-migratie (okt 2026) komt
+  // body_battery_change uit v2/dailysummaries' chargedValue-drainedValue
+  // (sinds middernacht, dag-breed) i.p.v. de vroegere nachtelijke-
+  // slaapdata-waarde van de onofficiele API -- vandaar "vandaag" i.p.v.
+  // "vannacht" in de tekst. Een echte max-van-vandaag-waarde
+  // (body_battery_max) wordt nog steeds niet opgehaald, dus die kolom
+  // staat altijd leeg; toon daarom de verandering zelf als hoofdgetal
+  // i.p.v. een permanent "\u2014".
   const bbEl = document.getElementById('vitalBodyBattery');
   const bbHintEl = document.getElementById('vitalBodyBatteryHint');
   if(gToday && gToday.body_battery_change!=null){
     const change = Math.round(gToday.body_battery_change);
     bbEl.textContent = (change>=0?'+':'') + change;
-    bbHintEl.textContent = change>=0 ? 'hersteld vannacht' : 'verbruikt vannacht (weinig herstel)';
+    bbHintEl.textContent = change>=0 ? 'hersteld vandaag' : 'verbruikt vandaag (weinig herstel)';
   } else {
     bbEl.textContent = '\u2014';
-    bbHintEl.textContent = 'Garmin (test)';
+    bbHintEl.textContent = 'geen data';
   }
 
   // Trainingsbelasting-ratio: >1,3 duidt op een hogere acute t.o.v.

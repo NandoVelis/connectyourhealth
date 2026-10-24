@@ -159,11 +159,21 @@ class PersonalApiClient:
         summary_rows = summary_data if isinstance(summary_data, list) else (summary_data or {}).get("data") or []
         summary_row = summary_rows[0] if summary_rows else {}
         calories = summary_row.get("calories") or {}
+        # Body Battery: de Personal API heeft (nog) geen losse "nachtelijke
+        # verandering"-waarde zoals de onofficiele API die via de slaapdata
+        # gaf -- v2/dailysummaries geeft wel een dag-breed chargedValue/
+        # drainedValue (sinds 00:00 lokale tijd), dat verschil is de beste
+        # beschikbare benadering i.p.v. de kolom permanent leeg te laten.
+        body_battery = summary_row.get("bodyBattery") or {}
+        bb_change = None
+        if body_battery.get("chargedValue") is not None or body_battery.get("drainedValue") is not None:
+            bb_change = (body_battery.get("chargedValue") or 0) - (body_battery.get("drainedValue") or 0)
         return {
             "totalSteps": total_steps,
             "totalKilocalories": calories.get("burnedTotal"),
             "activeKilocalories": calories.get("burnedActive"),
             "bmrKilocalories": calories.get("burnedResting"),
+            "bodyBatteryChange": bb_change,
         }
 
     def get_activities_by_date(self, start_date, end_date, activity_type=None):
@@ -817,6 +827,12 @@ def main():
         row["garmin_total_kcal"] = as_int(stats.get("totalKilocalories"))
         row["garmin_active_kcal"] = as_int(stats.get("activeKilocalories"))
         row["garmin_bmr_kcal"] = as_int(stats.get("bmrKilocalories"))
+        # Alleen overschrijven als de Personal API dit meegaf (sleutel ontbreekt
+        # op het onofficiele garminconnect-pad, waar body_battery_change al via
+        # de slaapdata hierboven gevuld wordt -- dit zou die anders stilletjes
+        # leeg maken).
+        if stats.get("bodyBatteryChange") is not None:
+            row["body_battery_change"] = stats["bodyBatteryChange"]
         row["raw"]["stats"] = stats
 
     if isinstance(today_run_activities, list):
