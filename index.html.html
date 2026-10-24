@@ -323,6 +323,13 @@
     >
       🔄 Synchroniseer Garmin
     </button>
+    <button
+      id="syncFitageBtn"
+      class="btn-primary"
+      style="background:#00A896;color:#FFFFFF;"
+    >
+      🔄 Synchroniseer FITAGE
+    </button>
     <div class="datenav">
       <button id="darkModeToggle" title="Donkere modus aan/uit">&#9789;</button>
       <button id="prevDay">&larr;</button>
@@ -6180,6 +6187,48 @@ document
 
       btn.disabled = false;
       btn.innerText = "🔄 Synchroniseer Garmin";
+
+    }
+
+  });
+
+document
+  .getElementById("syncFitageBtn")
+  ?.addEventListener("click", async () => {
+
+    const btn = document.getElementById("syncFitageBtn");
+    const owner = currentOwner();
+    if(!owner){
+      alert("Vul eerst je naam in bij het tabblad Team.");
+      return;
+    }
+
+    btn.disabled = true;
+    btn.innerText = "Synchroniseren...";
+
+    // Zelfde patroon als de Garmin-knop hierboven: trigger-fitage-sync start
+    // alleen de GitHub Action (auto-sync-fitage.yml) en geeft meteen
+    // antwoord, dus even wachten voor we het dashboard verversen.
+    try {
+      const { data, error } = await supabaseClient.functions.invoke('trigger-fitage-sync', { method: 'POST' });
+      if(error || (data && data.ok === false)){
+        const reason = (data && data.reason) || (data && data.error) || (error && error.message) || 'onbekende fout';
+        alert("FITAGE-synchronisatie starten mislukt: " + reason);
+        return;
+      }
+      btn.innerText = "Bezig bij FITAGE...";
+      await new Promise(resolve => setTimeout(resolve, 15000));
+      await renderDashboard();
+      alert("FITAGE-synchronisatie voltooid (of nog bezig -- ververs zo nodig nogmaals).");
+    } catch (err) {
+
+      console.error(err);
+      alert("Synchronisatie mislukt (netwerkfout)");
+
+    } finally {
+
+      btn.disabled = false;
+      btn.innerText = "🔄 Synchroniseer FITAGE";
 
     }
 
