@@ -113,6 +113,8 @@ class PersonalApiClient:
         rows, d = [], start
         while d <= end:
             values = self._get("/sleep-service/sleep/dailySleep", {"date": d.isoformat()})
+            if os.environ.get("GARMIN_DEBUG_RAW") and d == end:
+                print(f"DEBUG dailySleep({d.isoformat()}): {str(values)[:2000]}")
             rows.append({"calendarDate": d.isoformat(), "values": values})
             d += timedelta(days=1)
         return rows
@@ -155,6 +157,9 @@ class PersonalApiClient:
         )
         summary_rows = summary_data if isinstance(summary_data, list) else (summary_data or {}).get("dailySummaries") or []
         summary_row = summary_rows[0] if summary_rows else {}
+        if os.environ.get("GARMIN_DEBUG_RAW"):
+            print(f"DEBUG v2/dailysummaries({calendar_date}) raw: {str(summary_data)[:2000]}")
+            print(f"DEBUG v2/dailysummaries({calendar_date}) row: {str(summary_row)[:2000]}")
         calories = summary_row.get("calories") or {}
         return {
             "totalSteps": total_steps,
