@@ -3492,12 +3492,11 @@ async function renderDashboard(){
   const bodyCompRowEl = document.getElementById('vitalBodyCompRow');
   if(bodyComp && (bodyComp.bodyfat_pct!=null || bodyComp.muscle_pct!=null)){
     bodyCompRowEl.style.display = '';
-    const parts = [];
-    if(bodyComp.bodyfat_pct!=null) parts.push(`${bodyComp.bodyfat_pct}% vet`);
-    if(bodyComp.muscle_pct!=null) parts.push(`${bodyComp.muscle_pct}% spier`);
-    document.getElementById('vitalBodyComp').textContent = parts.join(' \u00b7 ');
-    document.getElementById('vitalBodyCompDate').textContent = bodyComp.measurement_date !== dateStr
-      ? `laatste meting: ${bodyComp.measurement_date}` : 'FITAGE';
+    document.getElementById('vitalBodyComp').textContent = bodyComp.bodyfat_pct!=null ? `${bodyComp.bodyfat_pct}% vet` : '\u2014';
+    const metaParts = [];
+    if(bodyComp.muscle_pct!=null) metaParts.push(`${bodyComp.muscle_pct}% spier`);
+    metaParts.push(bodyComp.measurement_date !== dateStr ? `laatste meting: ${bodyComp.measurement_date}` : 'FITAGE');
+    document.getElementById('vitalBodyCompDate').textContent = metaParts.join(' \u00b7 ');
   } else {
     bodyCompRowEl.style.display = 'none';
   }
