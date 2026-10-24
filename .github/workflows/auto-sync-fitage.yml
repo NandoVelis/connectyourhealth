@@ -1,0 +1,39 @@
+name: Auto-sync FITAGE
+
+# Synct gewicht + lichaamssamenstelling (vetpercentage, spierpercentage,
+# water, bot, BMI, BMR, visceraal vet) van een FITAGE/QNClouds-weegschaal
+# naar Supabase. Zie scripts/sync_fitage.py voor het (reverse-engineerde,
+# niet-officiele) protocol en de bijbehorende kanttekeningen.
+#
+# Vereiste repo-secrets (Settings -> Secrets and variables -> Actions):
+#   FITAGE_EMAIL_NANDO, FITAGE_PASSWORD_NANDO  (je gewone FITAGE-app-login)
+#
+# Een weegschaal wordt doorgaans hooguit een paar keer per dag gebruikt --
+# in tegenstelling tot Garmin's doorlopende activiteiten-/vitals-stroom is
+# een uurlijkse cron hier overkill. Elke 2 uur is ruim voldoende; gebruik
+# "Run workflow" hierboven voor een directe sync na het wegen.
+on:
+  schedule:
+    - cron: '0 */2 * * *'
+  workflow_dispatch:
+
+jobs:
+  sync-fitage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Installeer dependencies
+        run: pip install --upgrade pycryptodome requests
+
+      - name: Sync FITAGE voor Nando
+        env:
+          FITAGE_OWNER: Nando
+          FITAGE_EMAIL: ${{ secrets.FITAGE_EMAIL_NANDO }}
+          FITAGE_PASSWORD: ${{ secrets.FITAGE_PASSWORD_NANDO }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: python3 scripts/sync_fitage.py

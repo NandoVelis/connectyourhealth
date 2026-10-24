@@ -383,6 +383,11 @@
           <span class="stat-val" id="vitalWeight">&mdash;</span>
           <span class="meal-meta" id="vitalWeightWeek">week gem. &mdash;</span>
         </div>
+        <div class="stat-row" id="vitalBodyCompRow" style="display:none;border-bottom:none;flex-direction:column;align-items:flex-start;">
+          <span class="stat-label">&#129496; Lichaamssamenstelling</span>
+          <span class="stat-val" id="vitalBodyComp">&mdash;</span>
+          <span class="meal-meta" id="vitalBodyCompDate"></span>
+        </div>
         <div class="stat-row" style="border-bottom:none;flex-direction:column;align-items:flex-start;">
           <span class="stat-label">&#128267; Body Battery herstel</span>
           <span class="stat-val" id="vitalBodyBattery">&mdash;</span>
@@ -3476,6 +3481,20 @@ async function renderDashboard(){
 
   document.getElementById('vitalWeightWeek').innerHTML = 'week gem. ' + (weekWeightAvg!=null ? weekWeightAvg+' kg' : '\u2014') + deltaBadgeInverted(weightDelta);
 
+  const bodyComp = await loadMostRecentBodyComposition(dateStr);
+  const bodyCompRowEl = document.getElementById('vitalBodyCompRow');
+  if(bodyComp && (bodyComp.bodyfat_pct!=null || bodyComp.muscle_pct!=null)){
+    bodyCompRowEl.style.display = '';
+    const parts = [];
+    if(bodyComp.bodyfat_pct!=null) parts.push(`${bodyComp.bodyfat_pct}% vet`);
+    if(bodyComp.muscle_pct!=null) parts.push(`${bodyComp.muscle_pct}% spier`);
+    document.getElementById('vitalBodyComp').textContent = parts.join(' \u00b7 ');
+    document.getElementById('vitalBodyCompDate').textContent = bodyComp.measurement_date !== dateStr
+      ? `laatste meting: ${bodyComp.measurement_date}` : 'FITAGE';
+  } else {
+    bodyCompRowEl.style.display = 'none';
+  }
+
   const {score: dagscoreVal, parts: dagscoreParts} = computeDagscore(totals.kcal, training, vitals);
   const dagscoreNumEl = document.getElementById('dagscoreNum');
   dagscoreNumEl.textContent = dagscoreVal!=null ? dagscoreVal.toFixed(1) : '\u2014';
@@ -3790,6 +3809,25 @@ async function loadMostRecentWeight(dateStr){
   if(error || !data) return null;
   return { kg: data.kg };
 }
+
+// Lichaamssamenstelling (FITAGE-weegschaal, scripts/sync_fitage.py) --
+// niet elke dag een nieuwe meting, dus net als loadMostRecentWeight de
+// meest recente t/m dateStr pakken i.p.v. alleen exact die dag.
+async function loadMostRecentBodyComposition(dateStr){
+  const owner = currentOwner();
+  if(!owner) return null;
+  const { data, error } = await supabaseClient
+    .from('body_composition')
+    .select('measurement_date, bodyfat_pct, muscle_pct')
+    .eq('owner', owner)
+    .lte('measurement_date', dateStr)
+    .order('measurement_date', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if(error || !data) return null;
+  return data;
+}
+
 // Kcal-schuld: handmatig gezette "af te werken" overschotten (bv. na een
 // uitschieterdag), die vanzelf aflopen naarmate de dagelijkse kcal-balans
 // (uit kcal_balans_daily, dezelfde formule als de chat-routines) negatief
@@ -6156,7 +6194,7 @@ document
 // gedebounced i.p.v. per los event opnieuw te draaien.
 let _autoRefreshChannel = null;
 let _autoRefreshDebounce = null;
-const AUTO_REFRESH_TABLES = ['garmin_metrics','training','weight','vitals','meals','kcal_schuld'];
+const AUTO_REFRESH_TABLES = ['garmin_metrics','training','weight','vitals','meals','kcal_schuld','body_composition'];
 function startAutoRefresh(){
   const owner = currentOwner();
   if(!owner || _autoRefreshChannel) return;
