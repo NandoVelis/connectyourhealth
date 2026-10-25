@@ -3460,7 +3460,11 @@ async function renderDashboard(){
     loadHintEl.textContent = hint;
   } else {
     loadEl.textContent = '\u2014';
-    loadHintEl.textContent = 'Garmin (test)';
+    // Komt uit Garmin's trainingstatus-endpoint, dat sinds de Personal
+    // API-migratie (24 okt 2026) niet meer bestaat -- oudere dagen houden
+    // nog hun laatst bekende waarde vast (carry-forward in sync_garmin.py),
+    // maar vanaf hier komt dit structureel leeg binnen, niet tijdelijk.
+    loadHintEl.textContent = 'niet beschikbaar (Garmin Personal API heeft geen trainingstatus-data)';
   }
   const loadSyncedAtEl = document.getElementById('vitalTrainingLoadSyncedAt');
   if(gToday && gToday.updated_at){
