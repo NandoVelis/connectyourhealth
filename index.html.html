@@ -3946,6 +3946,18 @@ function addDaysToDateStr(dateStr, days){
   d.setDate(d.getDate()+days);
   return fmtDate(d);
 }
+async function loadKcalBalansRows(owner, afterDateStr, uptoDateStr){
+  if(!owner) return [];
+  const { data, error } = await supabaseClient
+    .from('kcal_balans_daily')
+    .select('dag, kcal_balans')
+    .eq('owner', owner)
+    .gt('dag', afterDateStr)
+    .lte('dag', uptoDateStr)
+    .order('dag', { ascending: false });
+  if(error || !data) return [];
+  return data;
+}
 async function renderKcalSchuld(owner, dateStr, balansSoFar, weightKg, runningStats){
   const cardEl = document.getElementById('kcalSchuldCard');
   const detailEl = document.getElementById('kcalSchuldDetail');
@@ -3981,6 +3993,15 @@ async function renderKcalSchuld(owner, dateStr, balansSoFar, weightKg, runningSt
   const kcalPerKm = runningStats ? runningStats.kcalPerKm : null;
   const kmHardlopen = estimateRunKmToBurn(dagdoel, weightKg, kcalPerKm);
   const kmWandelen = estimateWalkKmToBurn(dagdoel, weightKg);
+  const dagRijen = await loadKcalBalansRows(owner, schuld.startdatum, uptoVoorCredits);
+  const dagRijenHtml = dagRijen.length ? dagRijen.map(r => {
+    const bal = r.kcal_balans!=null ? Math.round(Number(r.kcal_balans)) : null;
+    const kleur = bal==null ? 'var(--ink)' : (bal<0 ? 'var(--ok, #1a7f37)' : 'var(--err, #c0392b)');
+    return `<div class="stat-row" style="padding:4px 0;border-bottom:none;">
+      <span class="stat-label" style="font-weight:400;">${r.dag}</span>
+      <span class="stat-val" style="font-size:13px;color:${kleur};">${bal==null ? 'geen data' : (bal>=0?'+':'')+bal+' kcal'}</span>
+    </div>`;
+  }).join('') : '<div class="meal-meta">Nog geen afgesloten dagen.</div>';
   detailEl.innerHTML = `
     <div class="stat-row">
       <span class="stat-label">Resterend saldo</span>
@@ -4001,7 +4022,11 @@ async function renderKcalSchuld(owner, dateStr, balansSoFar, weightKg, runningSt
       <span class="stat-val">~${kmWandelen} km extra wandelen</span>
     </div>` : ''}
     <div class="meal-meta" style="margin-top:4px;">Netto kcal-balans sinds ${schuld.startdatum} (afgesloten dagen): ${afgewerktTotNu>=0?'+':''}${Math.round(afgewerktTotNu)} kcal.${balansSoFar!=null ? ` Balans tot nu toe vandaag: ${balansSoFar>=0?'+':''}${Math.round(balansSoFar)} kcal (telt morgen pas mee).` : ''}</div>
-    ${schuld.omschrijving ? `<div class="meal-meta" style="margin-top:4px;">${escapeHtml(schuld.omschrijving)}</div>` : ''}`;
+    ${schuld.omschrijving ? `<div class="meal-meta" style="margin-top:4px;">${escapeHtml(schuld.omschrijving)}</div>` : ''}
+    <details style="margin-top:8px;">
+      <summary style="cursor:pointer;font-size:13px;color:var(--ink);">Toon per dag</summary>
+      <div style="margin-top:4px;">${dagRijenHtml}</div>
+    </details>`;
 }
 async function saveWeight(dateStr, kg){
   const owner = currentOwner();
