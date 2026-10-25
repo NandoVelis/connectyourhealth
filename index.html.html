@@ -1514,7 +1514,7 @@ async function loadGarminStepsForDate(owner, dateStr){
   try{
     const { data, error } = await supabaseClient
       .from('garmin_metrics')
-      .select('steps_total, steps_training, garmin_total_kcal')
+      .select('steps_total, steps_training, garmin_total_kcal, garmin_active_kcal')
       .eq('owner', owner)
       .eq('metric_date', dateStr)
       .maybeSingle();
@@ -3206,6 +3206,24 @@ async function renderDashboard(){
         burned = estimatedRestKcal;
         burnedIsEstimate = true;
       }
+    }
+  }
+  // Voor de LOPENDE dag is Garmin's eigen "garmin_active_kcal" (tot nu toe)
+  // een betere live-schatting dan onze eigen stappenformule -- op 25 okt
+  // 2026 bleek die laatste op rustdagen structureel 1,6x-3,4x hoger uit te
+  // komen dan wat Garmin zelf als actieve kcal meet. Garmin's dagtotaal zelf
+  // (burnedFromGarminBackup) kan voor vandaag niet gebruikt worden (loopt
+  // achter, geen volledige-dag-cijfer), maar active_kcal-tot-nu-toe is een
+  // gemeten tussenstand i.p.v. een schatting, en telt zowel training als
+  // overige beweging al mee -- dus i.p.v. onze eigen rust-kcal-schatting plus
+  // stappenformule op te tellen, gebruiken we onze rust-kcal-schatting (voor
+  // de hele dag) plus Garmin's gemeten actieve kcal tot nu toe.
+  if(!isPastDay && garminStepsToday && garminStepsToday.garmin_active_kcal!=null){
+    const restKcalForToday = training ? training.restKcal : estimatedRestKcal;
+    if(restKcalForToday!=null){
+      burned = restKcalForToday + garminStepsToday.garmin_active_kcal;
+      burnedIsEstimate = true;
+      stepsKcalAdded = true; // voorkomt dat extraStepsKcal hieronder nog eens wordt opgeteld
     }
   }
   // Geplande training (uit het Garmin-workoutschema) nog niet gesynchroniseerd
