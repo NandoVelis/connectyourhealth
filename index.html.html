@@ -3222,17 +3222,22 @@ async function renderDashboard(){
       }
     }
   }
-  // Voor de LOPENDE dag is Garmin's eigen "garmin_active_kcal" (tot nu toe)
-  // een betere live-schatting dan onze eigen stappenformule -- op 25 okt
-  // 2026 bleek die laatste op rustdagen structureel 1,6x-3,4x hoger uit te
-  // komen dan wat Garmin zelf als actieve kcal meet. Garmin's dagtotaal zelf
+  // Voor de LOPENDE dag, ZOLANG er nog geen echte activiteit gelogd is, is
+  // Garmin's eigen "garmin_active_kcal" (tot nu toe) een betere live-
+  // schatting dan onze eigen stappenformule -- op 25 okt 2026 bleek die
+  // laatste op rustdagen structureel 1,6x-3,4x hoger uit te komen dan wat
+  // Garmin zelf als actieve kcal meet. Garmin's dagtotaal zelf
   // (burnedFromGarminBackup) kan voor vandaag niet gebruikt worden (loopt
   // achter, geen volledige-dag-cijfer), maar active_kcal-tot-nu-toe is een
-  // gemeten tussenstand i.p.v. een schatting, en telt zowel training als
-  // overige beweging al mee -- dus i.p.v. onze eigen rust-kcal-schatting plus
-  // stappenformule op te tellen, gebruiken we onze rust-kcal-schatting (voor
-  // de hele dag) plus Garmin's gemeten actieve kcal tot nu toe.
-  if(!isPastDay && garminStepsToday && garminStepsToday.garmin_active_kcal!=null){
+  // gemeten tussenstand i.p.v. een schatting. ZODRA er wel een echte
+  // activiteit gelogd is, NIET meer overschrijven: Garmin's active_kcal
+  // bevat dan ook die activiteit, maar niet op dezelfde manier opgesplitst
+  // als de losse "Totaal verbrand"-regels hieronder (activiteit/rust/
+  // stappen) -- dat gaf anders een bovenste totaal dat niet meer optelde
+  // tot de som van de zichtbare regels (bv. 706+1741+41=2488 i.p.v. de
+  // getoonde 2394), ontdekt via een screenshot op 25 okt 2026.
+  const hasRealActivityToday = !!(training && training.activities && training.activities.length>0);
+  if(!isPastDay && !hasRealActivityToday && garminStepsToday && garminStepsToday.garmin_active_kcal!=null){
     const restKcalForToday = training ? training.restKcal : estimatedRestKcal;
     if(restKcalForToday!=null){
       burned = restKcalForToday + garminStepsToday.garmin_active_kcal;
