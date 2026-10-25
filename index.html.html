@@ -4070,7 +4070,15 @@ async function saveWeight(dateStr, kg){
 // herijkt naar 0.00047 (som-verhouding over die 27 dagen, na uitsluiting van
 // 11 okt -- die dag had een ongelogd hardloop-rondje terug van de 4 Mijl
 // Groningen, wat de kalibratie anders zou vertekenen).
-const KCAL_PER_STEP_PER_KG = 0.00047;
+// Op 25 okt bleek 0.00047 op rustdagen specifiek 1,6x-3,4x hoger uit te
+// komen dan Garmin's eigen gemeten active_kcal (zie kcal_balans_daily-
+// migratie en de lopende-dag-aanpassing van diezelfde dag) -- de lopende
+// dag en afgesloten dagen gebruiken daardoor allebei al Garmin's eigen
+// metingen i.p.v. deze formule. Deze constante wordt nog wel gebruikt voor
+// kleinere weergave-onderdelen (bv. losse "stappen vandaag"-cijfers), dus
+// op verzoek niet helemaal teruggezet naar 0.0004 maar naar het midden
+// tussen de huidige en vorige waarde, i.p.v. een drastische correctie.
+const KCAL_PER_STEP_PER_KG = 0.000435;
 function extraKcalFromSteps(steps, weightKg){
   if(!steps || !weightKg) return 0;
   return Math.round(steps * KCAL_PER_STEP_PER_KG * weightKg);
