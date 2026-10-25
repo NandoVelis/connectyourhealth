@@ -3188,6 +3188,8 @@ async function renderDashboard(){
   let trainingRelevantSteps = null;
   let garminStepsToday = null;
   let stepsKcalAdded = false;
+  const isPastDay = dateStr < fmtDate(new Date());
+  let burnedFromGarminBackup = false;
   if(stepsWeightKg){
     garminStepsToday = await loadGarminStepsForDate(owner, dateStr);
     if(garminStepsToday && garminStepsToday.steps_total!=null){
@@ -3199,18 +3201,20 @@ async function renderDashboard(){
       if(training){ trainingExtraStepsKcal = kcal; } else { extraStepsKcal = kcal; }
       if(kcal>0 && burned!=null){ burned += kcal; stepsKcalAdded = true; }
     }
-  }
-  // Backup als er geen training gesynchroniseerd is voor deze dag: Garmin's
-  // eigen dagtotaal is een betere gok dan de vaste profielschatting (die
-  // dag-op-dag-variatie mist), maar alleen voor afgesloten dagen -- voor de
-  // lopende dag is Garmin's cijfer nog maar "tot nu toe" en dus geen goede
-  // vervanging voor de volledige-dag-schatting.
-  const isPastDay = dateStr < fmtDate(new Date());
-  let burnedFromGarminBackup = false;
-  if(burned==null && isPastDay && garminStepsToday && garminStepsToday.garmin_total_kcal!=null){
-    burned = garminStepsToday.garmin_total_kcal;
-    burnedIsEstimate = true;
-    burnedFromGarminBackup = true;
+    // Afgesloten dag: Garmin's eigen gemeten dagtotaal (incl. BMR, activiteiten
+    // en stappen) is betrouwbaarder dan onze eigen optelling hierboven --
+    // rest_kcal is een profielschatting die structureel ~170-400 kcal onder
+    // Garmin's gemeten BMR zit, en de losse activiteit-kcal wijkt soms ook af
+    // van Garmin's eigen active_kcal-opsplitsing (ontdekt 25 okt 2026). Geldt
+    // alleen voor afgesloten dagen (incl. als er geen trainingsrij is) -- voor
+    // vandaag is Garmin's dagtotaal nog maar "tot nu toe". De losse regels
+    // (rust/activiteit/stappen) blijven zichtbaar als context maar tellen dan
+    // niet per-definitie meer op tot dit getal.
+    if(isPastDay && garminStepsToday && garminStepsToday.garmin_total_kcal!=null){
+      burned = garminStepsToday.garmin_total_kcal;
+      burnedIsEstimate = true;
+      burnedFromGarminBackup = true;
+    }
   }
   if(burned==null && stepsWeightKg){
     const profile = await loadProfile(owner);
@@ -3390,7 +3394,8 @@ async function renderDashboard(){
         <span class="stat-label" style="font-weight:700;">Totaal verbrand</span>
         <span class="stat-val">${burned ?? training.totalKcal ?? 0} kcal</span>
       </div>
-      ${garminCompareRow(garminStepsToday, dateStr, training.restKcal)}`;
+      ${burnedFromGarminBackup ? `<div class="meal-meta" style="margin-top:4px;">Afgesloten dag &mdash; Garmin's eigen gemeten dagtotaal gebruikt i.p.v. de som van de regels hierboven (die kunnen hierdoor niet exact optellen).</div>` : ''}
+      ${burnedFromGarminBackup ? '' : garminCompareRow(garminStepsToday, dateStr, training.restKcal)}`;
   }
 
   const balansEl = document.getElementById('balansNum');
@@ -3405,11 +3410,13 @@ async function renderDashboard(){
   balansEl.textContent = (balans>=0?'+':'') + balans;
   balansEl.className = 'balans-number ' + (balans>0 ? 'balans-neg' : 'balans-pos');
   const noMealsSuffix = meals.length===0 ? ' \u2014 nog geen maaltijden gelogd' : '';
-  balansSubEl.textContent = (burnedIsEstimate
-    ? 'kcal ingenomen \u2212 geschat rustverbruik (nog niet gesynchroniseerd)'
-    : burned!==null
-      ? 'kcal ingenomen \u2212 verbrand (training)'
-      : 'kcal ingenomen (training nog niet opgehaald)') + noMealsSuffix;
+  balansSubEl.textContent = (burnedFromGarminBackup
+    ? 'kcal ingenomen \u2212 verbrand (Garmin dagtotaal)'
+    : burnedIsEstimate
+      ? 'kcal ingenomen \u2212 geschat rustverbruik (nog niet gesynchroniseerd)'
+      : burned!==null
+        ? 'kcal ingenomen \u2212 verbrand (training)'
+        : 'kcal ingenomen (training nog niet opgehaald)') + noMealsSuffix;
 
   // Sta je in de plus (meer gegeten dan verbrand), toon dan hoeveel extra
   // stappen nodig zijn om op netto 0 uit te komen -- zelfde formule als
