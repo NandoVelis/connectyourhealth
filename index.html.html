@@ -1635,13 +1635,27 @@ function estimateActivityKcalFromDistance(distanceKm, weightKg){
 // activiteiten-formule blijft de basis voor "Totaal verbrand"/balans, dit
 // is puur ter vergelijking. Voor de lopende dag is Garmin's cijfer nog maar
 // "tot nu toe" (dag niet afgerond), dus dat wordt erbij vermeld.
-function garminCompareRow(garminStepsToday, dateStr){
-  const kcal = garminStepsToday && garminStepsToday.garmin_total_kcal;
-  if(kcal==null) return '';
+function garminCompareRow(garminStepsToday, dateStr, restKcalForToday){
   const isToday = dateStr === fmtDate(new Date());
+  let kcal, label;
+  // Voor vandaag zegt Garmin's eigen "tot nu toe"-dagtotaal weinig vroeg op
+  // de dag (bv. 683 kcal om 8 uur 's ochtends) -- op verzoek i.p.v. dat rauwe
+  // cijfer een verwachting tonen: ons rust-kcal (voor de hele dag) plus
+  // Garmin's gemeten active_kcal tot nu toe, zonder de geplande-training-
+  // schatting (die zit al in "Totaal verbrand" hierboven, dit is de kale
+  // Garmin-gebaseerde tegenhanger daarvan). Voor afgesloten dagen blijft
+  // Garmin's eigen (dan al definitieve) dagtotaal gewoon staan.
+  if(isToday && restKcalForToday!=null && garminStepsToday && garminStepsToday.garmin_active_kcal!=null){
+    kcal = restKcalForToday + garminStepsToday.garmin_active_kcal;
+    label = 'Garmin dagtotaal (verwacht)';
+  } else {
+    kcal = garminStepsToday && garminStepsToday.garmin_total_kcal;
+    if(kcal==null) return '';
+    label = 'Garmin dagtotaal' + (isToday ? ' (tot nu toe)' : '');
+  }
   return `
       <div class="stat-row" style="border-top:1px solid var(--line);margin-top:10px;padding-top:10px;">
-        <span class="stat-label">&#128999; Garmin dagtotaal${isToday ? ' (tot nu toe)' : ''}</span>
+        <span class="stat-label">&#128999; ${label}</span>
         <span class="stat-val">${kcal} kcal</span>
       </div>`;
 }
@@ -3326,7 +3340,7 @@ async function renderDashboard(){
         <span class="stat-label" style="font-weight:700;">Totaal verbrand</span>
         <span class="stat-val">~${burned ?? estimatedRestKcal} kcal</span>
       </div>
-      ${burnedFromGarminBackup ? '' : garminCompareRow(garminStepsToday, dateStr)}`;
+      ${burnedFromGarminBackup ? '' : garminCompareRow(garminStepsToday, dateStr, estimatedRestKcal)}`;
   } else if(!training){
     detailEl.innerHTML = '<div class="empty">Nog niet opgehaald voor deze dag.</div>';
   } else {
@@ -3371,7 +3385,7 @@ async function renderDashboard(){
         <span class="stat-label" style="font-weight:700;">Totaal verbrand</span>
         <span class="stat-val">${burned ?? training.totalKcal ?? 0} kcal</span>
       </div>
-      ${garminCompareRow(garminStepsToday, dateStr)}`;
+      ${garminCompareRow(garminStepsToday, dateStr, training.restKcal)}`;
   }
 
   const balansEl = document.getElementById('balansNum');
