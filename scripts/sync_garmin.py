@@ -633,6 +633,21 @@ def main():
 
     garmin = login(owner, email, password, mfa_code, personal_api_key)
 
+    # Trainingstatus/trainingsbelasting (ACWR e.d.) bestaat niet in de
+    # Personal API (bevestigd tegen de officiele swagger-docs, 25 okt 2026)
+    # -- op verzoek alsnog de oude, onofficiele garminconnect-login gebruiken
+    # puur voor dit ene datapunt (zelfde sessie-hergebruik-tabel als
+    # sync_fitage.py's terugschrijf-actie), met de rest van de sync op de
+    # nieuwe API. Faalt dit (bv. MFA/sessie verlopen), dan blijft dit
+    # datapunt gewoon leeg i.p.v. de hele sync te laten crashen.
+    training_status_client = garmin
+    if personal_api_key:
+        try:
+            training_status_client = login(owner, email, password, mfa_code, None)
+        except Exception as e:
+            print(f"  WAARSCHUWING: kon niet inloggen bij de oude Garmin-login voor trainingstatus ({e}) -- overgeslagen.")
+            training_status_client = None
+
     today = date.today()
     week_start = today - timedelta(days=7)
 
@@ -641,7 +656,7 @@ def main():
     hrv = safe(garmin.get_hrv_data_range, week_start.isoformat(), today.isoformat())
     sleep = safe(garmin.get_sleep_daily, week_start.isoformat(), today.isoformat())
     max_metrics = safe(garmin.get_max_metrics_range, week_start.isoformat(), today.isoformat())
-    training_status = safe(garmin.get_training_status, today.isoformat())
+    training_status = safe(training_status_client.get_training_status, today.isoformat()) if training_status_client else None
     # Vroeger alleen voor "vandaag" opgehaald -- maar Garmin's dagtotaal-kcal
     # (totalKilocalories/activeKilocalories/bmrKilocalories) is de enige
     # betrouwbare bron voor het WERKELIJKE dagverbruik (i.t.t. onze eigen
