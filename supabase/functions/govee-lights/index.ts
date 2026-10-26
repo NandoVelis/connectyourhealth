@@ -11,7 +11,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 // KNIPPER-WAARSCHUWING ma t/m vr 07:50 en 13:50: lampen die aan staan knipperen 3x (3 min voor de uit).
 // UIT            ma t/m vr 07:53 en 13:53.
 // AAN            ma t/m vr 12:01 en 17:01.
-// WARM LICHT     dagelijks 20:00: kleurtemperatuur naar 2700K (lampen die aan staan); herstel bij de volgende 'aan'.
+// WARM LICHT     dagelijks 20:00: kleurtemperatuur naar 2000K (amber; de laagste stand die de lamp aankan) (lampen die aan staan); herstel bij de volgende 'aan'.
 // DIMMEN         zo t/m do vanaf 22:30, elke 5 min een stap, relatief aan de huidige helderheid (nooit hoger).
 // UIT            zo t/m do 23:00.
 // REGEN          overdag 07:00-20:15 (body {"event":"regen"}, elke 10 min): droog nu, regen binnen 30 min (Buienradar) -> 2x blauw pulseren, max 1x per uur.
@@ -433,10 +433,10 @@ Deno.serve(async (req) => {
         await sleep(700);
         if (!s.on) continue;
         if (s.temp && s.temp > 0) cb[d.device] = s.temp;
-        if (await setTemp(key, d, 2700)) n++;
+        if (await setTemp(key, d, 2000)) n++;
         await sleep(700);
       }
-      await log({ last_warm_date: t.date, color_base: cb }, `warm licht 2700K ${n} lampen`);
+      await log({ last_warm_date: t.date, color_base: cb }, `warm licht 2000K (amber) ${n} lampen`);
       return Response.json({ action: "warm", lamps: n });
     }
 
