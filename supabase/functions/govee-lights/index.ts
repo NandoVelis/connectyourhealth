@@ -1,15 +1,20 @@
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
-// Govee-lampen automatisch aan/uit.
-// AAN: zodra de slaap van vandaag in garmin_metrics staat (= wakker + horloge gesynct), max 1x per dag.
-// AAN op vaste tijden: ma t/m vr om 12:01 en 17:01 Europe/Amsterdam (venster :01-:14), max 1x per tijdstip per dag.
-// UIT op vaste tijden: ma t/m vr om 07:53 en 13:53 Europe/Amsterdam (venster :53-:59), max 1x per tijdstip per dag.
-// DIMMEN: zo t/m do vanaf 22:30, elke 5 min een stap, relatief aan de huidige helderheid (nooit hoger), alleen lampen die aan staan.
-// Helderheid van vóór het dimmen wordt onthouden (govee_state.brightness_base) en bij de volgende 'aan' hersteld.
-// UIT: zondag t/m donderdag om 23:00 Europe/Amsterdam (venster 23:00-23:14), max 1x per dag.
-// Alle tijden via Europe/Amsterdam, dus zomer-/wintertijd klopt vanzelf.
-// Vereist secret GOVEE_KEY (via GitHub-secret + deploy-workflow). Optioneel: GOVEE_OWNER (default Nando).
-// Aangeroepen door pg_cron-job 'govee-lights-5min' (zie supabase/govee_setup.sql).
+// Govee-lampen automatisch. Alle tijden Europe/Amsterdam, dus zomer-/wintertijd klopt vanzelf.
+//
+// WEKKER-LICHT   ma t/m vr 06:30-06:39: lamp gaat in 10 stappen van 1% naar normale helderheid (alleen lampen die uit stonden).
+// AAN (wakker)   zodra de slaap van vandaag in garmin_metrics staat, max 1x per dag (werkdagen alleen vóór 07:53).
+//                Daarna 1 minuut kleur-indicatie: groen = rusthartslag < 40 én slaapscore > 75,
+//                oranje = één van de twee, rood = geen van beide; daarna terug naar de vorige kleur.
+// UIT            ma t/m vr 07:53 en 13:53.
+// AAN            ma t/m vr 12:01 en 17:01.
+// WARM LICHT     dagelijks 20:00: kleurtemperatuur naar 2700K (lampen die aan staan); herstel bij de volgende 'aan'.
+// DIMMEN         zo t/m do vanaf 22:30, elke 5 min een stap, relatief aan de huidige helderheid (nooit hoger).
+// UIT            zo t/m do 23:00.
+// ESPN-DEADLINE  50-65 min voor espn_game.next_deadline: lampen die aan staan knipperen 3x (1x per deadline).
+//
+// Vereist secret GOVEE_KEY. Optioneel GOVEE_OWNER (default Nando).
+// Aangeroepen door pg_cron-jobs, zie supabase/govee_setup.sql.
 
 const TZ = "Europe/Amsterdam";
 const BASE = "https://openapi.api.govee.com/router/api/v1";
@@ -32,7 +37,15 @@ function nowAms() {
 
 const H = (key: string) => ({ "Govee-API-Key": key, "Content-Type": "application/json" });
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-const hasBrightness = (d: any) => (d.capabilities ?? []).some((c: any) => c.instance === "brightness");
+const hasCap = (d: any, inst: string) => (d.capabilities ?? []).some((c: any) => c.instance === inst);
+const hasBrightness = (d: any) => hasCap(d, "brightness");
+const hasTemp = (d: any) => hasCap(d, "colorTemperatureK");
+const hasColor = (d: any) => hasCap(d, "colorRgb");
+function tempRange(d: any) {
+  const c = (d.capabilities ?? []).find((c: any) => c.instance === "colorTemperatureK");
+  const r = c?.parameters?.range;
+  return { min: r?.min ?? 2000, max: r?.max ?? 9000 };
+}
 
 async function listLights(key: string) {
   const res = await fetch(`${BASE}/user/devices`, { headers: H(key) });
@@ -51,42 +64,58 @@ async function control(key: string, d: any, type: string, instance: string, valu
   });
   return r.ok;
 }
+const setPower = (k: string, d: any, on: boolean) => control(k, d, "devices.capabilities.on_off", "powerSwitch", on ? 1 : 0);
+const setBrightness = (k: string, d: any, v: number) => control(k, d, "devices.capabilities.range", "brightness", Math.max(1, Math.min(100, Math.round(v))));
+const setTemp = (k: string, d: any, v: number) => {
+  const { min, max } = tempRange(d);
+  return control(k, d, "devices.capabilities.color_setting", "colorTemperatureK", Math.max(min, Math.min(max, v)));
+};
+const setRgb = (k: string, d: any, v: number) => control(k, d, "devices.capabilities.color_setting", "colorRgb", v);
 
-async function getState(key: string, d: any): Promise<{ on: boolean | null; brightness: number | null }> {
+type LampState = { on: boolean | null; brightness: number | null; temp: number | null; rgb: number | null };
+async function getState(key: string, d: any): Promise<LampState> {
   const r = await fetch(`${BASE}/device/state`, {
     method: "POST", headers: H(key),
     body: JSON.stringify({ requestId: crypto.randomUUID(), payload: { sku: d.sku, device: d.device } }),
   });
-  if (!r.ok) return { on: null, brightness: null };
+  if (!r.ok) return { on: null, brightness: null, temp: null, rgb: null };
   const j = await r.json();
   const caps = j?.payload?.capabilities ?? [];
-  const pw = caps.find((c: any) => c.instance === "powerSwitch");
-  const br = caps.find((c: any) => c.instance === "brightness");
+  const val = (inst: string) => caps.find((c: any) => c.instance === inst)?.state?.value;
+  const num = (v: unknown) => (typeof v === "number" ? v : null);
   return {
-    on: pw ? pw.state?.value === 1 : null,
-    brightness: typeof br?.state?.value === "number" ? br.state.value : null,
+    on: val("powerSwitch") === undefined ? null : val("powerSwitch") === 1,
+    brightness: num(val("brightness")),
+    temp: num(val("colorTemperatureK")),
+    rgb: num(val("colorRgb")),
   };
 }
 
-// Zet alle lampen aan of uit. Bij 'aan' wordt de helderheid van vóór het dimmen (base) teruggezet.
-async function setAll(key: string, on: boolean, base: Record<string, number> = {}) {
+// Zet alle lampen aan of uit. Bij 'aan': helderheid en kleurtemperatuur van vóór dimmen/warm licht terugzetten.
+async function setAll(key: string, on: boolean, base: Record<string, number> = {}, colorBase: Record<string, number> = {}) {
   const lights = await listLights(key);
   let ok = 0;
   let restored = false;
+  let restoredColor = false;
   for (const d of lights) {
-    if (await control(key, d, "devices.capabilities.on_off", "powerSwitch", on ? 1 : 0)) ok++;
+    if (await setPower(key, d, on)) ok++;
     await sleep(700);
-    if (on && hasBrightness(d) && typeof base[d.device] === "number") {
-      await control(key, d, "devices.capabilities.range", "brightness", base[d.device]);
+    if (!on) continue;
+    if (hasBrightness(d) && typeof base[d.device] === "number") {
+      await setBrightness(key, d, base[d.device]);
       restored = true;
       await sleep(700);
     }
+    if (hasTemp(d) && typeof colorBase[d.device] === "number") {
+      await setTemp(key, d, colorBase[d.device]);
+      restoredColor = true;
+      await sleep(700);
+    }
   }
-  return { total: lights.length, ok, restored };
+  return { total: lights.length, ok, restored, restoredColor };
 }
 
-// Dimt lampen die helderheid ondersteunen en aan staan: nieuwe helderheid = huidige x factor (nooit hoger dan nu).
-// saveBase: onthoud de huidige helderheid als 'normale' helderheid (om bij 'aan' te herstellen).
+// Dimt lampen die helderheid ondersteunen en aan staan: nieuwe helderheid = huidige x factor (nooit hoger).
 async function dimAll(key: string, factor: number, saveBase: boolean, base: Record<string, number>) {
   const lights = await listLights(key);
   let ok = 0;
@@ -103,10 +132,60 @@ async function dimAll(key: string, factor: number, saveBase: boolean, base: Reco
     const target = Math.max(1, Math.round(st.brightness * factor));
     seen.push(`${st.brightness}->${target}`);
     if (target >= st.brightness) continue;
-    if (await control(key, d, "devices.capabilities.range", "brightness", target)) ok++;
+    if (await setBrightness(key, d, target)) ok++;
     await sleep(700);
   }
   return { total: lights.length, dimmable, ok, seen, base: newBase };
+}
+
+// Kleur-indicatie: groen/oranje/rood 1 minuut, daarna terug naar de vorige kleur(temperatuur).
+function indicatorRgb(score: number | null, rhr: number | null): number | null {
+  if (score == null && rhr == null) return null;
+  const good = (score != null && score > 75 ? 1 : 0) + (rhr != null && rhr < 40 ? 1 : 0);
+  if (good === 2) return 0x00c800; // groen
+  if (good === 1) return 0xff8c00; // oranje
+  return 0xff0000; // rood
+}
+async function colorFlash(key: string, rgb: number) {
+  const lights = (await listLights(key)).filter(hasColor);
+  const prev: LampState[] = [];
+  for (const d of lights) {
+    const s = await getState(key, d);
+    await sleep(700);
+    prev.push(s);
+    if (s.on) { await setRgb(key, d, rgb); await sleep(700); }
+  }
+  await sleep(60_000);
+  for (let i = 0; i < lights.length; i++) {
+    const d = lights[i], s = prev[i];
+    if (!s.on) continue;
+    if (s.temp && s.temp > 0 && hasTemp(d)) await setTemp(key, d, s.temp);
+    else if (s.rgb != null) await setRgb(key, d, s.rgb);
+    else await setTemp(key, d, 4000);
+    await sleep(700);
+  }
+}
+function background(p: Promise<unknown>) {
+  const er = (globalThis as any).EdgeRuntime;
+  if (er?.waitUntil) er.waitUntil(p.catch(() => {}));
+  else p.catch(() => {});
+}
+
+// ESPN-deadline: 3x knipperen (helderheid 1% en terug) bij lampen die aan staan.
+async function blinkAll(key: string) {
+  const lights = (await listLights(key)).filter(hasBrightness);
+  let n = 0;
+  for (const d of lights) {
+    const s = await getState(key, d);
+    await sleep(700);
+    if (!s.on || s.brightness == null) continue;
+    for (let i = 0; i < 3; i++) {
+      await setBrightness(key, d, 1); await sleep(900);
+      await setBrightness(key, d, s.brightness); await sleep(900);
+    }
+    n++;
+  }
+  return n;
 }
 
 Deno.serve(async () => {
@@ -114,43 +193,111 @@ Deno.serve(async () => {
   if (!key) return Response.json({ status: "geen GOVEE_KEY secret gezet" });
 
   const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
-  const { data: st } = await sb.from("govee_state").select("*").eq("id", 1).single();
+  const { data: stRow } = await sb.from("govee_state").select("*").eq("id", 1).single();
+  const st: any = stRow ?? {};
   const t = nowAms();
-  const base: Record<string, number> = ((st as any)?.brightness_base ?? {}) as Record<string, number>;
+  const base: Record<string, number> = (st.brightness_base ?? {}) as Record<string, number>;
+  const colorBase: Record<string, number> = (st.color_base ?? {}) as Record<string, number>;
+  const normal: Record<string, number> = (st.normal_brightness ?? {}) as Record<string, number>;
   const log = async (patch: Record<string, unknown>, msg: string) => {
     await sb.from("govee_state").update({ ...patch, last_log: `${t.date} ${t.hour}:${String(t.minute).padStart(2, "0")} ${msg}`, updated_at: new Date().toISOString() }).eq("id", 1);
   };
+  const clearPatch = (r: { restored: boolean; restoredColor: boolean }) => ({
+    ...(r.restored ? { brightness_base: null } : {}),
+    ...(r.restoredColor ? { color_base: null } : {}),
+  });
+  const onDays = ["Mon", "Tue", "Wed", "Thu", "Fri"];
 
   try {
+    // ESPN-DEADLINE: 50-65 min ervoor, 1x per deadline
+    const { data: game } = await sb.from("espn_game").select("next_deadline").eq("id", 1).maybeSingle();
+    if (game?.next_deadline) {
+      const ms = new Date(game.next_deadline).getTime() - Date.now();
+      if (ms > 50 * 60_000 && ms <= 65 * 60_000 && st.last_espn_alert !== game.next_deadline) {
+        await log({ last_espn_alert: game.next_deadline }, "espn-deadline knipperen gestart");
+        const n = await blinkAll(key);
+        await log({}, `espn-deadline geknipperd ${n} lampen`);
+        return Response.json({ action: "espn-blink", lamps: n });
+      }
+    }
+
+    // WEKKER-LICHT: ma t/m vr 06:30-06:39, in 10 stappen naar de normale helderheid
+    if (onDays.includes(t.weekday) && t.hour === 6 && t.minute >= 30 && t.minute < 40) {
+      const k = t.minute - 30;
+      const mark = `${t.date}:${k}`;
+      if (st.last_wake_step !== mark) {
+        const lights = await listLights(key);
+        const wd: string[] = k === 0 ? [] : ((st.wake_devices ?? []) as string[]);
+        let n = 0;
+        for (const d of lights) {
+          if (!hasBrightness(d)) continue;
+          if (k === 0) {
+            const s = await getState(key, d);
+            await sleep(700);
+            if (s.on) continue; // staat al aan: met rust laten
+            wd.push(d.device);
+          } else if (!wd.includes(d.device)) continue;
+          const target = normal[d.device] ?? 70;
+          const pct = Math.max(1, Math.round(target * (k + 1) / 10));
+          if (k === 0) {
+            await setBrightness(key, d, pct); await sleep(700);
+            await setPower(key, d, true); await sleep(700);
+          }
+          if (await setBrightness(key, d, pct)) n++;
+          await sleep(700);
+        }
+        await log({ last_wake_step: mark, wake_devices: wd }, `wekker-licht stap ${k + 1}/10 (${n} lampen)`);
+        return Response.json({ action: "wake-light", step: k + 1, lamps: n });
+      }
+    }
+
     // DIMMEN: zo t/m do, 22:30-22:59 in stappen van 5 min (relatief aan de huidige helderheid)
     const dimDays = ["Sun", "Mon", "Tue", "Wed", "Thu"];
     if (t.hour === 22 && t.minute >= 30 && dimDays.includes(t.weekday)) {
       const factors = [0.8, 0.75, 0.75, 0.67, 0.67, 0.5];
       const idx = Math.min(factors.length - 1, Math.floor((t.minute - 30) / 5));
       const mark = `${t.date}:${idx}`;
-      if ((st as any)?.last_dim !== mark) {
+      if (st.last_dim !== mark) {
         const r = await dimAll(key, factors[idx], idx === 0, base);
-        await log({ last_dim: mark, brightness_base: r.base }, `dim x${factors[idx]} ${r.ok}/${r.dimmable} [${r.seen.join(", ")}]`);
+        const patch: Record<string, unknown> = { last_dim: mark, brightness_base: r.base };
+        if (idx === 0) patch.normal_brightness = { ...normal, ...r.base }; // 'normale' helderheid voor het wekker-licht
+        await log(patch, `dim x${factors[idx]} ${r.ok}/${r.dimmable} [${r.seen.join(", ")}]`);
         return Response.json({ action: `dim-${idx}`, ...r });
       }
     }
 
     // UIT: zo t/m do, 23:00-23:14
-    const offDays = ["Sun", "Mon", "Tue", "Wed", "Thu"];
-    if (t.hour === 23 && t.minute < 15 && offDays.includes(t.weekday) && st?.last_off_date !== t.date) {
+    if (t.hour === 23 && t.minute < 15 && dimDays.includes(t.weekday) && st.last_off_date !== t.date) {
       const r = await setAll(key, false);
       if (r.ok > 0) await log({ last_off_date: t.date }, `uit ${r.ok}/${r.total}`);
       return Response.json({ action: "off", ...r });
     }
 
+    // WARM LICHT: dagelijks 20:00-20:14, alleen lampen die aan staan
+    if (t.hour === 20 && t.minute < 15 && st.last_warm_date !== t.date) {
+      const lights = await listLights(key);
+      const cb: Record<string, number> = { ...colorBase };
+      let n = 0;
+      for (const d of lights) {
+        if (!hasTemp(d)) continue;
+        const s = await getState(key, d);
+        await sleep(700);
+        if (!s.on) continue;
+        if (s.temp && s.temp > 0) cb[d.device] = s.temp;
+        if (await setTemp(key, d, 2700)) n++;
+        await sleep(700);
+      }
+      await log({ last_warm_date: t.date, color_base: cb }, `warm licht 2700K ${n} lampen`);
+      return Response.json({ action: "warm", lamps: n });
+    }
+
     // UIT op vaste tijden: ma t/m vr 07:53 en 13:53
-    const onDays = ["Mon", "Tue", "Wed", "Thu", "Fri"];
     const timedOff = [
       { hour: 7, col: "last_off_0753_date" },
       { hour: 13, col: "last_off_1353_date" },
     ];
     for (const s of timedOff) {
-      if (t.hour === s.hour && t.minute >= 53 && onDays.includes(t.weekday) && (st as any)?.[s.col] !== t.date) {
+      if (t.hour === s.hour && t.minute >= 53 && onDays.includes(t.weekday) && st[s.col] !== t.date) {
         const r = await setAll(key, false);
         if (r.ok > 0) await log({ [s.col]: t.date }, `uit ${s.hour}:53 ${r.ok}/${r.total}`);
         return Response.json({ action: `off-${s.hour}53`, ...r });
@@ -163,22 +310,35 @@ Deno.serve(async () => {
       { hour: 17, col: "last_on_1701_date" },
     ];
     for (const s of timedOn) {
-      if (t.hour === s.hour && t.minute >= 1 && t.minute < 15 && onDays.includes(t.weekday) && (st as any)?.[s.col] !== t.date) {
-        const r = await setAll(key, true, base);
-        if (r.ok > 0) await log({ [s.col]: t.date, ...(r.restored ? { brightness_base: null } : {}) }, `aan ${s.hour}:01 ${r.ok}/${r.total}`);
+      if (t.hour === s.hour && t.minute >= 1 && t.minute < 15 && onDays.includes(t.weekday) && st[s.col] !== t.date) {
+        const r = await setAll(key, true, base, colorBase);
+        if (r.ok > 0) await log({ [s.col]: t.date, ...clearPatch(r) }, `aan ${s.hour}:01 ${r.ok}/${r.total}`);
         return Response.json({ action: `on-${s.hour}01`, ...r });
       }
     }
 
-    // AAN: tussen 04:00 en 12:00, slaap van vandaag staat erin.
+    // AAN (wakker): tussen 04:00 en 12:00, slaap van vandaag staat erin.
     // Op werkdagen alleen vóór 07:53, anders gaan de lampen na de vaste 'uit' weer aan.
     const beforeLeave = !onDays.includes(t.weekday) || t.hour < 7 || (t.hour === 7 && t.minute < 53);
-    if (t.hour >= 4 && t.hour < 12 && beforeLeave && st?.last_on_date !== t.date) {
-      const { data: row } = await sb.from("garmin_metrics").select("sleep_minutes")
+    if (t.hour >= 4 && t.hour < 12 && beforeLeave && st.last_on_date !== t.date) {
+      const { data: row } = await sb.from("garmin_metrics").select("sleep_minutes, sleep_score, resting_hr")
         .eq("owner", OWNER).eq("metric_date", t.date).maybeSingle();
       if (row && Number(row.sleep_minutes) > 0) {
-        const r = await setAll(key, true, base);
-        if (r.ok > 0) await log({ last_on_date: t.date, ...(r.restored ? { brightness_base: null } : {}) }, `aan ${r.ok}/${r.total}`);
+        const r = await setAll(key, true, base, colorBase);
+        if (r.ok > 0) {
+          const patch: Record<string, unknown> = { last_on_date: t.date, ...clearPatch(r) };
+          const rgb = indicatorRgb(
+            row.sleep_score != null ? Number(row.sleep_score) : null,
+            row.resting_hr != null ? Number(row.resting_hr) : null,
+          );
+          let msg = `aan ${r.ok}/${r.total}`;
+          if (rgb != null && st.last_color_date !== t.date) {
+            patch.last_color_date = t.date;
+            msg += ` + kleur #${rgb.toString(16).padStart(6, "0")} (score ${row.sleep_score}, rhr ${row.resting_hr})`;
+            background(colorFlash(key, rgb));
+          }
+          await log(patch, msg);
+        }
         return Response.json({ action: "on", ...r });
       }
     }

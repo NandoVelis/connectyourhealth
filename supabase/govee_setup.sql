@@ -50,3 +50,24 @@ select cron.schedule('govee-lights-5min', '*/5 3-12,15-16,20-22 * * *',
 
 -- Toegevoegd: helderheid van vóór het dimmen onthouden.
 alter table public.govee_state add column if not exists brightness_base jsonb;
+
+-- Toegevoegd: wekker-licht, kleur-indicatie, warm licht, ESPN-deadline-knipper, ochtend-sync.
+alter table public.govee_state
+  add column if not exists last_wake_step text,
+  add column if not exists wake_devices jsonb,
+  add column if not exists last_warm_date date,
+  add column if not exists color_base jsonb,
+  add column if not exists normal_brightness jsonb,
+  add column if not exists last_espn_alert text,
+  add column if not exists last_color_date date;
+select cron.schedule('govee-lights-5min', '*/5 3-12,15-16,18-22 * * *',
+  $$select net.http_post(url := 'https://mhvduufxeqyxgkkvwimx.supabase.co/functions/v1/govee-lights', headers := '{"Content-Type":"application/json"}'::jsonb, body := '{}'::jsonb, timeout_milliseconds := 30000);$$);
+select cron.schedule('govee-wake-light', '30-39 4,5 * * 1-5',
+  $$select net.http_post(url := 'https://mhvduufxeqyxgkkvwimx.supabase.co/functions/v1/govee-lights', headers := '{"Content-Type":"application/json"}'::jsonb, body := '{}'::jsonb, timeout_milliseconds := 30000);$$);
+select cron.schedule('govee-espn-deadline', '*/5 * * * *',
+  $$select net.http_post(url := 'https://mhvduufxeqyxgkkvwimx.supabase.co/functions/v1/govee-lights', headers := '{"Content-Type":"application/json"}'::jsonb, body := '{}'::jsonb, timeout_milliseconds := 30000)
+    from public.espn_game where next_deadline between now() + interval '50 minutes' and now() + interval '65 minutes';$$);
+-- Garmin-sync elke 10 min tussen 06:00-06:59 lokaal (ma-vr), DST-proof via WHERE op lokaal uur.
+select cron.schedule('garmin-sync-wake', '*/10 4,5 * * 1-5',
+  $$select net.http_post(url := 'https://mhvduufxeqyxgkkvwimx.supabase.co/functions/v1/trigger-garmin-sync', headers := '{"Content-Type":"application/json"}'::jsonb, body := '{}'::jsonb, timeout_milliseconds := 30000)
+    where extract(hour from (now() at time zone 'Europe/Amsterdam')) = 6;$$);
