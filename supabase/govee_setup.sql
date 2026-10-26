@@ -42,3 +42,8 @@ select cron.schedule('govee-lights-5min', '*/5 3-12,15-16,21-22 * * *',
   $$select net.http_post(url := 'https://mhvduufxeqyxgkkvwimx.supabase.co/functions/v1/govee-lights', headers := '{"Content-Type":"application/json"}'::jsonb, body := '{}'::jsonb, timeout_milliseconds := 30000);$$);
 select cron.schedule('govee-lights-timed-off', '53 5,6,11,12 * * 1-5',
   $$select net.http_post(url := 'https://mhvduufxeqyxgkkvwimx.supabase.co/functions/v1/govee-lights', headers := '{"Content-Type":"application/json"}'::jsonb, body := '{}'::jsonb, timeout_milliseconds := 30000);$$);
+
+-- Toegevoegd: dimmen zo t/m do vanaf 22:30 (stappen van 5 min) voor de 23:00-uit.
+alter table public.govee_state add column if not exists last_dim text;
+select cron.schedule('govee-lights-5min', '*/5 3-12,15-16,20-22 * * *',
+  $$select net.http_post(url := 'https://mhvduufxeqyxgkkvwimx.supabase.co/functions/v1/govee-lights', headers := '{"Content-Type":"application/json"}'::jsonb, body := '{}'::jsonb, timeout_milliseconds := 30000);$$);

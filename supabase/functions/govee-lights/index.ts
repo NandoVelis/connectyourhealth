@@ -4,6 +4,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 // AAN: zodra de slaap van vandaag in garmin_metrics staat (= wakker + horloge gesynct), max 1x per dag.
 // AAN op vaste tijden: ma t/m vr om 12:01 en 17:01 Europe/Amsterdam (venster :01-:14), max 1x per tijdstip per dag.
 // UIT op vaste tijden: ma t/m vr om 07:53 en 13:53 Europe/Amsterdam (venster :53-:59), max 1x per tijdstip per dag.
+// DIMMEN: zo t/m do vanaf 22:30, elke 5 min een stap (80,60,45,30,20,10%), alleen lampen die aan staan.
 // UIT: zondag t/m donderdag om 23:00 Europe/Amsterdam (venster 23:00-23:14), max 1x per dag.
 // Alle tijden via Europe/Amsterdam, dus zomer-/wintertijd klopt vanzelf.
 // Vereist secret GOVEE_KEY (via GitHub-secret + deploy-workflow). Optioneel: GOVEE_OWNER (default Nando).
@@ -28,28 +29,67 @@ function nowAms() {
   };
 }
 
-async function setAll(key: string, on: boolean) {
-  const h = { "Govee-API-Key": key, "Content-Type": "application/json" };
-  const res = await fetch(`${BASE}/user/devices`, { headers: h });
+const H = (key: string) => ({ "Govee-API-Key": key, "Content-Type": "application/json" });
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+const hasBrightness = (d: any) => (d.capabilities ?? []).some((c: any) => c.instance === "brightness");
+
+async function listLights(key: string) {
+  const res = await fetch(`${BASE}/user/devices`, { headers: H(key) });
   if (!res.ok) throw new Error(`devices ${res.status}`);
   const { data } = await res.json();
-  const lights = (data ?? []).filter((d: any) => d.type === "devices.types.light");
+  return (data ?? []).filter((d: any) => d.type === "devices.types.light");
+}
+
+async function control(key: string, d: any, type: string, instance: string, value: number) {
+  const r = await fetch(`${BASE}/device/control`, {
+    method: "POST", headers: H(key),
+    body: JSON.stringify({
+      requestId: crypto.randomUUID(),
+      payload: { sku: d.sku, device: d.device, capability: { type, instance, value } },
+    }),
+  });
+  return r.ok;
+}
+
+async function isOn(key: string, d: any): Promise<boolean | null> {
+  const r = await fetch(`${BASE}/device/state`, {
+    method: "POST", headers: H(key),
+    body: JSON.stringify({ requestId: crypto.randomUUID(), payload: { sku: d.sku, device: d.device } }),
+  });
+  if (!r.ok) return null;
+  const j = await r.json();
+  const cap = (j?.payload?.capabilities ?? []).find((c: any) => c.instance === "powerSwitch");
+  return cap ? cap.state?.value === 1 : null;
+}
+
+// Zet alle lampen aan of uit. Bij 'aan' ook helderheid terug naar 100% (na het dimmen 's avonds).
+async function setAll(key: string, on: boolean) {
+  const lights = await listLights(key);
   let ok = 0;
   for (const d of lights) {
-    const r = await fetch(`${BASE}/device/control`, {
-      method: "POST", headers: h,
-      body: JSON.stringify({
-        requestId: crypto.randomUUID(),
-        payload: {
-          sku: d.sku, device: d.device,
-          capability: { type: "devices.capabilities.on_off", instance: "powerSwitch", value: on ? 1 : 0 },
-        },
-      }),
-    });
-    if (r.ok) ok++;
-    await new Promise((res) => setTimeout(res, 700));
+    if (await control(key, d, "devices.capabilities.on_off", "powerSwitch", on ? 1 : 0)) ok++;
+    await sleep(700);
+    if (on && hasBrightness(d)) {
+      await control(key, d, "devices.capabilities.range", "brightness", 100);
+      await sleep(700);
+    }
   }
   return { total: lights.length, ok };
+}
+
+// Dimt alleen lampen die helderheid ondersteunen en op dit moment aan staan.
+async function dimAll(key: string, pct: number) {
+  const lights = await listLights(key);
+  let ok = 0;
+  let dimmable = 0;
+  for (const d of lights) {
+    if (!hasBrightness(d)) continue;
+    dimmable++;
+    if ((await isOn(key, d)) !== true) { await sleep(700); continue; }
+    if (await control(key, d, "devices.capabilities.range", "brightness", pct)) ok++;
+    await sleep(700);
+  }
+  return { total: lights.length, dimmable, ok };
 }
 
 Deno.serve(async () => {
@@ -64,6 +104,19 @@ Deno.serve(async () => {
   };
 
   try {
+    // DIMMEN: zo t/m do, 22:30-22:59 in stappen van 5 min
+    const dimDays = ["Sun", "Mon", "Tue", "Wed", "Thu"];
+    if (t.hour === 22 && t.minute >= 30 && dimDays.includes(t.weekday)) {
+      const steps = [80, 60, 45, 30, 20, 10];
+      const idx = Math.min(steps.length - 1, Math.floor((t.minute - 30) / 5));
+      const mark = `${t.date}:${idx}`;
+      if ((st as any)?.last_dim !== mark) {
+        const r = await dimAll(key, steps[idx]);
+        await log({ last_dim: mark }, `dim ${steps[idx]}% ${r.ok}/${r.dimmable}`);
+        return Response.json({ action: `dim-${steps[idx]}`, ...r });
+      }
+    }
+
     // UIT: zo t/m do, 23:00-23:14
     const offDays = ["Sun", "Mon", "Tue", "Wed", "Thu"];
     if (t.hour === 23 && t.minute < 15 && offDays.includes(t.weekday) && st?.last_off_date !== t.date) {
