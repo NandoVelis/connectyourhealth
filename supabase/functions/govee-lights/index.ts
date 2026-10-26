@@ -3,6 +3,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 // Govee-lampen automatisch aan/uit.
 // AAN: zodra de slaap van vandaag in garmin_metrics staat (= wakker + horloge gesynct), max 1x per dag.
 // AAN op vaste tijden: ma t/m vr om 12:01 en 17:01 Europe/Amsterdam (venster :01-:14), max 1x per tijdstip per dag.
+// UIT op vaste tijden: ma t/m vr om 07:53 en 13:53 Europe/Amsterdam (venster :53-:59), max 1x per tijdstip per dag.
 // UIT: zondag t/m donderdag om 23:00 Europe/Amsterdam (venster 23:00-23:14), max 1x per dag.
 // Alle tijden via Europe/Amsterdam, dus zomer-/wintertijd klopt vanzelf.
 // Vereist secret GOVEE_KEY (via GitHub-secret + deploy-workflow). Optioneel: GOVEE_OWNER (default Nando).
@@ -71,8 +72,21 @@ Deno.serve(async () => {
       return Response.json({ action: "off", ...r });
     }
 
-    // AAN op vaste tijden: ma t/m vr 12:01 en 17:01
+    // UIT op vaste tijden: ma t/m vr 07:53 en 13:53
     const onDays = ["Mon", "Tue", "Wed", "Thu", "Fri"];
+    const timedOff = [
+      { hour: 7, col: "last_off_0753_date" },
+      { hour: 13, col: "last_off_1353_date" },
+    ];
+    for (const s of timedOff) {
+      if (t.hour === s.hour && t.minute >= 53 && onDays.includes(t.weekday) && (st as any)?.[s.col] !== t.date) {
+        const r = await setAll(key, false);
+        if (r.ok > 0) await log({ [s.col]: t.date }, `uit ${s.hour}:53 ${r.ok}/${r.total}`);
+        return Response.json({ action: `off-${s.hour}53`, ...r });
+      }
+    }
+
+    // AAN op vaste tijden: ma t/m vr 12:01 en 17:01
     const timedOn = [
       { hour: 12, col: "last_on_1201_date" },
       { hour: 17, col: "last_on_1701_date" },
@@ -85,8 +99,10 @@ Deno.serve(async () => {
       }
     }
 
-    // AAN: tussen 04:00 en 12:00, slaap van vandaag staat erin
-    if (t.hour >= 4 && t.hour < 12 && st?.last_on_date !== t.date) {
+    // AAN: tussen 04:00 en 12:00, slaap van vandaag staat erin.
+    // Op werkdagen alleen vóór 07:53, anders gaan de lampen na de vaste 'uit' weer aan.
+    const beforeLeave = !onDays.includes(t.weekday) || t.hour < 7 || (t.hour === 7 && t.minute < 53);
+    if (t.hour >= 4 && t.hour < 12 && beforeLeave && st?.last_on_date !== t.date) {
       const { data: row } = await sb.from("garmin_metrics").select("sleep_minutes")
         .eq("owner", OWNER).eq("metric_date", t.date).maybeSingle();
       if (row && Number(row.sleep_minutes) > 0) {
