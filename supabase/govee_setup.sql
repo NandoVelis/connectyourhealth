@@ -86,3 +86,6 @@ alter table public.govee_state
 alter table public.govee_state add column if not exists last_rain_alert timestamptz;
 select cron.schedule('govee-rain', '*/10 6-19 * * *',
   $$select net.http_post(url := 'https://mhvduufxeqyxgkkvwimx.supabase.co/functions/v1/govee-lights', headers := '{"Content-Type":"application/json"}'::jsonb, body := '{"event":"regen"}'::jsonb, timeout_milliseconds := 30000);$$);
+
+-- Toegevoegd: binnenkomende appjes (event "app", groen pulseren).
+alter table public.govee_state add column if not exists last_msg_alert timestamptz;

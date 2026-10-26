@@ -15,6 +15,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 // DIMMEN         zo t/m do vanaf 22:30, elke 5 min een stap, relatief aan de huidige helderheid (nooit hoger).
 // UIT            zo t/m do 23:00.
 // REGEN          overdag 07:00-20:15 (body {"event":"regen"}, elke 10 min): droog nu, regen binnen 30 min (Buienradar) -> 2x blauw pulseren, max 1x per uur.
+// APP-MELDING    event "app" + geheime sleutel (secret GOVEE_WEBHOOK_TOKEN): lampen die aan staan pulseren 3x groen (bv. WhatsApp via MacroDroid), max 1x per minuut.
 // ESPN-DEADLINE  50-65 min voor espn_game.next_deadline: lampen die aan staan knipperen 3x (1x per deadline).
 //
 // Vereist secret GOVEE_KEY. Optioneel GOVEE_OWNER (default Nando).
@@ -246,7 +247,7 @@ async function rainSoon(): Promise<{ soon: boolean; minutes: number | null; raw:
   const idx = vals.slice(1, 7).findIndex((v) => v >= RAIN_MIN); // komende 30 min
   return { soon: dryNow && idx >= 0, minutes: idx >= 0 ? (idx + 1) * 5 : null, raw: raw.slice(0, 80) };
 }
-async function rainPulse(key: string) {
+async function rainPulse(key: string, rgbColor = RAIN_BLAUW, pulses = 2) {
   const lights = (await listLights(key)).filter(hasColor);
   const prev: LampState[] = [];
   const active: number[] = [];
@@ -257,9 +258,9 @@ async function rainPulse(key: string) {
     if (s.on) active.push(i);
   }
   if (!active.length) return 0;
-  for (const i of active) { await setRgb(key, lights[i], RAIN_BLAUW); await sleep(300); }
+  for (const i of active) { await setRgb(key, lights[i], rgbColor); await sleep(300); }
   await sleep(2000);
-  for (let k = 0; k < 2; k++) {
+  for (let k = 0; k < pulses; k++) {
     for (const lvl of [100, 20]) {
       for (const i of active) { if (hasBrightness(lights[i])) await setBrightness(key, lights[i], lvl); await sleep(300); }
       await sleep(2200);
@@ -295,8 +296,35 @@ Deno.serve(async (req) => {
   });
   const onDays = ["Mon", "Tue", "Wed", "Thu", "Fri"];
 
-  let event = "";
-  try { event = String((await req.json())?.event ?? ""); } catch { /* geen body */ }
+  const url = new URL(req.url);
+  let event = url.searchParams.get("event") ?? "";
+  let token = req.headers.get("x-token") ?? url.searchParams.get("token") ?? "";
+  try {
+    const b = await req.json();
+    if (b?.event) event = String(b.event);
+    if (b?.token) token = String(b.token);
+  } catch { /* geen body */ }
+
+  try {
+    // EVENT app (bv. WhatsApp via MacroDroid): groen pulseren, alleen met geheime sleutel (GOVEE_WEBHOOK_TOKEN)
+    if (event === "app") {
+      const secret = Deno.env.get("GOVEE_WEBHOOK_TOKEN");
+      if (!secret || token !== secret) return Response.json({ error: "niet toegestaan" }, { status: 401 });
+      const mins = t.hour * 60 + t.minute;
+      const busy = [
+        [20 * 60 + 24, 20 * 60 + 36], [21 * 60 + 29, 21 * 60 + 36], [22 * 60 + 30, 23 * 60 + 5],
+        [6 * 60 + 29, 6 * 60 + 41], [7 * 60 + 48, 7 * 60 + 56], [13 * 60 + 48, 13 * 60 + 56],
+      ].some(([a, b]) => mins >= a && mins <= b);
+      const last = st.last_msg_alert ? new Date(st.last_msg_alert).getTime() : 0;
+      if (busy) return Response.json({ action: "app-skip" });
+      if (Date.now() - last < 60_000) return Response.json({ action: "app-throttled" });
+      await sb.from("govee_state").update({ last_msg_alert: new Date().toISOString() }).eq("id", 1);
+      background(rainPulse(key, 0x00c800, 3).then((n) => log({}, `app-pulse groen ${n} lampen`)));
+      return Response.json({ action: "app" });
+    }
+  } catch (e) {
+    return Response.json({ error: (e as Error).message }, { status: 500 });
+  }
 
   try {
     // EVENT regen: alleen overdag (07:00-20:15) en niet rond de vaste knipper/uit-momenten
