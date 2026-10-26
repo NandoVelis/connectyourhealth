@@ -431,11 +431,6 @@
       <div id="nutritionTip" class="meal-meta" style="font-size:14px;color:var(--ink);"></div>
     </div>
 
-    <div class="card" style="margin-bottom:16px;display:none;" id="kcalSchuldCard">
-      <h3>&#129297; Kcal-schuld</h3>
-      <div id="kcalSchuldDetail"></div>
-    </div>
-
     <div class="card" style="margin-bottom:16px;">
       <h3>&#127939; Trainingstip</h3>
       <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:10px;">
@@ -3601,7 +3596,6 @@ async function renderDashboard(){
   const weightForTip = (weightEntry && weightEntry.kg) ? weightEntry.kg : (await loadMostRecentWeight(dateStr))?.kg || null;
   const runningStatsForTip = await loadAverageRunningStats();
   const customItemsForTip = await loadCustomQuickAdds();
-  await renderKcalSchuld(owner, dateStr, balans, weightForTip, runningStatsForTip);
   const tipText = generateNutritionTip(
     totals,
     { protein: targetProtein, carbs: targetCarbs, fat: targetFat },
@@ -3880,27 +3874,10 @@ async function loadMostRecentWeight(dateStr){
   return { kg: data.kg };
 }
 
-// Kcal-schuld: handmatig gezette "af te werken" overschotten (bv. na een
-// uitschieterdag), die vanzelf aflopen naarmate de dagelijkse kcal-balans
-// (uit kcal_balans_daily, dezelfde formule als de chat-routines) negatief
-// uitvalt. Alleen de meest recente, nog openstaande schuld wordt getoond.
-async function loadKcalSchuld(owner){
-  if(!owner) return null;
-  const { data, error } = await supabaseClient
-    .from('kcal_schuld')
-    .select('*')
-    .eq('owner', owner)
-    .order('startdatum', { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  if(error || !data) return null;
-  return data;
-}
 // ---- Echte trend-/wedstrijd-tips (i.p.v. alleen de dagelijkse voedingstip) ----
 // Kijkt naar afgesloten dagen in kcal_balans_daily om te zien of de balans
 // een aantal dagen op rij dezelfde kant op staat -- "vandaag" telt bewust
-// niet mee (zie renderKcalSchuld hierboven: een lopende dag is nog geen
-// afgesloten meting).
+// niet mee: een lopende dag is nog geen afgesloten meting.
 async function loadRecentKcalBalans(owner, days){
   if(!owner) return [];
   const { data, error } = await supabaseClient
@@ -3990,93 +3967,6 @@ async function loadKcalBalansSum(owner, afterDateStr, uptoDateStr){
   if(error || !data) return 0;
   return data.reduce((sum, r) => sum + (Number(r.kcal_balans) || 0), 0);
 }
-function addDaysToDateStr(dateStr, days){
-  const d = new Date(dateStr+'T00:00:00');
-  d.setDate(d.getDate()+days);
-  return fmtDate(d);
-}
-async function loadKcalBalansRows(owner, afterDateStr, uptoDateStr){
-  if(!owner) return [];
-  const { data, error } = await supabaseClient
-    .from('kcal_balans_daily')
-    .select('dag, kcal_balans')
-    .eq('owner', owner)
-    .gt('dag', afterDateStr)
-    .lte('dag', uptoDateStr)
-    .order('dag', { ascending: false });
-  if(error || !data) return [];
-  return data;
-}
-async function renderKcalSchuld(owner, dateStr, balansSoFar, weightKg, runningStats){
-  const cardEl = document.getElementById('kcalSchuldCard');
-  const detailEl = document.getElementById('kcalSchuldDetail');
-  if(!cardEl || !detailEl || !owner) return;
-  // Alleen tonen op vandaag -- de voortgangsberekening (balans-tot-nu-toe)
-  // heeft geen zinnige betekenis voor een datum in het verleden/toekomst.
-  if(dateStr !== fmtDate(new Date())){ cardEl.style.display = 'none'; return; }
-  const schuld = await loadKcalSchuld(owner);
-  if(!schuld){ cardEl.style.display = 'none'; return; }
-  // Vandaag telt pas mee zodra de dag is afgesloten (morgenochtend) --
-  // rest_kcal is al een volledige-dag-schatting, dus een tussentijdse
-  // vergelijking met de inname-tot-nu-toe oogt kunstmatig negatief.
-  // Credits tellen t/m 31 okt (ivm de halve marathon op 1 nov).
-  const creditEindDatum = '2026-10-31';
-  const yesterday = addDaysToDateStr(dateStr, -1);
-  const uptoVoorCredits = yesterday < creditEindDatum ? yesterday : creditEindDatum;
-  const afgewerktTotNu = await loadKcalBalansSum(owner, schuld.startdatum, uptoVoorCredits);
-  const resterend = Math.max(0, Number(schuld.startbedrag) + afgewerktTotNu);
-  cardEl.style.display = '';
-  if(resterend <= 0){
-    detailEl.innerHTML = `
-      <div class="stat-row" style="border-bottom:none;">
-        <span class="stat-label" style="font-weight:700;">✅ Weggestreept!</span>
-        <span class="stat-val">Schuld van ${Math.round(schuld.startbedrag)} kcal (${schuld.startdatum}) is afgewerkt</span>
-      </div>
-      ${schuld.omschrijving ? `<div class="meal-meta" style="margin-top:4px;">${escapeHtml(schuld.omschrijving)}</div>` : ''}`;
-    return;
-  }
-  // Doeleinddatum vast op 31 okt (ivm halve marathon 1 nov) -- zie ook
-  // creditEindDatum hierboven, dezelfde datum.
-  const dagenResterend = Math.max(1, Math.round((new Date(creditEindDatum+'T00:00:00') - new Date(dateStr+'T00:00:00')) / 86400000) + 1);
-  const dagdoel = Math.round(resterend / dagenResterend);
-  const kcalPerKm = runningStats ? runningStats.kcalPerKm : null;
-  const kmHardlopen = estimateRunKmToBurn(dagdoel, weightKg, kcalPerKm);
-  const kmWandelen = estimateWalkKmToBurn(dagdoel, weightKg);
-  const dagRijen = await loadKcalBalansRows(owner, schuld.startdatum, uptoVoorCredits);
-  const dagRijenHtml = dagRijen.length ? dagRijen.map(r => {
-    const bal = r.kcal_balans!=null ? Math.round(Number(r.kcal_balans)) : null;
-    const kleur = bal==null ? 'var(--ink)' : (bal<0 ? 'var(--ok, #1a7f37)' : 'var(--err, #c0392b)');
-    return `<div class="stat-row" style="padding:4px 0;border-bottom:none;">
-      <span class="stat-label" style="font-weight:400;">${r.dag}</span>
-      <span class="stat-val" style="font-size:13px;color:${kleur};">${bal==null ? 'geen data' : (bal>=0?'+':'')+bal+' kcal'}</span>
-    </div>`;
-  }).join('') : '<div class="meal-meta">Nog geen afgesloten dagen.</div>';
-  detailEl.innerHTML = `
-    <div class="stat-row">
-      <span class="stat-label">Resterend saldo</span>
-      <span class="stat-val" style="font-weight:700;">${Math.round(resterend)} kcal</span>
-    </div>
-    <div class="stat-row">
-      <span class="stat-label">Nog ${dagenResterend} dag${dagenResterend===1?'':'en'} t/m ${creditEindDatum}</span>
-      <span class="stat-val">~${dagdoel} kcal/dag extra</span>
-    </div>
-    ${kmHardlopen ? `
-    <div class="stat-row">
-      <span class="stat-label">\u{1F3C3} Komt neer op</span>
-      <span class="stat-val">~${kmHardlopen} km extra hardlopen</span>
-    </div>` : ''}
-    ${kmWandelen ? `
-    <div class="stat-row" style="border-bottom:none;">
-      <span class="stat-label">\u{1F6B6} Of</span>
-      <span class="stat-val">~${kmWandelen} km extra wandelen</span>
-    </div>` : ''}
-    <div class="meal-meta" style="margin-top:4px;">Netto kcal-balans sinds ${schuld.startdatum} (afgesloten dagen): ${afgewerktTotNu>=0?'+':''}${Math.round(afgewerktTotNu)} kcal.${balansSoFar!=null ? ` Balans tot nu toe vandaag: ${balansSoFar>=0?'+':''}${Math.round(balansSoFar)} kcal (telt morgen pas mee).` : ''}</div>
-    ${schuld.omschrijving ? `<div class="meal-meta" style="margin-top:4px;">${escapeHtml(schuld.omschrijving)}</div>` : ''}
-    <details style="margin-top:8px;">
-      <summary style="cursor:pointer;font-size:13px;color:var(--ink);">Toon per dag</summary>
-      <div style="margin-top:4px;">${dagRijenHtml}</div>
-    </details>`;
-}
 async function saveWeight(dateStr, kg){
   const owner = currentOwner();
   if(!owner) return false;
@@ -4114,18 +4004,6 @@ function extraKcalFromSteps(steps, weightKg){
   if(!steps || !weightKg) return 0;
   return Math.round(steps * KCAL_PER_STEP_PER_KG * weightKg);
 }
-// Gemiddelde paslengte bij wandeltempo (~75-80cm/stap) -- generieke schatting,
-// niet uit eigen data gekalibreerd zoals KCAL_PER_STEP_PER_KG zelf. Gebruikt
-// om een kcal-doel om te rekenen naar een wandelafstand, los van het
-// hardloop-equivalent (dat een stuk korter uitvalt bij hetzelfde aantal kcal).
-const WALK_STEPS_PER_KM = 1300;
-function estimateWalkKmToBurn(kcalToBurn, weightKg){
-  if(!kcalToBurn || kcalToBurn<=0 || !weightKg) return null;
-  const kcalPerKm = WALK_STEPS_PER_KM * KCAL_PER_STEP_PER_KG * weightKg;
-  if(!kcalPerKm) return null;
-  return Math.round(kcalToBurn / kcalPerKm * 10) / 10;
-}
-
 function trainingDistanceKm(training){
   if(!training || !training.activities) return 0;
   return training.activities.reduce((a,x)=>a+(Number(x.km)||0),0);
