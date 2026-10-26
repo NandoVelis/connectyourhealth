@@ -6,6 +6,8 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 // AAN (wakker)   zodra de slaap van vandaag in garmin_metrics staat, max 1x per dag (werkdagen alleen vóór 07:53).
 //                Daarna 1 minuut kleur-indicatie: groen = rusthartslag < 40 én slaapscore > 75,
 //                oranje = één van de twee, rood = geen van beide; daarna terug naar de vorige kleur.
+// TV: maandag 20:25 (Rondo, Ziggo Sport 20:30): oranje, helder -> gedimd. Ma t/m vr 21:30 (Vandaag Inside, SBS6 21:35):
+//     blauw/wit wisselend (SBS-kleuren), ~1 min, daarna terug naar de vorige stand. Alleen lampen die aan staan.
 // KNIPPER-WAARSCHUWING ma t/m vr 07:50 en 13:50: lampen die aan staan knipperen 3x (3 min voor de uit).
 // UIT            ma t/m vr 07:53 en 13:53.
 // AAN            ma t/m vr 12:01 en 17:01.
@@ -189,6 +191,44 @@ async function blinkAll(key: string) {
   return n;
 }
 
+// TV-effecten (stapsgewijs via de API; max ~10 commando's/min per lamp, dus elke ~10 s een stap).
+const ZIGGO_ORANJE = 0xff6a13;
+const SBS_BLAUW = 0x0057b8;
+const WIT = 0xffffff;
+async function tvEffect(key: string, kind: "rondo" | "vi") {
+  const lights = (await listLights(key)).filter(hasColor);
+  const prev: LampState[] = [];
+  const active: number[] = [];
+  for (let i = 0; i < lights.length; i++) {
+    const s = await getState(key, lights[i]);
+    await sleep(700);
+    prev.push(s);
+    if (s.on) active.push(i);
+  }
+  if (!active.length) return 0;
+  const stepMs = 10_000;
+  const run = async (fn: (d: any) => Promise<unknown>) => {
+    const t0 = Date.now();
+    for (const i of active) { await fn(lights[i]); await sleep(300); }
+    const left = stepMs - (Date.now() - t0);
+    if (left > 0) await sleep(left);
+  };
+  if (kind === "rondo") {
+    await run(async (d) => { await setRgb(key, d, ZIGGO_ORANJE); await setBrightness(key, d, 100); });
+    for (const b of [75, 50, 30, 12]) await run((d) => setBrightness(key, d, b));
+  } else {
+    for (const c of [SBS_BLAUW, WIT, SBS_BLAUW, WIT, SBS_BLAUW, WIT]) await run((d) => setRgb(key, d, c));
+  }
+  for (const i of active) {
+    const d = lights[i], s = prev[i];
+    if (s.temp && s.temp > 0 && hasTemp(d)) await setTemp(key, d, s.temp);
+    else if (s.rgb != null) await setRgb(key, d, s.rgb);
+    await sleep(700);
+    if (s.brightness != null) { await setBrightness(key, d, s.brightness); await sleep(700); }
+  }
+  return active.length;
+}
+
 Deno.serve(async () => {
   const key = Deno.env.get("GOVEE_KEY");
   if (!key) return Response.json({ status: "geen GOVEE_KEY secret gezet" });
@@ -220,6 +260,18 @@ Deno.serve(async () => {
         await log({}, `espn-deadline geknipperd ${n} lampen`);
         return Response.json({ action: "espn-blink", lamps: n });
       }
+    }
+
+    // TV: Rondo (maandag 20:25-20:27) en Vandaag Inside (ma t/m vr 21:30-21:32), 1x per dag, op de achtergrond
+    if (t.weekday === "Mon" && t.hour === 20 && t.minute >= 25 && t.minute <= 27 && st.last_tv_rondo_date !== t.date) {
+      await log({ last_tv_rondo_date: t.date }, "tv rondo gestart");
+      background(tvEffect(key, "rondo"));
+      return Response.json({ action: "tv-rondo" });
+    }
+    if (onDays.includes(t.weekday) && t.hour === 21 && t.minute >= 30 && t.minute <= 32 && st.last_tv_vi_date !== t.date) {
+      await log({ last_tv_vi_date: t.date }, "tv vandaag inside gestart");
+      background(tvEffect(key, "vi"));
+      return Response.json({ action: "tv-vi" });
     }
 
     // WEKKER-LICHT: ma t/m vr 06:30-06:39, in 10 stappen naar de normale helderheid

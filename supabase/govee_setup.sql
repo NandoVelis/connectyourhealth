@@ -76,3 +76,8 @@ select cron.schedule('garmin-sync-wake', '*/10 4,5 * * 1-5',
 alter table public.govee_state
   add column if not exists last_blink_0750_date date,
   add column if not exists last_blink_1350_date date;
+
+-- Toegevoegd: tv-effecten (Rondo maandag 20:25, Vandaag Inside ma-vr 21:30). Gedekt door de 5-min-job.
+alter table public.govee_state
+  add column if not exists last_tv_rondo_date date,
+  add column if not exists last_tv_vi_date date;
