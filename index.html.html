@@ -273,6 +273,43 @@
     th,td{padding:8px 6px;font-size:12px;}
     .btn-primary,.btn-secondary{padding:12px 16px;}
   }
+  /* ---- Recepten ---- */
+  .rcp-toolbar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:12px;}
+  .rcp-toolbar input[type=search], .rcp-toolbar select{
+    padding:9px 12px;border:1px solid var(--line);border-radius:8px;
+    font-family:'Archivo',sans-serif;font-size:14px;background:var(--card);color:var(--ink);
+  }
+  .rcp-toolbar input[type=search]{flex:1 1 220px;min-width:0;}
+  .rcp-chiprow{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:10px;}
+  .rcp-chiplabel{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-soft);margin-right:4px;}
+  .rcp-chip{
+    border:1px solid var(--line);background:var(--card);color:var(--ink-soft);
+    border-radius:999px;padding:5px 11px;font-family:'Archivo',sans-serif;font-size:12px;font-weight:600;cursor:pointer;
+  }
+  .rcp-chip.on{background:var(--amber);border-color:var(--amber);color:#fff;}
+  .rcp-count{font-size:12px;color:var(--ink-soft);margin:4px 0 12px;}
+  .rcp-card{
+    background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+    margin-bottom:12px;overflow:hidden;
+  }
+  .rcp-card summary{list-style:none;cursor:pointer;padding:16px 18px;}
+  .rcp-card summary::-webkit-details-marker{display:none;}
+  .rcp-title{font-size:16px;font-weight:700;margin:0 0 6px;display:flex;justify-content:space-between;gap:10px;}
+  .rcp-title::after{content:'▸';color:var(--ink-soft);}
+  .rcp-card[open] .rcp-title::after{content:'▾';}
+  .rcp-meta{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;font-size:12px;color:var(--ink-soft);}
+  .rcp-pill{background:var(--amber-soft);color:var(--amber);border-radius:999px;padding:2px 9px;font-weight:600;}
+  .rcp-pill.alt{background:var(--pine-soft);color:var(--pine);}
+  .rcp-macros{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;}
+  .rcp-macro{background:var(--paper);border-radius:10px;padding:8px 10px;}
+  .rcp-macro b{display:block;font-family:'Martian Mono',monospace;font-size:15px;}
+  .rcp-macro span{font-size:11px;color:var(--ink-soft);}
+  .rcp-macro-note{font-size:11px;color:var(--ink-soft);margin-top:6px;}
+  .rcp-body{padding:0 18px 18px;border-top:1px solid var(--line);}
+  .rcp-body h4{margin:16px 0 6px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--amber);}
+  .rcp-text{white-space:pre-wrap;font-size:14px;line-height:1.55;}
+  .rcp-bron{font-size:12px;color:var(--ink-soft);margin-top:14px;}
+  @media(max-width:680px){.rcp-macros{grid-template-columns:1fr 1fr;}}
 </style>
 </head>
 <body>
@@ -347,6 +384,7 @@
     <button data-tab="geschiedenis">Geschiedenis</button>
     <button data-tab="team">Team</button>
     <button data-tab="prestaties">Prestaties</button>
+    <button data-tab="recepten" id="receptenTabBtn" style="display:none;">Recepten</button>
     <a href="/overig" id="overigNavLink" style="display:none;">Overig</a>
   </nav>
 
@@ -1163,6 +1201,33 @@
     </div>
   </section>
 
+  <!-- RECEPTEN (alleen Nando) -->
+  <section id="tab-recepten" style="display:none;">
+    <div class="card">
+      <h3>Recepten</h3>
+      <div class="rcp-toolbar">
+        <input type="search" id="rcpSearch" placeholder="Zoek op naam, ingrediënt of bron…" autocomplete="off">
+        <select id="rcpTijd" aria-label="Bereidingstijd">
+          <option value="">Alle tijden</option>
+          <option value="20">Tot 20 min</option>
+          <option value="45">Tot 45 min</option>
+          <option value="90">Tot 90 min</option>
+          <option value="91">Langer dan 90 min</option>
+        </select>
+        <select id="rcpSort" aria-label="Sorteren">
+          <option value="naam">Sorteer: naam</option>
+          <option value="tijd">Sorteer: tijd (kort eerst)</option>
+          <option value="kcal">Sorteer: kcal per portie (laag eerst)</option>
+          <option value="eiwit">Sorteer: eiwit per portie (hoog eerst)</option>
+        </select>
+      </div>
+      <div class="rcp-chiprow" id="rcpApparaatChips"></div>
+      <div class="rcp-chiprow" id="rcpSoortChips"></div>
+      <div class="rcp-count" id="rcpCount"></div>
+      <div id="rcpList"><div class="empty">Recepten laden…</div></div>
+    </div>
+  </section>
+
 
 </div>
 
@@ -1315,7 +1380,138 @@ async function updateOverigLinkVisibility(){
     link.style.display = OVERIG_ALLOWED_EMAILS.includes(email) ? '' : 'none';
   }catch(e){ link.style.display = 'none'; }
 }
-supabaseClient.auth.onAuthStateChange(()=>{ updateOverigLinkVisibility(); });
+supabaseClient.auth.onAuthStateChange(()=>{ updateOverigLinkVisibility(); updateReceptenTabVisibility(); });
+
+// ---- Recepten (alleen Nando) ----
+// De tabel public.recepten heeft RLS: alleen deze twee e-mailadressen kunnen
+// er rijen uit lezen/schrijven. De tab-knop is daarom ook alleen voor hen
+// zichtbaar; de RLS-policy is de echte beveiliging.
+const RECEPTEN_ALLOWED_EMAILS = ['nandovelis@gmail.com','nandovelis@connectyou.nl'];
+let receptenCache = null;
+const receptenState = { q:'', tijd:'', apparaat:new Set(), soort:new Set(), sort:'naam' };
+
+async function updateReceptenTabVisibility(){
+  const btn = document.getElementById('receptenTabBtn');
+  if(!btn) return;
+  let allowed = false;
+  try{
+    const { data:{ session } } = await supabaseClient.auth.getSession();
+    const email = ((session && session.user && session.user.email) || '').toLowerCase();
+    allowed = RECEPTEN_ALLOWED_EMAILS.includes(email);
+  }catch(e){ allowed = false; }
+  btn.style.display = allowed ? '' : 'none';
+  if(!allowed && btn.classList.contains('active')){
+    const dash = document.querySelector('nav.tabs button[data-tab="dashboard"]');
+    if(dash) dash.click();
+  }
+}
+
+async function loadRecepten(force){
+  if(receptenCache && !force) return receptenCache;
+  const { data, error } = await supabaseClient.from('recepten').select('*').order('naam');
+  if(error) throw error;
+  receptenCache = data || [];
+  return receptenCache;
+}
+
+function receptPerPortie(r){
+  const p = Number(r.porties);
+  const div = p > 0 ? p : 1;
+  const f = v => (v === null || v === undefined) ? null : Number(v) / div;
+  return { kcal:f(r.kcal_totaal), eiwit:f(r.eiwit_totaal), kh:f(r.kh_totaal), vet:f(r.vet_totaal), perPortie: p > 0, porties: p > 0 ? p : null };
+}
+function fmtMacro(v, dec){
+  if(v === null || v === undefined || isNaN(v)) return '–';
+  return (dec ? (Math.round(v*10)/10).toString().replace('.', ',') : Math.round(v).toString());
+}
+function receptMatches(r){
+  const st = receptenState;
+  if(st.q){
+    const hay = [r.naam, r.bron, r.ingredienten, r.bereiding, r.notities, (r.soort||[]).join(' '), (r.apparaat||[]).join(' ')].join(' ').toLowerCase();
+    const terms = st.q.toLowerCase().split(/\s+/).filter(Boolean);
+    if(!terms.every(t => hay.includes(t))) return false;
+  }
+  if(st.tijd){
+    const t = Number(r.bereidingstijd_min);
+    const lim = Number(st.tijd);
+    if(lim === 91){ if(!(t > 90)) return false; }
+    else if(!(t > 0 && t <= lim)) return false;
+  }
+  for(const a of st.apparaat){ if(!(r.apparaat||[]).includes(a)) return false; }
+  for(const so of st.soort){ if(!(r.soort||[]).includes(so)) return false; }
+  return true;
+}
+function renderReceptenChips(list){
+  const uniq = key => Array.from(new Set(list.flatMap(r => r[key] || []))).sort((a,b)=>a.localeCompare(b,'nl'));
+  const build = (elId, label, values, set) => {
+    const el = document.getElementById(elId);
+    if(!el) return;
+    el.innerHTML = '<span class="rcp-chiplabel">'+label+'</span>' + values.map(v =>
+      '<button type="button" class="rcp-chip'+(set.has(v)?' on':'')+'" data-v="'+escapeHtml(v)+'">'+escapeHtml(v)+'</button>').join('');
+    el.querySelectorAll('.rcp-chip').forEach(b => b.addEventListener('click', ()=>{
+      const v = b.dataset.v;
+      if(set.has(v)) set.delete(v); else set.add(v);
+      renderRecepten();
+    }));
+  };
+  build('rcpApparaatChips', 'Apparaat', uniq('apparaat'), receptenState.apparaat);
+  build('rcpSoortChips', 'Soort', uniq('soort'), receptenState.soort);
+}
+function receptCardHtml(r){
+  const m = receptPerPortie(r);
+  const pills = (r.apparaat||[]).map(a => '<span class="rcp-pill alt">'+escapeHtml(a)+'</span>').join('')
+              + (r.soort||[]).map(so => '<span class="rcp-pill">'+escapeHtml(so)+'</span>').join('');
+  const tijd = r.bereidingstijd_min ? '<span>⏱ '+r.bereidingstijd_min+' min</span>' : '';
+  const note = m.perPortie
+    ? 'Per portie (recept voor '+fmtMacro(m.porties, true)+' porties)'
+    : 'Aantal porties niet vastgelegd: totaal van het hele recept';
+  const sect = (h, t) => t ? '<h4>'+h+'</h4><div class="rcp-text">'+escapeHtml(t)+'</div>' : '';
+  return '<details class="rcp-card">'
+    + '<summary>'
+    +   '<div class="rcp-title"><span>'+escapeHtml(r.naam)+'</span></div>'
+    +   '<div class="rcp-meta">'+tijd+pills+'</div>'
+    +   '<div class="rcp-macros">'
+    +     '<div class="rcp-macro"><b>'+fmtMacro(m.kcal)+'</b><span>kcal</span></div>'
+    +     '<div class="rcp-macro"><b>'+fmtMacro(m.eiwit, true)+' g</b><span>eiwit</span></div>'
+    +     '<div class="rcp-macro"><b>'+fmtMacro(m.kh, true)+' g</b><span>koolhydraten</span></div>'
+    +     '<div class="rcp-macro"><b>'+fmtMacro(m.vet, true)+' g</b><span>vet</span></div>'
+    +   '</div>'
+    +   '<div class="rcp-macro-note">'+escapeHtml(note)+'</div>'
+    + '</summary>'
+    + '<div class="rcp-body">'
+    +   sect('Ingrediënten', r.ingredienten)
+    +   sect('Bereiding', r.bereiding)
+    +   sect('Notities', r.notities)
+    +   (r.bron ? '<div class="rcp-bron">Bron: '+escapeHtml(r.bron)+'</div>' : '')
+    + '</div>'
+    + '</details>';
+}
+async function renderRecepten(force){
+  const listEl = document.getElementById('rcpList');
+  if(!listEl) return;
+  let all;
+  try{
+    all = await loadRecepten(force);
+  }catch(e){
+    listEl.innerHTML = '<div class="empty">Recepten laden mislukt: '+escapeHtml(e.message || String(e))+'</div>';
+    return;
+  }
+  renderReceptenChips(all);
+  const st = receptenState;
+  const rows = all.filter(receptMatches);
+  const key = {
+    naam: (a,b) => a.naam.localeCompare(b.naam,'nl'),
+    tijd: (a,b) => (a.bereidingstijd_min ?? 1e9) - (b.bereidingstijd_min ?? 1e9) || a.naam.localeCompare(b.naam,'nl'),
+    kcal: (a,b) => (receptPerPortie(a).kcal ?? 1e9) - (receptPerPortie(b).kcal ?? 1e9),
+    eiwit: (a,b) => (receptPerPortie(b).eiwit ?? -1) - (receptPerPortie(a).eiwit ?? -1)
+  }[st.sort] || ((a,b)=>0);
+  rows.sort(key);
+  document.getElementById('rcpCount').textContent = rows.length + ' van ' + all.length + ' recepten';
+  listEl.innerHTML = rows.length ? rows.map(receptCardHtml).join('') : '<div class="empty">Geen recepten gevonden met deze filters.</div>';
+}
+document.getElementById('rcpSearch')?.addEventListener('input', e => { receptenState.q = e.target.value.trim(); renderRecepten(); });
+document.getElementById('rcpTijd')?.addEventListener('change', e => { receptenState.tijd = e.target.value; renderRecepten(); });
+document.getElementById('rcpSort')?.addEventListener('change', e => { receptenState.sort = e.target.value; renderRecepten(); });
 
 function dayKey(dateStr){ return 'day-'+dateStr; }
 
@@ -4931,13 +5127,14 @@ document.querySelectorAll('nav.tabs button').forEach(btn=>{
   btn.addEventListener('click', ()=>{
     document.querySelectorAll('nav.tabs button').forEach(b=>b.classList.remove('active'));
     btn.classList.add('active');
-    ['dashboard','invoer','week','maand','geschiedenis','team','prestaties'].forEach(t=>{
+    ['dashboard','invoer','week','maand','geschiedenis','team','prestaties','recepten'].forEach(t=>{
       document.getElementById('tab-'+t).style.display = (t===btn.dataset.tab)?'block':'none';
     });
     if(btn.dataset.tab==='geschiedenis') renderHistory();
     if(btn.dataset.tab==='week') renderWeek();
     if(btn.dataset.tab==='maand') renderMaand();
     if(btn.dataset.tab==='team' || btn.dataset.tab==='prestaties'){ renderAllTeamViews(); }
+    if(btn.dataset.tab==='recepten') renderRecepten();
   });
 });
 
@@ -6001,7 +6198,7 @@ if(!currentOwner()){
   document.querySelectorAll('nav.tabs button').forEach(b=>b.classList.remove('active'));
   const teamTabBtn = document.querySelector('nav.tabs button[data-tab="team"]');
   if(teamTabBtn) teamTabBtn.classList.add('active');
-  ['dashboard','invoer','week','maand','geschiedenis','team','prestaties'].forEach(t=>{
+  ['dashboard','invoer','week','maand','geschiedenis','team','prestaties','recepten'].forEach(t=>{
     document.getElementById('tab-'+t).style.display = (t==='team')?'block':'none';
   });
   const teamNameStatusEl = document.getElementById('teamNameStatus');
@@ -6227,6 +6424,7 @@ function startAutoRefresh(){
 
 async function startApp(){
   updateOverigLinkVisibility();
+  updateReceptenTabVisibility();
   await checkTredictSyncStatus();
   await renderDashboard();
   startAutoRefresh();
