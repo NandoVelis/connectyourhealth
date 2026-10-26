@@ -2,6 +2,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 
 // Govee-lampen automatisch aan/uit.
 // AAN: zodra de slaap van vandaag in garmin_metrics staat (= wakker + horloge gesynct), max 1x per dag.
+// AAN op vaste tijden: ma t/m vr om 12:01 en 17:01 Europe/Amsterdam (venster :01-:14), max 1x per tijdstip per dag.
 // UIT: zondag t/m donderdag om 23:00 Europe/Amsterdam (venster 23:00-23:14), max 1x per dag.
 // Alle tijden via Europe/Amsterdam, dus zomer-/wintertijd klopt vanzelf.
 // Vereist secret GOVEE_KEY (via GitHub-secret + deploy-workflow). Optioneel: GOVEE_OWNER (default Nando).
@@ -68,6 +69,20 @@ Deno.serve(async () => {
       const r = await setAll(key, false);
       if (r.ok > 0) await log({ last_off_date: t.date }, `uit ${r.ok}/${r.total}`);
       return Response.json({ action: "off", ...r });
+    }
+
+    // AAN op vaste tijden: ma t/m vr 12:01 en 17:01
+    const onDays = ["Mon", "Tue", "Wed", "Thu", "Fri"];
+    const timedOn = [
+      { hour: 12, col: "last_on_1201_date" },
+      { hour: 17, col: "last_on_1701_date" },
+    ];
+    for (const s of timedOn) {
+      if (t.hour === s.hour && t.minute >= 1 && t.minute < 15 && onDays.includes(t.weekday) && (st as any)?.[s.col] !== t.date) {
+        const r = await setAll(key, true);
+        if (r.ok > 0) await log({ [s.col]: t.date }, `aan ${s.hour}:01 ${r.ok}/${r.total}`);
+        return Response.json({ action: `on-${s.hour}01`, ...r });
+      }
     }
 
     // AAN: tussen 04:00 en 12:00, slaap van vandaag staat erin

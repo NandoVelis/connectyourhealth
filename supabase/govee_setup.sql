@@ -24,3 +24,12 @@ select cron.schedule(
       timeout_milliseconds := 30000
   );$$
 );
+
+-- Toegevoegd: vaste aan-tijden ma t/m vr 12:01 en 17:01 (Amsterdam).
+alter table public.govee_state
+  add column if not exists last_on_1201_date date,
+  add column if not exists last_on_1701_date date;
+select cron.schedule('govee-lights-5min', '*/5 3-11,15-16,21-22 * * *',
+  $$select net.http_post(url := 'https://mhvduufxeqyxgkkvwimx.supabase.co/functions/v1/govee-lights', headers := '{"Content-Type":"application/json"}'::jsonb, body := '{}'::jsonb, timeout_milliseconds := 30000);$$);
+select cron.schedule('govee-lights-timed-on', '1 10,11,15,16 * * 1-5',
+  $$select net.http_post(url := 'https://mhvduufxeqyxgkkvwimx.supabase.co/functions/v1/govee-lights', headers := '{"Content-Type":"application/json"}'::jsonb, body := '{}'::jsonb, timeout_milliseconds := 30000);$$);
