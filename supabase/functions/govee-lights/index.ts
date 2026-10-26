@@ -6,7 +6,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 // AAN (wakker)   zodra de slaap van vandaag in garmin_metrics staat, max 1x per dag (werkdagen alleen vóór 07:53).
 //                Daarna 1 minuut kleur-indicatie: groen = rusthartslag < 40 én slaapscore > 75,
 //                oranje = één van de twee, rood = geen van beide; daarna terug naar de vorige kleur.
-// TV: maandag 20:25 (Rondo, Ziggo Sport 20:30): oranje, helder -> gedimd. Ma t/m vr 21:30 (Vandaag Inside, SBS6 21:35):
+// TV: maandag 20:25-20:30 (Rondo, Ziggo Sport 20:30): 5 min Ziggo-oranje, elke ~10 s fel/minder fel. Ma t/m vr 21:30 (Vandaag Inside, SBS6 21:35):
 //     blauw/wit wisselend (SBS-kleuren), ~1 min, daarna terug naar de vorige stand. Alleen lampen die aan staan.
 // KNIPPER-WAARSCHUWING ma t/m vr 07:50 en 13:50: lampen die aan staan knipperen 3x (3 min voor de uit).
 // UIT            ma t/m vr 07:53 en 13:53.
@@ -280,6 +280,47 @@ async function rainPulse(key: string, rgbColor = RAIN_BLAUW, pulses = 2, holdMs 
   return active.length;
 }
 
+// Rondo: 5 minuten (20:25-20:29), elke ~10 s wisselen tussen fel en minder fel Ziggo-oranje.
+// Verdeeld over 5 aanroepen van 1 minuut (k = 0..4); de oorspronkelijke lampstand staat in govee_state.tv_prev.
+async function rondoBlock(key: string, sb: any, k: number, saved: Record<string, LampState> | null, date: string) {
+  const lights = (await listLights(key)).filter(hasColor);
+  const prev: Record<string, LampState> = saved ?? {};
+  if (!saved) {
+    for (const d of lights) {
+      const s = await getState(key, d);
+      await sleep(700);
+      if (s.on) prev[d.device] = s;
+    }
+    await sb.from("govee_state").update({ tv_prev: prev }).eq("id", 1);
+  }
+  const active = lights.filter((d) => prev[d.device]);
+  if (active.length) {
+    const stepMs = 9_500;
+    for (let j = 0; j < 6; j++) {
+      const bright = (k * 6 + j) % 2 === 0;
+      const t0 = Date.now();
+      for (const d of active) {
+        if (j === 0) { await setRgb(key, d, ZIGGO_ORANJE); await sleep(200); }
+        await setBrightness(key, d, bright ? 100 : 25);
+        await sleep(300);
+      }
+      const left = stepMs - (Date.now() - t0);
+      if (left > 0) await sleep(left);
+    }
+  }
+  if (k === 4) {
+    for (const d of active) {
+      const s = prev[d.device];
+      if (s.temp && s.temp > 0 && hasTemp(d)) await setTemp(key, d, s.temp);
+      else if (s.rgb != null) await setRgb(key, d, s.rgb);
+      await sleep(700);
+      if (s.brightness != null) { await setBrightness(key, d, s.brightness); await sleep(700); }
+    }
+    await sb.from("govee_state").update({ tv_prev: null, last_tv_rondo_date: date }).eq("id", 1);
+  }
+  return active.length;
+}
+
 Deno.serve(async (req) => {
   const key = Deno.env.get("GOVEE_KEY");
   if (!key) return Response.json({ status: "geen GOVEE_KEY secret gezet" });
@@ -363,10 +404,14 @@ Deno.serve(async (req) => {
     }
 
     // TV: Rondo (maandag 20:25-20:27) en Vandaag Inside (ma t/m vr 21:30-21:32), 1x per dag, op de achtergrond
-    if (t.weekday === "Mon" && t.hour === 20 && t.minute >= 25 && t.minute <= 27 && st.last_tv_rondo_date !== t.date) {
-      await log({ last_tv_rondo_date: t.date }, "tv rondo gestart");
-      background(tvEffect(key, "rondo"));
-      return Response.json({ action: "tv-rondo" });
+    if (event === "rondo" && t.weekday === "Mon" && t.hour === 20 && t.minute >= 25 && t.minute <= 29 && st.last_tv_rondo_date !== t.date) {
+      const k = t.minute - 25;
+      const mark = `${t.date}:${k}`;
+      if (st.last_tv_step === mark) return Response.json({ action: "tv-rondo-skip" });
+      await log({ last_tv_step: mark }, `tv rondo blok ${k + 1}/5`);
+      const saved = k > 0 && st.tv_prev ? (st.tv_prev as Record<string, LampState>) : null;
+      background(rondoBlock(key, sb, k, saved, t.date));
+      return Response.json({ action: "tv-rondo", block: k + 1 });
     }
     if (onDays.includes(t.weekday) && t.hour === 21 && t.minute >= 30 && t.minute <= 32 && st.last_tv_vi_date !== t.date) {
       await log({ last_tv_vi_date: t.date }, "tv vandaag inside gestart");

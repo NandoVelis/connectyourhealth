@@ -89,3 +89,10 @@ select cron.schedule('govee-rain', '*/10 6-19 * * *',
 
 -- Toegevoegd: binnenkomende appjes (event "app", groen pulseren).
 alter table public.govee_state add column if not exists last_msg_alert timestamptz;
+
+-- Toegevoegd: Rondo 5 minuten fel/minder fel, verdeeld over 5 aanroepen (ma 20:25-20:29).
+alter table public.govee_state
+  add column if not exists tv_prev jsonb,
+  add column if not exists last_tv_step text;
+select cron.schedule('govee-rondo', '25-29 18,19 * * 1',
+  $$select net.http_post(url := 'https://mhvduufxeqyxgkkvwimx.supabase.co/functions/v1/govee-lights', headers := '{"Content-Type":"application/json"}'::jsonb, body := '{"event":"rondo"}'::jsonb, timeout_milliseconds := 30000);$$);
