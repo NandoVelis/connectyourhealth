@@ -15,7 +15,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 // DIMMEN         zo t/m do vanaf 22:30, elke 5 min een stap, relatief aan de huidige helderheid (nooit hoger).
 // UIT            zo t/m do 23:00.
 // REGEN          overdag 07:00-20:15 (body {"event":"regen"}, elke 10 min): droog nu, regen binnen 30 min (Buienradar) -> 2x blauw pulseren, max 1x per uur.
-// APP-MELDING    event "app" + geheime sleutel (secret GOVEE_WEBHOOK_TOKEN): lampen die aan staan pulseren 3x groen (bv. WhatsApp via MacroDroid), max 1x per minuut.
+// APP-MELDING    event "app" + geheime sleutel (secret GOVEE_WEBHOOK_TOKEN): lampen die aan staan 8 s felgroen op 100% + 2x pulseren (bv. WhatsApp via MacroDroid), max 1x per minuut.
 // ESPN-DEADLINE  50-65 min voor espn_game.next_deadline: lampen die aan staan knipperen 3x (1x per deadline).
 //
 // Vereist secret GOVEE_KEY. Optioneel GOVEE_OWNER (default Nando).
@@ -248,7 +248,7 @@ async function rainSoon(): Promise<{ soon: boolean; minutes: number | null; raw:
   const idx = vals.slice(1, 7).findIndex((v) => v >= RAIN_MIN); // komende 30 min
   return { soon: dryNow && idx >= 0, minutes: idx >= 0 ? (idx + 1) * 5 : null, raw: raw.slice(0, 80) };
 }
-async function rainPulse(key: string, rgbColor = RAIN_BLAUW, pulses = 2) {
+async function rainPulse(key: string, rgbColor = RAIN_BLAUW, pulses = 2, holdMs = 0) {
   const lights = (await listLights(key)).filter(hasColor);
   const prev: LampState[] = [];
   const active: number[] = [];
@@ -259,8 +259,11 @@ async function rainPulse(key: string, rgbColor = RAIN_BLAUW, pulses = 2) {
     if (s.on) active.push(i);
   }
   if (!active.length) return 0;
-  for (const i of active) { await setRgb(key, lights[i], rgbColor); await sleep(300); }
-  await sleep(2000);
+  for (const i of active) {
+    await setRgb(key, lights[i], rgbColor); await sleep(300);
+    if (holdMs > 0 && hasBrightness(lights[i])) { await setBrightness(key, lights[i], 100); await sleep(300); }
+  }
+  await sleep(holdMs > 0 ? holdMs : 2000);
   for (let k = 0; k < pulses; k++) {
     for (const lvl of [100, 20]) {
       for (const i of active) { if (hasBrightness(lights[i])) await setBrightness(key, lights[i], lvl); await sleep(300); }
@@ -320,7 +323,7 @@ Deno.serve(async (req) => {
       if (busy) return Response.json({ action: "app-skip" });
       if (Date.now() - last < 60_000) return Response.json({ action: "app-throttled" });
       await sb.from("govee_state").update({ last_msg_alert: new Date().toISOString() }).eq("id", 1);
-      background(rainPulse(key, 0x00c800, 3).then((n) => log({}, `app-pulse groen ${n} lampen`)));
+      background(rainPulse(key, 0x00ff00, 2, 8000).then((n) => log({}, `app-pulse groen ${n} lampen`)));
       return Response.json({ action: "app" });
     }
   } catch (e) {
