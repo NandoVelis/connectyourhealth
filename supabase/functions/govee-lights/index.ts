@@ -11,7 +11,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 // KNIPPER-WAARSCHUWING ma t/m vr 07:50 en 13:50: lampen die aan staan knipperen 3x (3 min voor de uit).
 // UIT            ma t/m vr 07:53 en 13:53.
 // AAN            ma t/m vr 12:01 en 17:01.
-// WARM LICHT     dagelijks 20:00: kleurtemperatuur naar 2000K (amber; de laagste stand die de lamp aankan) (lampen die aan staan); herstel bij de volgende 'aan'.
+// WARM LICHT     dagelijks 20:00: diep amber (rgb 0xff5a00; 2000K als de lamp geen kleur kan) (lampen die aan staan); herstel bij de volgende 'aan'.
 // DIMMEN         zo t/m do vanaf 22:30, elke 5 min een stap, relatief aan de huidige helderheid (nooit hoger).
 // UIT            zo t/m do 23:00.
 // REGEN          overdag 07:00-20:15 (body {"event":"regen"}, elke 10 min): droog nu, regen binnen 30 min (Buienradar) -> 2x blauw pulseren, max 1x per uur.
@@ -194,6 +194,7 @@ async function blinkAll(key: string) {
 }
 
 // TV-effecten (stapsgewijs via de API; max ~10 commando's/min per lamp, dus elke ~10 s een stap).
+const WARM_AMBER = 0xff5a00; // diep amber, richting rood
 const ZIGGO_ORANJE = 0xff6a13;
 const SBS_BLAUW = 0x0057b8;
 const WIT = 0xffffff;
@@ -422,21 +423,22 @@ Deno.serve(async (req) => {
       return Response.json({ action: "off", ...r });
     }
 
-    // WARM LICHT: dagelijks 20:00-20:14, alleen lampen die aan staan
+    // WARM LICHT: dagelijks 20:00-20:14, alleen lampen die aan staan. Diep amber (rgb) als de lamp kleur kan, anders 2000K.
     if (t.hour === 20 && t.minute < 15 && st.last_warm_date !== t.date) {
       const lights = await listLights(key);
       const cb: Record<string, number> = { ...colorBase };
       let n = 0;
       for (const d of lights) {
-        if (!hasTemp(d)) continue;
+        if (!hasTemp(d) && !hasColor(d)) continue;
         const s = await getState(key, d);
         await sleep(700);
         if (!s.on) continue;
-        if (s.temp && s.temp > 0) cb[d.device] = s.temp;
-        if (await setTemp(key, d, 2000)) n++;
+        if (s.temp && s.temp > 2000) cb[d.device] = s.temp; // oorspronkelijke wit-stand onthouden (niet de eigen amber-stand)
+        const ok = hasColor(d) ? await setRgb(key, d, WARM_AMBER) : await setTemp(key, d, 2000);
+        if (ok) n++;
         await sleep(700);
       }
-      await log({ last_warm_date: t.date, color_base: cb }, `warm licht 2000K (amber) ${n} lampen`);
+      await log({ last_warm_date: t.date, color_base: cb }, `warm licht amber ${n} lampen`);
       return Response.json({ action: "warm", lamps: n });
     }
 
