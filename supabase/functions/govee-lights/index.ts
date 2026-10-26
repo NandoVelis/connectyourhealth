@@ -6,6 +6,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 // AAN (wakker)   zodra de slaap van vandaag in garmin_metrics staat, max 1x per dag (werkdagen alleen vóór 07:53).
 //                Daarna 1 minuut kleur-indicatie: groen = rusthartslag < 40 én slaapscore > 75,
 //                oranje = één van de twee, rood = geen van beide; daarna terug naar de vorige kleur.
+// KNIPPER-WAARSCHUWING ma t/m vr 07:50 en 13:50: lampen die aan staan knipperen 3x (3 min voor de uit).
 // UIT            ma t/m vr 07:53 en 13:53.
 // AAN            ma t/m vr 12:01 en 17:01.
 // WARM LICHT     dagelijks 20:00: kleurtemperatuur naar 2700K (lampen die aan staan); herstel bij de volgende 'aan'.
@@ -289,6 +290,20 @@ Deno.serve(async () => {
       }
       await log({ last_warm_date: t.date, color_base: cb }, `warm licht 2700K ${n} lampen`);
       return Response.json({ action: "warm", lamps: n });
+    }
+
+    // KNIPPER-WAARSCHUWING: ma t/m vr 07:50 en 13:50 (venster :50-:52), 3 min voor de vaste 'uit'
+    const warnings = [
+      { hour: 7, col: "last_blink_0750_date" },
+      { hour: 13, col: "last_blink_1350_date" },
+    ];
+    for (const w of warnings) {
+      if (t.hour === w.hour && t.minute >= 50 && t.minute <= 52 && onDays.includes(t.weekday) && st[w.col] !== t.date) {
+        await log({ [w.col]: t.date }, `waarschuwing ${w.hour}:50 gestart`);
+        const n = await blinkAll(key);
+        await log({}, `waarschuwing ${w.hour}:50 geknipperd ${n} lampen`);
+        return Response.json({ action: `blink-${w.hour}50`, lamps: n });
+      }
     }
 
     // UIT op vaste tijden: ma t/m vr 07:53 en 13:53

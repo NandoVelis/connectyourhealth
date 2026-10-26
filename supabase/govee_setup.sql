@@ -71,3 +71,8 @@ select cron.schedule('govee-espn-deadline', '*/5 * * * *',
 select cron.schedule('garmin-sync-wake', '*/10 4,5 * * 1-5',
   $$select net.http_post(url := 'https://mhvduufxeqyxgkkvwimx.supabase.co/functions/v1/trigger-garmin-sync', headers := '{"Content-Type":"application/json"}'::jsonb, body := '{}'::jsonb, timeout_milliseconds := 30000)
     where extract(hour from (now() at time zone 'Europe/Amsterdam')) = 6;$$);
+
+-- Toegevoegd: knipper-waarschuwing ma t/m vr 07:50 en 13:50 (3 min voor de uit). Gedekt door de 5-min-job.
+alter table public.govee_state
+  add column if not exists last_blink_0750_date date,
+  add column if not exists last_blink_1350_date date;
