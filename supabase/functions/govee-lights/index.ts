@@ -195,7 +195,7 @@ async function blinkAll(key: string) {
 
 // TV-effecten (stapsgewijs via de API; max ~10 commando's/min per lamp, dus elke ~10 s een stap).
 const WARM_AMBER = 0xff5a00; // diep amber, richting rood
-const ZIGGO_ORANJE = 0xff6a13;
+const ZIGGO_ORANJE = 0xff5000;
 const SBS_BLAUW = 0x0057b8;
 const WIT = 0xffffff;
 async function tvEffect(key: string, kind: "rondo" | "vi") {
@@ -218,7 +218,7 @@ async function tvEffect(key: string, kind: "rondo" | "vi") {
   };
   if (kind === "rondo") {
     await run(async (d) => { await setRgb(key, d, ZIGGO_ORANJE); await setBrightness(key, d, 100); });
-    for (const b of [75, 50, 30, 12]) await run((d) => setBrightness(key, d, b));
+    for (const b of [85, 70, 55, 40]) await run((d) => setBrightness(key, d, b));
   } else {
     for (const c of [SBS_BLAUW, WIT, SBS_BLAUW, WIT, SBS_BLAUW, WIT]) await run((d) => setRgb(key, d, c));
   }
