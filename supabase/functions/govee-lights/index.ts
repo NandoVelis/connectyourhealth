@@ -15,7 +15,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 // DIMMEN         zo t/m do vanaf 22:30, elke 5 min een stap, relatief aan de huidige helderheid (nooit hoger).
 // UIT            zo t/m do 23:00.
 // REGEN          overdag 07:00-20:15 (body {"event":"regen"}, elke 10 min): droog nu, regen binnen 30 min (Buienradar) -> 2x blauw pulseren, max 1x per uur.
-// APP-MELDING    event "app" + geheime sleutel (secret GOVEE_WEBHOOK_TOKEN): lampen die aan staan 8 s felgroen op 100% + 2x pulseren (bv. WhatsApp via MacroDroid), max 1x per minuut.
+// APP-MELDING    event "app" + geheime sleutel (secret GOVEE_WEBHOOK_TOKEN): lampen die aan staan 5 s vast felgroen op 100% (bv. WhatsApp via MacroDroid), max 1x per minuut.
 // ESPN-DEADLINE  50-65 min voor espn_game.next_deadline: lampen die aan staan knipperen 3x (1x per deadline).
 //
 // Vereist secret GOVEE_KEY. Optioneel GOVEE_OWNER (default Nando).
@@ -364,7 +364,7 @@ Deno.serve(async (req) => {
       if (busy) return Response.json({ action: "app-skip" });
       if (Date.now() - last < 60_000) return Response.json({ action: "app-throttled" });
       await sb.from("govee_state").update({ last_msg_alert: new Date().toISOString() }).eq("id", 1);
-      background(rainPulse(key, 0x00ff00, 2, 8000).then((n) => log({}, `app-pulse groen ${n} lampen`)));
+      background(rainPulse(key, 0x00ff00, 0, 5000).then((n) => log({}, `app-pulse groen ${n} lampen`)));
       return Response.json({ action: "app" });
     }
   } catch (e) {
