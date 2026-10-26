@@ -14,6 +14,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 // WARM LICHT     dagelijks 20:00: kleurtemperatuur naar 2700K (lampen die aan staan); herstel bij de volgende 'aan'.
 // DIMMEN         zo t/m do vanaf 22:30, elke 5 min een stap, relatief aan de huidige helderheid (nooit hoger).
 // UIT            zo t/m do 23:00.
+// REGEN          overdag 07:00-20:15 (body {"event":"regen"}, elke 10 min): droog nu, regen binnen 30 min (Buienradar) -> 2x blauw pulseren, max 1x per uur.
 // ESPN-DEADLINE  50-65 min voor espn_game.next_deadline: lampen die aan staan knipperen 3x (1x per deadline).
 //
 // Vereist secret GOVEE_KEY. Optioneel GOVEE_OWNER (default Nando).
@@ -229,7 +230,52 @@ async function tvEffect(key: string, kind: "rondo" | "vi") {
   return active.length;
 }
 
-Deno.serve(async () => {
+// REGEN (Buienradar): kijkt 30 min vooruit voor Groningen (centrum, ca. 53.22 N / 6.57 E).
+// Regen begint straks (nu droog, binnen 30 min nat) -> lampen die aan staan pulseren 2x blauw. Max 1x per uur.
+const RAIN_URL = "https://gpsgadget.buienradar.nl/data/raintext?lat=53.22&lon=6.57";
+const RAIN_BLAUW = 0x1e64ff;
+// Waarde 0-255 -> mm/u = 10^((v-109)/32). 100 is ruim 0,5 mm/u: merkbare regen.
+const RAIN_MIN = 100;
+async function rainSoon(): Promise<{ soon: boolean; minutes: number | null; raw: string }> {
+  const res = await fetch(RAIN_URL);
+  if (!res.ok) throw new Error(`buienradar ${res.status}`);
+  const raw = (await res.text()).trim();
+  const vals = raw.split(/\r?\n/).map((l) => parseInt(l.split("|")[0])).filter((n) => !isNaN(n));
+  if (vals.length < 7) return { soon: false, minutes: null, raw: raw.slice(0, 80) };
+  const dryNow = vals[0] < RAIN_MIN;
+  const idx = vals.slice(1, 7).findIndex((v) => v >= RAIN_MIN); // komende 30 min
+  return { soon: dryNow && idx >= 0, minutes: idx >= 0 ? (idx + 1) * 5 : null, raw: raw.slice(0, 80) };
+}
+async function rainPulse(key: string) {
+  const lights = (await listLights(key)).filter(hasColor);
+  const prev: LampState[] = [];
+  const active: number[] = [];
+  for (let i = 0; i < lights.length; i++) {
+    const s = await getState(key, lights[i]);
+    await sleep(700);
+    prev.push(s);
+    if (s.on) active.push(i);
+  }
+  if (!active.length) return 0;
+  for (const i of active) { await setRgb(key, lights[i], RAIN_BLAUW); await sleep(300); }
+  await sleep(2000);
+  for (let k = 0; k < 2; k++) {
+    for (const lvl of [100, 20]) {
+      for (const i of active) { if (hasBrightness(lights[i])) await setBrightness(key, lights[i], lvl); await sleep(300); }
+      await sleep(2200);
+    }
+  }
+  for (const i of active) {
+    const d = lights[i], s = prev[i];
+    if (s.temp && s.temp > 0 && hasTemp(d)) await setTemp(key, d, s.temp);
+    else if (s.rgb != null) await setRgb(key, d, s.rgb);
+    await sleep(700);
+    if (s.brightness != null && hasBrightness(d)) { await setBrightness(key, d, s.brightness); await sleep(700); }
+  }
+  return active.length;
+}
+
+Deno.serve(async (req) => {
   const key = Deno.env.get("GOVEE_KEY");
   if (!key) return Response.json({ status: "geen GOVEE_KEY secret gezet" });
 
@@ -249,7 +295,29 @@ Deno.serve(async () => {
   });
   const onDays = ["Mon", "Tue", "Wed", "Thu", "Fri"];
 
+  let event = "";
+  try { event = String((await req.json())?.event ?? ""); } catch { /* geen body */ }
+
   try {
+    // EVENT regen: alleen overdag (07:00-20:15) en niet rond de vaste knipper/uit-momenten
+    if (event === "regen") {
+      const mins = t.hour * 60 + t.minute;
+      const inWindow = mins >= 7 * 60 && mins <= 20 * 60 + 15;
+      const clash = onDays.includes(t.weekday) && [[7 * 60 + 48, 7 * 60 + 56], [13 * 60 + 48, 13 * 60 + 56]].some(([a, b]) => mins >= a && mins <= b);
+      if (!inWindow || clash) return Response.json({ action: "regen-skip" });
+      const last = st.last_rain_alert ? new Date(st.last_rain_alert).getTime() : 0;
+      if (Date.now() - last < 60 * 60_000) return Response.json({ action: "regen-throttled" });
+      const r = await rainSoon();
+      if (!r.soon) return Response.json({ action: "regen-none", sample: r.raw });
+      await sb.from("govee_state").update({ last_rain_alert: new Date().toISOString() }).eq("id", 1);
+      await log({}, `regen over ~${r.minutes} min, pulse gestart`);
+      background(rainPulse(key).then(async (n) => {
+        if (!n) await sb.from("govee_state").update({ last_rain_alert: null }).eq("id", 1); // lampen uit: niet verbruiken
+        await log({}, `regen-pulse ${n} lampen`);
+      }));
+      return Response.json({ action: "regen", minutes: r.minutes });
+    }
+
     // ESPN-DEADLINE: 50-65 min ervoor, 1x per deadline
     const { data: game } = await sb.from("espn_game").select("next_deadline").eq("id", 1).maybeSingle();
     if (game?.next_deadline) {

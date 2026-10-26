@@ -81,3 +81,8 @@ alter table public.govee_state
 alter table public.govee_state
   add column if not exists last_tv_rondo_date date,
   add column if not exists last_tv_vi_date date;
+
+-- Toegevoegd: regenmelding via Buienradar (elke 10 min overdag; de functie bewaakt zelf 07:00-20:15 lokaal en max 1x per uur).
+alter table public.govee_state add column if not exists last_rain_alert timestamptz;
+select cron.schedule('govee-rain', '*/10 6-19 * * *',
+  $$select net.http_post(url := 'https://mhvduufxeqyxgkkvwimx.supabase.co/functions/v1/govee-lights', headers := '{"Content-Type":"application/json"}'::jsonb, body := '{"event":"regen"}'::jsonb, timeout_milliseconds := 30000);$$);
