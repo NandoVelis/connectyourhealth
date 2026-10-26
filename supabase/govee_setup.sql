@@ -47,3 +47,6 @@ select cron.schedule('govee-lights-timed-off', '53 5,6,11,12 * * 1-5',
 alter table public.govee_state add column if not exists last_dim text;
 select cron.schedule('govee-lights-5min', '*/5 3-12,15-16,20-22 * * *',
   $$select net.http_post(url := 'https://mhvduufxeqyxgkkvwimx.supabase.co/functions/v1/govee-lights', headers := '{"Content-Type":"application/json"}'::jsonb, body := '{}'::jsonb, timeout_milliseconds := 30000);$$);
+
+-- Toegevoegd: helderheid van vóór het dimmen onthouden.
+alter table public.govee_state add column if not exists brightness_base jsonb;
