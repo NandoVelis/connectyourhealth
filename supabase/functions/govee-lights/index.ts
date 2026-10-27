@@ -3,7 +3,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 // Govee-lampen automatisch. Alle tijden Europe/Amsterdam, dus zomer-/wintertijd klopt vanzelf.
 //
 // WEKKER-LICHT   ma t/m vr 06:30-06:39: lamp gaat in 10 stappen van 1% naar normale helderheid (alleen lampen die uit stonden).
-// AAN (wakker)   zodra de slaap van vandaag in garmin_metrics staat, max 1x per dag (werkdagen alleen vóór 07:53); vóór 07:00 start op 5% en elke 5 min +5% (tot de normale helderheid).
+// AAN (wakker)   zodra de slaap van vandaag in garmin_metrics staat, max 1x per dag (werkdagen alleen vóór 07:53); vóór 07:00 start op 5% en elke 5 min +5% tot max 60%.
 //                Daarna 1 minuut kleur-indicatie: groen = rusthartslag < 40 én slaapscore > 75,
 //                oranje = één van de twee, rood = geen van beide; daarna terug naar de vorige kleur.
 // TV: maandag 20:25-20:30 (Rondo, Ziggo Sport 20:30): 5 min Ziggo-oranje, elke ~10 s fel/minder fel. Ma t/m vr 21:30 (Vandaag Inside, SBS6 21:35):
@@ -420,12 +420,12 @@ Deno.serve(async (req) => {
       return Response.json({ action: "tv-vi" });
     }
 
-    // OCHTEND-RAMP: na de ochtend-aan elke 5 min +5% helderheid, tot de normale stand, stopt om 07:00
+    // OCHTEND-RAMP: na de ochtend-aan elke 5 min +5% helderheid, tot 60%, stopt om 07:00
     if (t.hour >= 4 && t.hour < 7 && typeof st.wake_ramp === "string" && st.wake_ramp.startsWith(t.date + "|")) {
       const [, lv, at] = st.wake_ramp.split("|");
       const level = parseInt(lv), nowMin = t.hour * 60 + t.minute;
-      if (level < 100 && nowMin - parseInt(at) >= 4) {
-        const next = Math.min(100, level + 5);
+      if (level < 60 && nowMin - parseInt(at) >= 4) {
+        const next = Math.min(60, level + 5);
         const lights = (await listLights(key)).filter(hasBrightness);
         let n = 0;
         for (const d of lights) {
