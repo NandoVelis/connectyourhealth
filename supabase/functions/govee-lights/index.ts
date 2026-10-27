@@ -9,7 +9,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 // TV: maandag 20:25-20:30 (Rondo, Ziggo Sport 20:30): 5 min Ziggo-oranje, elke ~10 s fel/minder fel. Ma t/m vr 21:30 (Vandaag Inside, SBS6 21:35):
 //     blauw/wit wisselend (SBS-kleuren), ~1 min, daarna terug naar de vorige stand. Alleen lampen die aan staan.
 // STOPLICHT      ma t/m vr 07:45 en 13:45: groen, 07:50/13:50 oranje, 07:52/13:52 rood (event stoplight, minuut-cron); daarna uit van :53 (kleur eerst terug).
-// UIT            ma t/m vr 07:53 en 13:53.
+// UIT            ma t/m vr 07:53 en 13:53: eerst 1 min rood knipperen (100%/60%), kleur+helderheid terug, dan uit.
 // AAN            ma t/m vr 12:01 en 17:01: helderheid van vóór de uit (handmatig), anders 60%.
 // WARM LICHT     dagelijks 20:00: diep amber (rgb 0xff5a00; 2000K als de lamp geen kleur kan) (lampen die aan staan); herstel bij de volgende 'aan'.
 // DIMMEN         zo t/m do vanaf 22:30, elke 5 min een stap, relatief aan de huidige helderheid (nooit hoger).
@@ -292,6 +292,39 @@ async function snapshotBrightness(key: string): Promise<Record<string, number>> 
   return out;
 }
 
+// Vaste uit (07:53/13:53): 1 minuut rood knipperen (100% / 60% wisselend, ~9 s per stap), kleur en helderheid terugzetten, dan uit.
+async function offWithBlink(key: string, sb: any, sp: Record<string, LampState> | null, base: Record<string, number>, done: (msg: string, patch?: Record<string, unknown>) => Promise<void>) {
+  const lights = await listLights(key);
+  const prev: Record<string, LampState> = {};
+  const snap: Record<string, number> = {};
+  for (const d of lights) {
+    const st2 = await getState(key, d);
+    await sleep(700);
+    if (!st2.on) continue;
+    prev[d.device] = sp?.[d.device] ?? st2; // kleur van vóór het stoplicht, anders de huidige
+    if (st2.brightness != null) snap[d.device] = st2.brightness;
+  }
+  if (Object.keys(snap).length) await sb.from("govee_state").update({ brightness_base: { ...base, ...snap } }).eq("id", 1);
+  const blinkers = lights.filter((d) => prev[d.device] && hasColor(d));
+  for (const d of blinkers) { await setRgb(key, d, 0xff0000); await sleep(300); }
+  const levels = [100, 60, 100, 60, 100, 60];
+  for (const lvl of levels) {
+    const t0 = Date.now();
+    for (const d of blinkers) { if (hasBrightness(d)) await setBrightness(key, d, lvl); await sleep(300); }
+    const left = 9_000 - (Date.now() - t0);
+    if (left > 0) await sleep(left);
+  }
+  for (const d of blinkers) {
+    const p2 = prev[d.device];
+    if (p2.temp && p2.temp > 0 && hasTemp(d)) await setTemp(key, d, p2.temp);
+    else if (p2.rgb != null) await setRgb(key, d, p2.rgb);
+    await sleep(600);
+    if (snap[d.device] != null && hasBrightness(d)) { await setBrightness(key, d, snap[d.device]); await sleep(600); }
+  }
+  const r = await setAll(key, false);
+  await done(`uit na rood knipperen ${r.ok}/${r.total}`, { stoplight_prev: null });
+}
+
 // Rondo: 5 minuten (20:25-20:29), elke ~10 s wisselen tussen fel en minder fel Ziggo-oranje.
 // Verdeeld over 5 aanroepen van 1 minuut (k = 0..4); de oorspronkelijke lampstand staat in govee_state.tv_prev.
 async function rondoBlock(key: string, sb: any, k: number, saved: Record<string, LampState> | null, date: string) {
@@ -555,22 +588,10 @@ Deno.serve(async (req) => {
     ];
     for (const s of timedOff) {
       if (t.hour === s.hour && t.minute >= 53 && onDays.includes(t.weekday) && st[s.col] !== t.date) {
-        if (st.stoplight_prev && typeof st.stoplight_prev === "object") { // stoplicht: oorspronkelijke kleur terugzetten vóór de uit
-          const sp = st.stoplight_prev as Record<string, LampState>;
-          for (const d of (await listLights(key)).filter(hasColor)) {
-            const s2 = sp[d.device];
-            if (!s2) continue;
-            if (s2.temp && s2.temp > 0 && hasTemp(d)) await setTemp(key, d, s2.temp);
-            else if (s2.rgb != null) await setRgb(key, d, s2.rgb);
-            await sleep(600);
-          }
-          await sb.from("govee_state").update({ stoplight_prev: null }).eq("id", 1);
-        }
-        const snap = await snapshotBrightness(key);
-        if (Object.keys(snap).length) await sb.from("govee_state").update({ brightness_base: { ...base, ...snap } }).eq("id", 1);
-        const r = await setAll(key, false);
-        if (r.ok > 0) await log({ [s.col]: t.date }, `uit ${s.hour}:53 ${r.ok}/${r.total}`);
-        return Response.json({ action: `off-${s.hour}53`, ...r });
+        await log({ [s.col]: t.date }, `uit ${s.hour}:53 gestart (rood knipperen)`);
+        const sp = st.stoplight_prev && typeof st.stoplight_prev === "object" ? (st.stoplight_prev as Record<string, LampState>) : null;
+        background(offWithBlink(key, sb, sp, base, (msg, patch) => log(patch ?? {}, msg)));
+        return Response.json({ action: `off-${s.hour}53-blink` });
       }
     }
 
