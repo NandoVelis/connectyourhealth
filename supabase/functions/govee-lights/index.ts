@@ -8,7 +8,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 //                oranje = één van de twee, rood = geen van beide; daarna terug naar de vorige kleur.
 // TV: maandag 20:25-20:30 (Rondo, Ziggo Sport 20:30): 5 min Ziggo-oranje, elke ~10 s fel/minder fel. Ma t/m vr 21:30 (Vandaag Inside, SBS6 21:35):
 //     blauw/wit wisselend (SBS-kleuren), ~1 min, daarna terug naar de vorige stand. Alleen lampen die aan staan.
-// KNIPPER-WAARSCHUWING ma t/m vr 07:50 en 13:50: lampen die aan staan knipperen 3x (3 min voor de uit).
+// STOPLICHT      ma t/m vr 07:45 en 13:45: groen, 07:50/13:50 oranje, 07:52/13:52 rood (event stoplight, minuut-cron); daarna uit van :53 (kleur eerst terug).
 // UIT            ma t/m vr 07:53 en 13:53.
 // AAN            ma t/m vr 12:01 en 17:01: helderheid van vóór de uit (handmatig), anders 60%.
 // WARM LICHT     dagelijks 20:00: diep amber (rgb 0xff5a00; 2000K als de lamp geen kleur kan) (lampen die aan staan); herstel bij de volgende 'aan'.
@@ -370,7 +370,7 @@ Deno.serve(async (req) => {
       const mins = t.hour * 60 + t.minute;
       const busy = [
         [20 * 60 + 24, 20 * 60 + 36], [21 * 60 + 29, 21 * 60 + 36], [22 * 60 + 30, 23 * 60 + 5],
-        [6 * 60 + 29, 6 * 60 + 41], [7 * 60 + 48, 7 * 60 + 56], [13 * 60 + 48, 13 * 60 + 56],
+        [6 * 60 + 29, 6 * 60 + 41], [7 * 60 + 44, 7 * 60 + 56], [13 * 60 + 44, 13 * 60 + 56],
       ].some(([a, b]) => mins >= a && mins <= b);
       const last = st.last_msg_alert ? new Date(st.last_msg_alert).getTime() : 0;
       if (busy) return Response.json({ action: "app-skip" });
@@ -384,11 +384,37 @@ Deno.serve(async (req) => {
   }
 
   try {
+    // EVENT stoplight: ma t/m vr 07:45-07:52 en 13:45-13:52: groen (:45) -> oranje (:50) -> rood (:52). De uit van :53 zet eerst de kleur terug.
+    if (event === "stoplight" && onDays.includes(t.weekday) && (t.hour === 7 || t.hour === 13) && t.minute >= 45 && t.minute <= 52) {
+      const step = t.minute >= 52 ? 2 : t.minute >= 50 ? 1 : 0;
+      const mark = `${t.date}:${t.hour}:${step}`;
+      if (st.stoplight_step === mark) return Response.json({ action: "stoplight-skip" });
+      const colors = [0x00c800, 0xff8c00, 0xff0000];
+      const lights = (await listLights(key)).filter(hasColor);
+      let prev: Record<string, LampState> = (step > 0 && st.stoplight_prev) ? (st.stoplight_prev as Record<string, LampState>) : {};
+      if (step === 0 || !st.stoplight_prev) {
+        prev = {};
+        for (const d of lights) { const s2 = await getState(key, d); await sleep(700); if (s2.on) prev[d.device] = s2; }
+      }
+      let n = 0;
+      for (const d of lights) {
+        if (!prev[d.device]) continue;
+        if (await setRgb(key, d, colors[step])) n++;
+        await sleep(500);
+      }
+      await log({ stoplight_step: mark, stoplight_prev: prev }, `stoplicht ${["groen", "oranje", "rood"][step]} ${n} lampen`);
+      return Response.json({ action: "stoplight", step, lamps: n });
+    }
+  } catch (e) {
+    return Response.json({ error: (e as Error).message }, { status: 500 });
+  }
+
+  try {
     // EVENT regen: alleen overdag (07:00-20:15) en niet rond de vaste knipper/uit-momenten
     if (event === "regen") {
       const mins = t.hour * 60 + t.minute;
       const inWindow = mins >= 7 * 60 && mins <= 20 * 60 + 15;
-      const clash = onDays.includes(t.weekday) && [[7 * 60 + 48, 7 * 60 + 56], [13 * 60 + 48, 13 * 60 + 56]].some(([a, b]) => mins >= a && mins <= b);
+      const clash = onDays.includes(t.weekday) && [[7 * 60 + 44, 7 * 60 + 56], [13 * 60 + 44, 13 * 60 + 56]].some(([a, b]) => mins >= a && mins <= b);
       if (!inWindow || clash) return Response.json({ action: "regen-skip" });
       const last = st.last_rain_alert ? new Date(st.last_rain_alert).getTime() : 0;
       if (Date.now() - last < 60 * 60_000) return Response.json({ action: "regen-throttled" });
@@ -522,20 +548,6 @@ Deno.serve(async (req) => {
       return Response.json({ action: "warm", lamps: n });
     }
 
-    // KNIPPER-WAARSCHUWING: ma t/m vr 07:50 en 13:50 (venster :50-:52), 3 min voor de vaste 'uit'
-    const warnings = [
-      { hour: 7, col: "last_blink_0750_date" },
-      { hour: 13, col: "last_blink_1350_date" },
-    ];
-    for (const w of warnings) {
-      if (t.hour === w.hour && t.minute >= 50 && t.minute <= 52 && onDays.includes(t.weekday) && st[w.col] !== t.date) {
-        await log({ [w.col]: t.date }, `waarschuwing ${w.hour}:50 gestart`);
-        const n = await blinkAll(key);
-        await log({}, `waarschuwing ${w.hour}:50 geknipperd ${n} lampen`);
-        return Response.json({ action: `blink-${w.hour}50`, lamps: n });
-      }
-    }
-
     // UIT op vaste tijden: ma t/m vr 07:53 en 13:53
     const timedOff = [
       { hour: 7, col: "last_off_0753_date" },
@@ -543,6 +555,17 @@ Deno.serve(async (req) => {
     ];
     for (const s of timedOff) {
       if (t.hour === s.hour && t.minute >= 53 && onDays.includes(t.weekday) && st[s.col] !== t.date) {
+        if (st.stoplight_prev && typeof st.stoplight_prev === "object") { // stoplicht: oorspronkelijke kleur terugzetten vóór de uit
+          const sp = st.stoplight_prev as Record<string, LampState>;
+          for (const d of (await listLights(key)).filter(hasColor)) {
+            const s2 = sp[d.device];
+            if (!s2) continue;
+            if (s2.temp && s2.temp > 0 && hasTemp(d)) await setTemp(key, d, s2.temp);
+            else if (s2.rgb != null) await setRgb(key, d, s2.rgb);
+            await sleep(600);
+          }
+          await sb.from("govee_state").update({ stoplight_prev: null }).eq("id", 1);
+        }
         const snap = await snapshotBrightness(key);
         if (Object.keys(snap).length) await sb.from("govee_state").update({ brightness_base: { ...base, ...snap } }).eq("id", 1);
         const r = await setAll(key, false);

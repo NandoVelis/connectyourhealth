@@ -99,3 +99,10 @@ select cron.schedule('govee-rondo', '25-29 18,19 * * 1',
 
 -- Toegevoegd: ochtend-ramp (vóór 07:00 elke 5 min +5% na de ochtend-aan). Gedekt door de 5-min-job.
 alter table public.govee_state add column if not exists wake_ramp text;
+
+-- Toegevoegd: stoplicht ma-vr 07:45-07:52 en 13:45-13:52 (vervangt de knipper-waarschuwing 07:50/13:50).
+alter table public.govee_state
+  add column if not exists stoplight_prev jsonb,
+  add column if not exists stoplight_step text;
+select cron.schedule('govee-stoplight', '45-52 5,6,11,12 * * 1-5',
+  $$select net.http_post(url := 'https://mhvduufxeqyxgkkvwimx.supabase.co/functions/v1/govee-lights', headers := '{"Content-Type":"application/json"}'::jsonb, body := '{"event":"stoplight"}'::jsonb, timeout_milliseconds := 30000);$$);
