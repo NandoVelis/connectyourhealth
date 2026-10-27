@@ -8,7 +8,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 //                oranje = één van de twee, rood = geen van beide; daarna terug naar de vorige kleur.
 // TV: maandag 20:25-20:30 (Rondo, Ziggo Sport 20:30): 5 min Ziggo-oranje, elke ~10 s fel/minder fel. Ma t/m vr 21:30 (Vandaag Inside, SBS6 21:35):
 //     blauw/wit wisselend (SBS-kleuren), ~1 min, daarna terug naar de vorige stand. Alleen lampen die aan staan.
-// STOPLICHT      ma t/m vr 07:45 en 13:45: groen, 07:50/13:50 oranje, 07:52/13:52 rood (event stoplight, minuut-cron); daarna uit van :53 (kleur eerst terug).
+// STOPLICHT      ma t/m vr 07:25 en 13:25: vloeiend groen (tot :30), lichtgroen -> geel (:31-:40), -> oranje (:50), -> rood (:52); elke 30 s een tint (event stoplight, minuut-cron).
 // UIT            ma t/m vr 07:53 en 13:53: eerst 1 min rood knipperen (100%/60%), kleur+helderheid terug, dan uit.
 // AAN            ma t/m vr 12:01 en 17:01: helderheid van vóór de uit (handmatig), anders 60%.
 // WARM LICHT     dagelijks 20:00: diep amber (rgb 0xff5a00; 2000K als de lamp geen kleur kan) (lampen die aan staan); herstel bij de volgende 'aan'.
@@ -281,6 +281,26 @@ async function rainPulse(key: string, rgbColor = RAIN_BLAUW, pulses = 2, holdMs 
   return active.length;
 }
 
+// Stoplicht-kleurverloop: kleur op minuut m (t.o.v. het hele uur, 25..52), lineair tussen de sleutelpunten.
+const STOP_KF: Array<[number, number]> = [
+  [25, 0x00c800], [30, 0x00c800], // groen
+  [31, 0x9be000], [40, 0xffe000], // lichtgroen -> geel
+  [50, 0xff8c00],                  // geel -> oranje
+  [52, 0xff0000],                  // oranje -> rood
+];
+function stopColor(m: number): number {
+  if (m <= STOP_KF[0][0]) return STOP_KF[0][1];
+  for (let i = 1; i < STOP_KF.length; i++) {
+    const [m1, c1] = STOP_KF[i], [m0, c0] = STOP_KF[i - 1];
+    if (m <= m1) {
+      const f = (m - m0) / (m1 - m0);
+      const ch = (shift: number) => Math.round(((c0 >> shift) & 255) + ((((c1 >> shift) & 255) - ((c0 >> shift) & 255)) * f));
+      return (ch(16) << 16) | (ch(8) << 8) | ch(0);
+    }
+  }
+  return STOP_KF[STOP_KF.length - 1][1];
+}
+
 // Helderheid van lampen die aan staan vastleggen (vlak vóór de vaste uit), zodat de volgende 'aan' die stand terugzet.
 async function snapshotBrightness(key: string): Promise<Record<string, number>> {
   const out: Record<string, number> = {};
@@ -403,7 +423,7 @@ Deno.serve(async (req) => {
       const mins = t.hour * 60 + t.minute;
       const busy = [
         [20 * 60 + 24, 20 * 60 + 36], [21 * 60 + 29, 21 * 60 + 36], [22 * 60 + 30, 23 * 60 + 5],
-        [6 * 60 + 29, 6 * 60 + 41], [7 * 60 + 44, 7 * 60 + 56], [13 * 60 + 44, 13 * 60 + 56],
+        [6 * 60 + 29, 6 * 60 + 41], [7 * 60 + 24, 7 * 60 + 56], [13 * 60 + 24, 13 * 60 + 56],
       ].some(([a, b]) => mins >= a && mins <= b);
       const last = st.last_msg_alert ? new Date(st.last_msg_alert).getTime() : 0;
       if (busy) return Response.json({ action: "app-skip" });
@@ -417,26 +437,30 @@ Deno.serve(async (req) => {
   }
 
   try {
-    // EVENT stoplight: ma t/m vr 07:45-07:52 en 13:45-13:52: groen (:45) -> oranje (:50) -> rood (:52). De uit van :53 zet eerst de kleur terug.
-    if (event === "stoplight" && onDays.includes(t.weekday) && (t.hour === 7 || t.hour === 13) && t.minute >= 45 && t.minute <= 52) {
-      const step = t.minute >= 52 ? 2 : t.minute >= 50 ? 1 : 0;
-      const mark = `${t.date}:${t.hour}:${step}`;
+    // EVENT stoplight: ma t/m vr 07:25-07:52 en 13:25-13:52: vloeiend groen -> lichtgroen -> geel -> oranje -> rood (elke 30 s een tint).
+    // De uit van :53 knippert rood en zet daarna de oorspronkelijke kleur terug.
+    if (event === "stoplight" && onDays.includes(t.weekday) && (t.hour === 7 || t.hour === 13) && t.minute >= 25 && t.minute <= 52) {
+      const mark = `${t.date}:${t.hour}:${t.minute}`;
       if (st.stoplight_step === mark) return Response.json({ action: "stoplight-skip" });
-      const colors = [0x00c800, 0xff8c00, 0xff0000];
       const lights = (await listLights(key)).filter(hasColor);
-      let prev: Record<string, LampState> = (step > 0 && st.stoplight_prev) ? (st.stoplight_prev as Record<string, LampState>) : {};
-      if (step === 0 || !st.stoplight_prev) {
+      let prev: Record<string, LampState> | null = st.stoplight_prev && typeof st.stoplight_prev === "object" ? (st.stoplight_prev as Record<string, LampState>) : null;
+      if (!prev) {
         prev = {};
         for (const d of lights) { const s2 = await getState(key, d); await sleep(700); if (s2.on) prev[d.device] = s2; }
       }
-      let n = 0;
-      for (const d of lights) {
-        if (!prev[d.device]) continue;
-        if (await setRgb(key, d, colors[step])) n++;
-        await sleep(500);
-      }
-      await log({ stoplight_step: mark, stoplight_prev: prev }, `stoplicht ${["groen", "oranje", "rood"][step]} ${n} lampen`);
-      return Response.json({ action: "stoplight", step, lamps: n });
+      const apply = async (m: number) => {
+        let n = 0;
+        for (const d of lights) {
+          if (!prev![d.device]) continue;
+          if (await setRgb(key, d, stopColor(m))) n++;
+          await sleep(400);
+        }
+        return n;
+      };
+      await log({ stoplight_step: mark, stoplight_prev: prev }, `stoplicht #${stopColor(t.minute).toString(16).padStart(6, "0")}`);
+      const n = await apply(t.minute);
+      if (t.minute < 52) background((async () => { await sleep(30_000); await apply(t.minute + 0.5); })());
+      return Response.json({ action: "stoplight", minute: t.minute, lamps: n });
     }
   } catch (e) {
     return Response.json({ error: (e as Error).message }, { status: 500 });
@@ -447,7 +471,7 @@ Deno.serve(async (req) => {
     if (event === "regen") {
       const mins = t.hour * 60 + t.minute;
       const inWindow = mins >= 7 * 60 && mins <= 20 * 60 + 15;
-      const clash = onDays.includes(t.weekday) && [[7 * 60 + 44, 7 * 60 + 56], [13 * 60 + 44, 13 * 60 + 56]].some(([a, b]) => mins >= a && mins <= b);
+      const clash = onDays.includes(t.weekday) && [[7 * 60 + 24, 7 * 60 + 56], [13 * 60 + 24, 13 * 60 + 56]].some(([a, b]) => mins >= a && mins <= b);
       if (!inWindow || clash) return Response.json({ action: "regen-skip" });
       const last = st.last_rain_alert ? new Date(st.last_rain_alert).getTime() : 0;
       if (Date.now() - last < 60 * 60_000) return Response.json({ action: "regen-throttled" });

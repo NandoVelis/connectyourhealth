@@ -106,3 +106,7 @@ alter table public.govee_state
   add column if not exists stoplight_step text;
 select cron.schedule('govee-stoplight', '45-52 5,6,11,12 * * 1-5',
   $$select net.http_post(url := 'https://mhvduufxeqyxgkkvwimx.supabase.co/functions/v1/govee-lights', headers := '{"Content-Type":"application/json"}'::jsonb, body := '{"event":"stoplight"}'::jsonb, timeout_milliseconds := 30000);$$);
+
+-- Aangepast: stoplicht begint om 07:25/13:25 met vloeiend kleurverloop (elke minuut een aanroep, 2 tinten per minuut).
+select cron.schedule('govee-stoplight', '25-52 5,6,11,12 * * 1-5',
+  $$select net.http_post(url := 'https://mhvduufxeqyxgkkvwimx.supabase.co/functions/v1/govee-lights', headers := '{"Content-Type":"application/json"}'::jsonb, body := '{"event":"stoplight"}'::jsonb, timeout_milliseconds := 30000);$$);
