@@ -10,7 +10,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 //     blauw/wit wisselend (SBS-kleuren), ~1 min, daarna terug naar de vorige stand. Alleen lampen die aan staan.
 // KNIPPER-WAARSCHUWING ma t/m vr 07:50 en 13:50: lampen die aan staan knipperen 3x (3 min voor de uit).
 // UIT            ma t/m vr 07:53 en 13:53.
-// AAN            ma t/m vr 12:01 en 17:01.
+// AAN            ma t/m vr 12:01 en 17:01: helderheid van vóór de uit (handmatig), anders 60%.
 // WARM LICHT     dagelijks 20:00: diep amber (rgb 0xff5a00; 2000K als de lamp geen kleur kan) (lampen die aan staan); herstel bij de volgende 'aan'.
 // DIMMEN         zo t/m do vanaf 22:30, elke 5 min een stap, relatief aan de huidige helderheid (nooit hoger).
 // UIT            zo t/m do 23:00.
@@ -97,7 +97,7 @@ async function getState(key: string, d: any): Promise<LampState> {
 }
 
 // Zet alle lampen aan of uit. Bij 'aan': helderheid en kleurtemperatuur van vóór dimmen/warm licht terugzetten.
-async function setAll(key: string, on: boolean, base: Record<string, number> = {}, colorBase: Record<string, number> = {}, maxBrightness: number | null = null) {
+async function setAll(key: string, on: boolean, base: Record<string, number> = {}, colorBase: Record<string, number> = {}, maxBrightness: number | null = null, fallbackBrightness: number | null = null) {
   const lights = await listLights(key);
   let ok = 0;
   let restored = false;
@@ -106,8 +106,8 @@ async function setAll(key: string, on: boolean, base: Record<string, number> = {
     if (await setPower(key, d, on)) ok++;
     await sleep(700);
     if (!on) continue;
-    if (hasBrightness(d) && (typeof base[d.device] === "number" || maxBrightness != null)) {
-      const v = typeof base[d.device] === "number" ? base[d.device] : 100;
+    if (hasBrightness(d) && (typeof base[d.device] === "number" || maxBrightness != null || fallbackBrightness != null)) {
+      const v = typeof base[d.device] === "number" ? base[d.device] : (fallbackBrightness ?? 100);
       await setBrightness(key, d, Math.min(v, maxBrightness ?? 100));
       if (typeof base[d.device] === "number") restored = true;
       await sleep(700);
@@ -279,6 +279,17 @@ async function rainPulse(key: string, rgbColor = RAIN_BLAUW, pulses = 2, holdMs 
     if (s.brightness != null && hasBrightness(d)) { await setBrightness(key, d, s.brightness); await sleep(700); }
   }
   return active.length;
+}
+
+// Helderheid van lampen die aan staan vastleggen (vlak vóór de vaste uit), zodat de volgende 'aan' die stand terugzet.
+async function snapshotBrightness(key: string): Promise<Record<string, number>> {
+  const out: Record<string, number> = {};
+  for (const d of (await listLights(key)).filter(hasBrightness)) {
+    const s = await getState(key, d);
+    await sleep(700);
+    if (s.on && s.brightness != null) out[d.device] = s.brightness;
+  }
+  return out;
 }
 
 // Rondo: 5 minuten (20:25-20:29), elke ~10 s wisselen tussen fel en minder fel Ziggo-oranje.
@@ -532,6 +543,8 @@ Deno.serve(async (req) => {
     ];
     for (const s of timedOff) {
       if (t.hour === s.hour && t.minute >= 53 && onDays.includes(t.weekday) && st[s.col] !== t.date) {
+        const snap = await snapshotBrightness(key);
+        if (Object.keys(snap).length) await sb.from("govee_state").update({ brightness_base: { ...base, ...snap } }).eq("id", 1);
         const r = await setAll(key, false);
         if (r.ok > 0) await log({ [s.col]: t.date }, `uit ${s.hour}:53 ${r.ok}/${r.total}`);
         return Response.json({ action: `off-${s.hour}53`, ...r });
@@ -545,7 +558,7 @@ Deno.serve(async (req) => {
     ];
     for (const s of timedOn) {
       if (t.hour === s.hour && t.minute >= 1 && t.minute < 15 && onDays.includes(t.weekday) && st[s.col] !== t.date) {
-        const r = await setAll(key, true, base, colorBase);
+        const r = await setAll(key, true, base, colorBase, null, 60); // vorige handmatige stand, anders 60%
         if (r.ok > 0) await log({ [s.col]: t.date, ...clearPatch(r) }, `aan ${s.hour}:01 ${r.ok}/${r.total}`);
         return Response.json({ action: `on-${s.hour}01`, ...r });
       }
