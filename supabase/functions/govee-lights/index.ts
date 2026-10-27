@@ -3,7 +3,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 // Govee-lampen automatisch. Alle tijden Europe/Amsterdam, dus zomer-/wintertijd klopt vanzelf.
 //
 // WEKKER-LICHT   ma t/m vr 06:30-06:39: lamp gaat in 10 stappen van 1% naar normale helderheid (alleen lampen die uit stonden).
-// AAN (wakker)   zodra de slaap van vandaag in garmin_metrics staat, max 1x per dag (werkdagen alleen vóór 07:53).
+// AAN (wakker)   zodra de slaap van vandaag in garmin_metrics staat, max 1x per dag (werkdagen alleen vóór 07:53); vóór 08:00 max 30% helderheid.
 //                Daarna 1 minuut kleur-indicatie: groen = rusthartslag < 40 én slaapscore > 75,
 //                oranje = één van de twee, rood = geen van beide; daarna terug naar de vorige kleur.
 // TV: maandag 20:25-20:30 (Rondo, Ziggo Sport 20:30): 5 min Ziggo-oranje, elke ~10 s fel/minder fel. Ma t/m vr 21:30 (Vandaag Inside, SBS6 21:35):
@@ -97,7 +97,7 @@ async function getState(key: string, d: any): Promise<LampState> {
 }
 
 // Zet alle lampen aan of uit. Bij 'aan': helderheid en kleurtemperatuur van vóór dimmen/warm licht terugzetten.
-async function setAll(key: string, on: boolean, base: Record<string, number> = {}, colorBase: Record<string, number> = {}) {
+async function setAll(key: string, on: boolean, base: Record<string, number> = {}, colorBase: Record<string, number> = {}, maxBrightness: number | null = null) {
   const lights = await listLights(key);
   let ok = 0;
   let restored = false;
@@ -106,9 +106,10 @@ async function setAll(key: string, on: boolean, base: Record<string, number> = {
     if (await setPower(key, d, on)) ok++;
     await sleep(700);
     if (!on) continue;
-    if (hasBrightness(d) && typeof base[d.device] === "number") {
-      await setBrightness(key, d, base[d.device]);
-      restored = true;
+    if (hasBrightness(d) && (typeof base[d.device] === "number" || maxBrightness != null)) {
+      const v = typeof base[d.device] === "number" ? base[d.device] : 100;
+      await setBrightness(key, d, Math.min(v, maxBrightness ?? 100));
+      if (typeof base[d.device] === "number") restored = true;
       await sleep(700);
     }
     if (hasTemp(d) && typeof colorBase[d.device] === "number") {
@@ -537,7 +538,7 @@ Deno.serve(async (req) => {
       const { data: row } = await sb.from("garmin_metrics").select("sleep_minutes, sleep_score, resting_hr")
         .eq("owner", OWNER).eq("metric_date", t.date).maybeSingle();
       if (row && Number(row.sleep_minutes) > 0) {
-        const r = await setAll(key, true, base, colorBase);
+        const r = await setAll(key, true, base, colorBase, t.hour < 8 ? 30 : null); // 's ochtends vroeg zacht beginnen (max 30%)
         if (r.ok > 0) {
           const patch: Record<string, unknown> = { last_on_date: t.date, ...clearPatch(r) };
           const rgb = indicatorRgb(
