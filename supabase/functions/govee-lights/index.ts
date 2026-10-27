@@ -2,7 +2,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 
 // Govee-lampen automatisch. Alle tijden Europe/Amsterdam, dus zomer-/wintertijd klopt vanzelf.
 //
-// WEKKER-LICHT   ma t/m vr 06:30-06:39: lamp gaat in 10 stappen van 1% naar normale helderheid (alleen lampen die uit stonden).
+// WEKKER-LICHT   ma t/m vr 06:30-06:39: lamp gaat in 10 stappen van 1% naar normale helderheid (max 60%) (alleen lampen die uit stonden).
 // AAN (wakker)   zodra de slaap van vandaag in garmin_metrics staat, max 1x per dag (werkdagen alleen vóór 07:53); vóór 07:00 start op 5% en elke 5 min +5% tot max 60%.
 //                Daarna 1 minuut kleur-indicatie: groen = rusthartslag < 40 én slaapscore > 75,
 //                oranje = één van de twee, rood = geen van beide; daarna terug naar de vorige kleur.
@@ -456,7 +456,7 @@ Deno.serve(async (req) => {
             if (s.on) continue; // staat al aan: met rust laten
             wd.push(d.device);
           } else if (!wd.includes(d.device)) continue;
-          const target = normal[d.device] ?? 70;
+          const target = Math.min(60, normal[d.device] ?? 70); // nooit fellers dan 60%
           const pct = Math.max(1, Math.round(target * (k + 1) / 10));
           if (k === 0) {
             await setBrightness(key, d, pct); await sleep(700);
