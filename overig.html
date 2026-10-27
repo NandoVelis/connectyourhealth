@@ -524,11 +524,12 @@
    ========================================================================= */
 const SUPABASE_URL  = 'https://mhvduufxeqyxgkkvwimx.supabase.co';
 const SUPABASE_KEY  = 'sb_publishable_Oy2NNm-yMP358eH3NPHl1A_d24-72WS';
-const ALLOWED       = ['nandovelis@gmail.com', 'duncanvelis@ziggo.nl'];   // wie deze pagina mag zien
+const ALLOWED       = ['nandovelis@gmail.com', 'duncanvelis@ziggo.nl', 'nandovelis@connectyou.nl'];   // wie deze pagina mag zien
 // Elk toegestaan e-mailadres heeft zijn eigen ESPN Fantasy team-ID -- "Mijn
 // team" en de transfersuggesties tonen na het inloggen het team dat bij dat
-// adres hoort i.p.v. altijd hetzelfde team.
-const EMAIL_TO_ENTRY = { 'nandovelis@gmail.com': 28264, 'duncanvelis@ziggo.nl': 2640 };
+// adres hoort i.p.v. altijd hetzelfde team. connectyou.nl is Nando's eigen
+// login voor het hoofddashboard en deelt daarom hetzelfde team als gmail.
+const EMAIL_TO_ENTRY = { 'nandovelis@gmail.com': 28264, 'duncanvelis@ziggo.nl': 2640, 'nandovelis@connectyou.nl': 28264 };
 const POS           = {1:'Keeper',2:'Verdediger',3:'Middenvelder',4:'Spits'};
 const POS_SHORT     = {1:'KEE',2:'VER',3:'MID',4:'SPI'};
 // Publieke VAPID-sleutel voor pushmeldingen -- veilig om in de frontend te
