@@ -3,7 +3,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 // Govee-lampen automatisch. Alle tijden Europe/Amsterdam, dus zomer-/wintertijd klopt vanzelf.
 //
 // WEKKER-LICHT   ma t/m vr 06:30-06:39: lamp gaat in 10 stappen van 1% naar normale helderheid (max 60%) (alleen lampen die uit stonden).
-// KLEUR BIJ AAN  automatische aan = gekleurd natuurlijk licht (rgb): <08u goudoranje, tot 16u zacht warmgeel, daarna warm amber (nooit wit).
+// KLEUR BIJ AAN  automatische aan = gekleurd natuurlijk licht (rgb): <08u diep goudoranje, tot 16u warmgeel-oranje, daarna diep amber (nooit wit).
 // AAN (wakker)   zodra de slaap van vandaag in garmin_metrics staat, max 1x per dag (werkdagen alleen vóór 07:53); vóór 07:00 start op 5% en elke 5 min +5% tot max 60%.
 //                Daarna 1 minuut kleur-indicatie: groen = rusthartslag < 40 én slaapscore > 75,
 //                oranje = één van de twee, rood = geen van beide; daarna terug naar de vorige kleur.
@@ -317,8 +317,19 @@ async function snapshotBrightness(key: string): Promise<Record<string, number>> 
   return out;
 }
 
-// Natuurlijke lichtkleur per tijdstip, gekleurd (geen wit): ochtend goudoranje, dag zacht warmgeel, middag/avond warm amber.
-const naturalRgb = (hour: number) => (hour < 8 ? 0xffa53a : hour < 16 ? 0xffd37a : 0xffb04a);
+// Teruglezen wat de lampen na een automatische aan echt melden (voor de log).
+async function readback(key: string): Promise<string> {
+  const out: string[] = [];
+  for (const d of (await listLights(key)).filter((x) => hasColor(x) || hasBrightness(x))) {
+    const s = await getState(key, d);
+    await sleep(500);
+    out.push(`${s.on ? "aan" : "uit"} b${s.brightness ?? "?"} rgb${s.rgb != null ? "#" + s.rgb.toString(16).padStart(6, "0") : "?"} t${s.temp ?? "?"}`);
+  }
+  return out.join("; ");
+}
+
+// Natuurlijke lichtkleur per tijdstip, gekleurd (geen wit): ochtend diep goudoranje, dag warmgeel-oranje, middag/avond diep amber (verzadigd en warm).
+const naturalRgb = (hour: number) => (hour < 8 ? 0xff7f1a : hour < 16 ? 0xffb52e : 0xff8a14);
 
 // Vaste uit (07:53/13:53): 1 minuut rood knipperen (100% / 60% wisselend, ~9 s per stap), kleur en helderheid terugzetten, dan uit.
 async function offWithBlink(key: string, sb: any, sp: Record<string, LampState> | null, base: Record<string, number>, done: (msg: string, patch?: Record<string, unknown>) => Promise<void>) {
@@ -639,7 +650,7 @@ Deno.serve(async (req) => {
     for (const s of timedOn) {
       if (t.hour === s.hour && t.minute >= 1 && t.minute < 15 && onDays.includes(t.weekday) && st[s.col] !== t.date) {
         const r = await setAll(key, true, base, colorBase, null, 60, naturalRgb(t.hour)); // vorige handmatige helderheid, anders 60%; natuurlijke kleur
-        if (r.ok > 0) await log({ [s.col]: t.date, ...clearPatch(r) }, `aan ${s.hour}:01 ${r.ok}/${r.total}`);
+        if (r.ok > 0) { const rb = await readback(key); await log({ [s.col]: t.date, ...clearPatch(r) }, `aan ${s.hour}:01 ${r.ok}/${r.total} [${rb}]`); }
         return Response.json({ action: `on-${s.hour}01`, ...r });
       }
     }
@@ -660,7 +671,7 @@ Deno.serve(async (req) => {
             row.sleep_score != null ? Number(row.sleep_score) : null,
             row.resting_hr != null ? Number(row.resting_hr) : null,
           );
-          let msg = `aan ${r.ok}/${r.total}`;
+          let msg = `aan ${r.ok}/${r.total} [${await readback(key)}]`;
           if (rgb != null && st.last_color_date !== t.date) {
             patch.last_color_date = t.date;
             msg += ` + kleur #${rgb.toString(16).padStart(6, "0")} (score ${row.sleep_score}, rhr ${row.resting_hr})`;
