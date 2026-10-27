@@ -559,7 +559,7 @@ Deno.serve(async (req) => {
         .eq("owner", OWNER).eq("metric_date", t.date).maybeSingle();
       if (row && Number(row.sleep_minutes) > 0) {
         const ramp = t.hour < 7; // vóór 07:00: zacht beginnen op 5% en per 5 min 5% omhoog
-        const r = await setAll(key, true, base, colorBase, ramp ? 5 : null);
+        const r = await setAll(key, true, base, colorBase, ramp ? 5 : 60); // ochtend-aan nooit boven 60%
         if (r.ok > 0) {
           const patch: Record<string, unknown> = { last_on_date: t.date, ...clearPatch(r) };
           if (ramp) patch.wake_ramp = `${t.date}|5|${t.hour * 60 + t.minute}`;
