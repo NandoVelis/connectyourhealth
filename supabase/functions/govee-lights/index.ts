@@ -9,7 +9,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 //                oranje = één van de twee, rood = geen van beide; daarna terug naar de vorige kleur.
 // TV: maandag 20:25-20:30 (Rondo, Ziggo Sport 20:30): 5 min Ziggo-oranje, elke ~10 s fel/minder fel. Ma t/m vr 21:30 (Vandaag Inside, SBS6 21:35):
 //     blauw/wit wisselend (SBS-kleuren), ~1 min, daarna terug naar de vorige stand. Alleen lampen die aan staan.
-// STOPLICHT      ma t/m vr 07:25 en 13:25: vloeiend groen (tot :30), lichtgroen -> geel (:31-:40), -> oranje (:50), -> rood (:52); elke 30 s een tint (event stoplight, minuut-cron).
+// STOPLICHT      ma t/m vr 07:25 en 13:25 (helderheid 100%, daarna eigen stand terug): vloeiend felgroen (tot :30), lichtgroen -> geel (:31-:40), -> oranje (:50), -> rood (:52); elke 30 s een tint (event stoplight, minuut-cron).
 // UIT            ma t/m vr 07:53 en 13:53: eerst 1 min rood knipperen (100%/60%), kleur+helderheid terug, dan uit.
 // AAN            ma t/m vr 12:01 en 17:01: helderheid van vóór de uit (handmatig), anders 60%.
 // WARM LICHT     dagelijks 20:00: diep amber (rgb 0xff5a00; 2000K als de lamp geen kleur kan) (lampen die aan staan); herstel bij de volgende 'aan'.
@@ -288,8 +288,8 @@ async function rainPulse(key: string, rgbColor = RAIN_BLAUW, pulses = 2, holdMs 
 
 // Stoplicht-kleurverloop: kleur op minuut m (t.o.v. het hele uur, 25..52), lineair tussen de sleutelpunten.
 const STOP_KF: Array<[number, number]> = [
-  [25, 0x00c800], [30, 0x00c800], // groen
-  [31, 0x9be000], [40, 0xffe000], // lichtgroen -> geel
+  [25, 0x00ff00], [30, 0x00ff00], // felgroen
+  [31, 0x9bff00], [40, 0xffe600], // lichtgroen -> geel
   [50, 0xff8c00],                  // geel -> oranje
   [52, 0xff0000],                  // oranje -> rood
 ];
@@ -330,7 +330,8 @@ async function offWithBlink(key: string, sb: any, sp: Record<string, LampState> 
     await sleep(700);
     if (!st2.on) continue;
     prev[d.device] = sp?.[d.device] ?? st2; // kleur van vóór het stoplicht, anders de huidige
-    if (st2.brightness != null) snap[d.device] = st2.brightness;
+    const own = sp?.[d.device]?.brightness ?? st2.brightness; // eigen stand van vóór het stoplicht
+    if (own != null) snap[d.device] = own;
   }
   if (Object.keys(snap).length) await sb.from("govee_state").update({ brightness_base: { ...base, ...snap } }).eq("id", 1);
   const blinkers = lights.filter((d) => prev[d.device] && hasColor(d));
@@ -452,21 +453,23 @@ Deno.serve(async (req) => {
       if (st.stoplight_step === mark) return Response.json({ action: "stoplight-skip" });
       const lights = (await listLights(key)).filter(hasColor);
       let prev: Record<string, LampState> | null = st.stoplight_prev && typeof st.stoplight_prev === "object" ? (st.stoplight_prev as Record<string, LampState>) : null;
+      const startRun = !prev; // eerste aanroep van deze reeks: eigen stand vastleggen en helderheid op 100%
       if (!prev) {
         prev = {};
         for (const d of lights) { const s2 = await getState(key, d); await sleep(700); if (s2.on) prev[d.device] = s2; }
       }
-      const apply = async (m: number) => {
+      const apply = async (m: number, withBrightness = false) => {
         let n = 0;
         for (const d of lights) {
           if (!prev![d.device]) continue;
+          if (withBrightness && hasBrightness(d)) { await setBrightness(key, d, 100); await sleep(300); }
           if (await setRgb(key, d, stopColor(m))) n++;
           await sleep(400);
         }
         return n;
       };
       await log({ stoplight_step: mark, stoplight_prev: prev }, `stoplicht #${stopColor(t.minute).toString(16).padStart(6, "0")}`);
-      const n = await apply(t.minute);
+      const n = await apply(t.minute, startRun);
       if (t.minute < 52) background((async () => { await sleep(30_000); await apply(t.minute + 0.5); })());
       return Response.json({ action: "stoplight", minute: t.minute, lamps: n });
     }
