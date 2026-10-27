@@ -3,7 +3,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 // Govee-lampen automatisch. Alle tijden Europe/Amsterdam, dus zomer-/wintertijd klopt vanzelf.
 //
 // WEKKER-LICHT   ma t/m vr 06:30-06:39: lamp gaat in 10 stappen van 1% naar normale helderheid (max 60%) (alleen lampen die uit stonden).
-// KLEUR BIJ AAN  automatische aan = natuurlijk licht: <08u 3000K, tot 16u 4000K, daarna 3200K (nooit koud wit).
+// KLEUR BIJ AAN  automatische aan = gekleurd natuurlijk licht (rgb): <08u goudoranje, tot 16u zacht warmgeel, daarna warm amber (nooit wit).
 // AAN (wakker)   zodra de slaap van vandaag in garmin_metrics staat, max 1x per dag (werkdagen alleen vóór 07:53); vóór 07:00 start op 5% en elke 5 min +5% tot max 60%.
 //                Daarna 1 minuut kleur-indicatie: groen = rusthartslag < 40 én slaapscore > 75,
 //                oranje = één van de twee, rood = geen van beide; daarna terug naar de vorige kleur.
@@ -98,7 +98,7 @@ async function getState(key: string, d: any): Promise<LampState> {
 }
 
 // Zet alle lampen aan of uit. Bij 'aan': helderheid en kleurtemperatuur van vóór dimmen/warm licht terugzetten.
-async function setAll(key: string, on: boolean, base: Record<string, number> = {}, colorBase: Record<string, number> = {}, maxBrightness: number | null = null, fallbackBrightness: number | null = null, naturalK: number | null = null) {
+async function setAll(key: string, on: boolean, base: Record<string, number> = {}, colorBase: Record<string, number> = {}, maxBrightness: number | null = null, fallbackBrightness: number | null = null, naturalRgb: number | null = null) {
   const lights = await listLights(key);
   let ok = 0;
   let restored = false;
@@ -113,8 +113,8 @@ async function setAll(key: string, on: boolean, base: Record<string, number> = {
       if (typeof base[d.device] === "number") restored = true;
       await sleep(700);
     }
-    if (hasTemp(d) && naturalK != null) { // automatische aan: natuurlijk licht i.p.v. koud wit (ook uit rgb-modus)
-      await setTemp(key, d, naturalK);
+    if (naturalRgb != null && (hasColor(d) || hasTemp(d))) { // automatische aan: gekleurd natuurlijk licht i.p.v. wit
+      if (hasColor(d)) await setRgb(key, d, naturalRgb); else await setTemp(key, d, 2000);
       restoredColor = true;
       await sleep(700);
     } else if (hasTemp(d) && typeof colorBase[d.device] === "number") {
@@ -317,8 +317,8 @@ async function snapshotBrightness(key: string): Promise<Record<string, number>> 
   return out;
 }
 
-// Natuurlijk lichtkleur per tijdstip: ochtend 3000K, dag 4000K, avond 3200K (nooit koud wit).
-const naturalK = (hour: number) => (hour < 8 ? 3000 : hour < 16 ? 4000 : 3200);
+// Natuurlijke lichtkleur per tijdstip, gekleurd (geen wit): ochtend goudoranje, dag zacht warmgeel, middag/avond warm amber.
+const naturalRgb = (hour: number) => (hour < 8 ? 0xffa53a : hour < 16 ? 0xffd37a : 0xffb04a);
 
 // Vaste uit (07:53/13:53): 1 minuut rood knipperen (100% / 60% wisselend, ~9 s per stap), kleur en helderheid terugzetten, dan uit.
 async function offWithBlink(key: string, sb: any, sp: Record<string, LampState> | null, base: Record<string, number>, done: (msg: string, patch?: Record<string, unknown>) => Promise<void>) {
@@ -563,7 +563,7 @@ Deno.serve(async (req) => {
           if (k === 0) {
             await setBrightness(key, d, pct); await sleep(700);
             await setPower(key, d, true); await sleep(700);
-            if (hasTemp(d)) { await setTemp(key, d, naturalK(t.hour)); await sleep(700); }
+            if (hasColor(d)) { await setRgb(key, d, naturalRgb(t.hour)); await sleep(700); }
           }
           if (await setBrightness(key, d, pct)) n++;
           await sleep(700);
@@ -635,7 +635,7 @@ Deno.serve(async (req) => {
     ];
     for (const s of timedOn) {
       if (t.hour === s.hour && t.minute >= 1 && t.minute < 15 && onDays.includes(t.weekday) && st[s.col] !== t.date) {
-        const r = await setAll(key, true, base, colorBase, null, 60, naturalK(t.hour)); // vorige handmatige helderheid, anders 60%; natuurlijke kleur
+        const r = await setAll(key, true, base, colorBase, null, 60, naturalRgb(t.hour)); // vorige handmatige helderheid, anders 60%; natuurlijke kleur
         if (r.ok > 0) await log({ [s.col]: t.date, ...clearPatch(r) }, `aan ${s.hour}:01 ${r.ok}/${r.total}`);
         return Response.json({ action: `on-${s.hour}01`, ...r });
       }
@@ -649,7 +649,7 @@ Deno.serve(async (req) => {
         .eq("owner", OWNER).eq("metric_date", t.date).maybeSingle();
       if (row && Number(row.sleep_minutes) > 0) {
         const ramp = t.hour < 7; // vóór 07:00: zacht beginnen op 5% en per 5 min 5% omhoog
-        const r = await setAll(key, true, base, colorBase, ramp ? 5 : 60, null, naturalK(t.hour)); // ochtend-aan nooit boven 60%
+        const r = await setAll(key, true, base, colorBase, ramp ? 5 : 60, null, naturalRgb(t.hour)); // ochtend-aan nooit boven 60%
         if (r.ok > 0) {
           const patch: Record<string, unknown> = { last_on_date: t.date, ...clearPatch(r) };
           if (ramp) patch.wake_ramp = `${t.date}|5|${t.hour * 60 + t.minute}`;
