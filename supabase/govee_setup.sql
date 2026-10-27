@@ -96,3 +96,6 @@ alter table public.govee_state
   add column if not exists last_tv_step text;
 select cron.schedule('govee-rondo', '25-29 18,19 * * 1',
   $$select net.http_post(url := 'https://mhvduufxeqyxgkkvwimx.supabase.co/functions/v1/govee-lights', headers := '{"Content-Type":"application/json"}'::jsonb, body := '{"event":"rondo"}'::jsonb, timeout_milliseconds := 30000);$$);
+
+-- Toegevoegd: ochtend-ramp (vóór 07:00 elke 5 min +5% na de ochtend-aan). Gedekt door de 5-min-job.
+alter table public.govee_state add column if not exists wake_ramp text;

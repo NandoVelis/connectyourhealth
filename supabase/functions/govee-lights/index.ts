@@ -3,7 +3,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 // Govee-lampen automatisch. Alle tijden Europe/Amsterdam, dus zomer-/wintertijd klopt vanzelf.
 //
 // WEKKER-LICHT   ma t/m vr 06:30-06:39: lamp gaat in 10 stappen van 1% naar normale helderheid (alleen lampen die uit stonden).
-// AAN (wakker)   zodra de slaap van vandaag in garmin_metrics staat, max 1x per dag (werkdagen alleen vóór 07:53); vóór 08:00 max 30% helderheid.
+// AAN (wakker)   zodra de slaap van vandaag in garmin_metrics staat, max 1x per dag (werkdagen alleen vóór 07:53); vóór 07:00 start op 5% en elke 5 min +5% (tot de normale helderheid).
 //                Daarna 1 minuut kleur-indicatie: groen = rusthartslag < 40 én slaapscore > 75,
 //                oranje = één van de twee, rood = geen van beide; daarna terug naar de vorige kleur.
 // TV: maandag 20:25-20:30 (Rondo, Ziggo Sport 20:30): 5 min Ziggo-oranje, elke ~10 s fel/minder fel. Ma t/m vr 21:30 (Vandaag Inside, SBS6 21:35):
@@ -420,6 +420,26 @@ Deno.serve(async (req) => {
       return Response.json({ action: "tv-vi" });
     }
 
+    // OCHTEND-RAMP: na de ochtend-aan elke 5 min +5% helderheid, tot de normale stand, stopt om 07:00
+    if (t.hour >= 4 && t.hour < 7 && typeof st.wake_ramp === "string" && st.wake_ramp.startsWith(t.date + "|")) {
+      const [, lv, at] = st.wake_ramp.split("|");
+      const level = parseInt(lv), nowMin = t.hour * 60 + t.minute;
+      if (level < 100 && nowMin - parseInt(at) >= 4) {
+        const next = Math.min(100, level + 5);
+        const lights = (await listLights(key)).filter(hasBrightness);
+        let n = 0;
+        for (const d of lights) {
+          const s = await getState(key, d);
+          await sleep(700);
+          if (!s.on || s.brightness == null || s.brightness > level + 2) continue; // uit of door jou zelf aangepast: met rust laten
+          if (await setBrightness(key, d, Math.min(next, normal[d.device] ?? 100))) n++;
+          await sleep(700);
+        }
+        await log({ wake_ramp: `${t.date}|${next}|${nowMin}` }, `ochtend-ramp ${next}% (${n} lampen)`);
+        return Response.json({ action: "wake-ramp", level: next, lamps: n });
+      }
+    }
+
     // WEKKER-LICHT: ma t/m vr 06:30-06:39, in 10 stappen naar de normale helderheid
     if (onDays.includes(t.weekday) && t.hour === 6 && t.minute >= 30 && t.minute < 40) {
       const k = t.minute - 30;
@@ -538,9 +558,11 @@ Deno.serve(async (req) => {
       const { data: row } = await sb.from("garmin_metrics").select("sleep_minutes, sleep_score, resting_hr")
         .eq("owner", OWNER).eq("metric_date", t.date).maybeSingle();
       if (row && Number(row.sleep_minutes) > 0) {
-        const r = await setAll(key, true, base, colorBase, t.hour < 8 ? 30 : null); // 's ochtends vroeg zacht beginnen (max 30%)
+        const ramp = t.hour < 7; // vóór 07:00: zacht beginnen op 5% en per 5 min 5% omhoog
+        const r = await setAll(key, true, base, colorBase, ramp ? 5 : null);
         if (r.ok > 0) {
           const patch: Record<string, unknown> = { last_on_date: t.date, ...clearPatch(r) };
+          if (ramp) patch.wake_ramp = `${t.date}|5|${t.hour * 60 + t.minute}`;
           const rgb = indicatorRgb(
             row.sleep_score != null ? Number(row.sleep_score) : null,
             row.resting_hr != null ? Number(row.resting_hr) : null,
