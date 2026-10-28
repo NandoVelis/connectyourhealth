@@ -11,6 +11,7 @@ on:
       - 'supabase/functions/espn-sunday-report/**'
       - 'supabase/functions/espn-fdr-sync/**'
       - 'supabase/functions/espn-morning-digest/**'
+      - 'supabase/functions/govee-lights/**'
   workflow_dispatch: {}
 
 jobs:
@@ -57,3 +58,22 @@ jobs:
         run: supabase functions deploy espn-morning-digest --project-ref mhvduufxeqyxgkkvwimx --no-verify-jwt
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+
+      - name: Deploy govee-lights
+        run: supabase functions deploy govee-lights --project-ref mhvduufxeqyxgkkvwimx --no-verify-jwt
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+
+      # Zet GOVEE_KEY als Supabase-secret vanuit het GitHub-secret met dezelfde
+      # naam (Settings -> Secrets and variables -> Actions). Overgeslagen zolang
+      # het GitHub-secret nog niet bestaat.
+      - name: Zet GOVEE_KEY secret in Supabase
+        run: |
+          if [ -n "$GOVEE_KEY" ]; then
+            supabase secrets set GOVEE_KEY="$GOVEE_KEY" --project-ref mhvduufxeqyxgkkvwimx
+          else
+            echo "GOVEE_KEY GitHub-secret niet gezet, overgeslagen"
+          fi
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          GOVEE_KEY: ${{ secrets.GOVEE_KEY }}

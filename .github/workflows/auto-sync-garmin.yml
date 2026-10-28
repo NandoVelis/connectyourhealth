@@ -42,8 +42,10 @@ on:
     # oplossen) -- dit verkleint het gat in de praktijkgevoelige vensters,
     # lost het niet volledig op.
     - cron: '0 * * * *'
-    - cron: '*/15 10-11 * * *'
-    - cron: '*/10 4-5 * * 1-5'
+    # Wintertijd (sinds 25 okt 2026, UTC+1): 11-12 UTC = 12:00-13:59 lokaal, 5-6 UTC = 6:00-7:59 lokaal.
+    # Bij terugschakelen naar zomertijd (eind maart) weer naar 10-11 resp. 4-5 UTC.
+    - cron: '*/15 11-12 * * *'
+    - cron: '*/10 5-6 * * 1-5'
   workflow_dispatch:
     inputs:
       mfa_code:
