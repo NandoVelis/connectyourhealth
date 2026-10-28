@@ -3581,11 +3581,16 @@ async function renderDashboard(){
         <span class="stat-label">&#128099; Stappen (excl. hardlopen)${trainingRelevantSteps!=null ? ': '+trainingRelevantSteps.toLocaleString('nl-NL') : ''}</span>
         <span class="stat-val">${trainingRelevantSteps!=null ? trainingExtraStepsKcal+' kcal' : '&mdash;'}</span>
       </div>
-      <div class="stat-row" style="border-bottom:none;">
+      <div class="stat-row" ${burnedFromGarminBackup ? '' : 'style="border-bottom:none;"'}>
         <span class="stat-label" style="font-weight:700;">Totaal verbrand</span>
         <span class="stat-val">${burned ?? training.totalKcal ?? 0} kcal</span>
       </div>
-      ${burnedFromGarminBackup ? `<div class="meal-meta" style="margin-top:4px;">Afgesloten dag &mdash; Garmin's eigen gemeten dagtotaal gebruikt i.p.v. de som van de regels hierboven (die kunnen hierdoor niet exact optellen).</div>` : ''}
+      ${burnedFromGarminBackup ? `
+      <div class="stat-row" style="border-bottom:none;">
+        <span class="stat-label">Onze formule (rust+activiteit+stappen)</span>
+        <span class="stat-val">${(training.totalKcal ?? 0) + trainingExtraStepsKcal} kcal</span>
+      </div>
+      <div class="meal-meta" style="margin-top:4px;">Afgesloten dag &mdash; "Totaal verbrand" gebruikt Garmin's eigen gemeten dagtotaal, "Onze formule" is de som van de regels hierboven (rust/activiteit/stappen) -- die twee kunnen verschillen.</div>` : ''}
       ${burnedFromGarminBackup ? '' : garminCompareRow(garminStepsToday, dateStr, training.restKcal)}`;
   }
 
