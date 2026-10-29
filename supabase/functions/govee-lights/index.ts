@@ -4,7 +4,8 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 //
 // WEKKER-LICHT   ma t/m vr 06:30-06:39: lamp gaat in 10 stappen van 1% naar normale helderheid (max 60%) (alleen lampen die uit stonden).
 // KLEUR BIJ AAN  automatische aan = gekleurd natuurlijk licht (rgb): <08u diep goudoranje, tot 16u warmgeel-oranje, daarna diep amber (nooit wit).
-// AAN (wakker)   zodra de slaap van vandaag in garmin_metrics staat, max 1x per dag (werkdagen alleen vóór 07:53); vóór 07:00 start op 5% en elke 5 min +5% tot max 60%.
+// AAN (wakker)   zodra de slaap van vandaag in garmin_metrics staat, max 1x per dag (werkdagen alleen vóór 07:53); vóór 07:00 start op 5% en elke 5 min +5% tot max 60%,
+//                en staat de opbouw om 07:00 nog niet op 60% (late start/gemiste tik), dan in 1 keer afgemaakt naar 60%.
 //                Daarna 1 minuut kleur-indicatie: groen = rusthartslag < 40 én slaapscore > 75,
 //                oranje = één van de twee, rood = geen van beide; daarna terug naar de vorige kleur.
 // TV: maandag 20:25-20:30 (Rondo, Ziggo Sport 20:30): 5 min Ziggo-oranje, elke ~10 s fel/minder fel. Ma t/m vr 21:30 (Vandaag Inside, SBS6 21:35):
@@ -553,6 +554,29 @@ Deno.serve(async (req) => {
         }
         await log({ wake_ramp: `${t.date}|${next}|${nowMin}` }, `ochtend-ramp ${next}% (${n} lampen)`);
         return Response.json({ action: "wake-ramp", level: next, lamps: n });
+      }
+    }
+
+    // OCHTEND-RAMP AFRONDEN: stond de opbouw om 07:00 nog niet op 60% (te laat
+    // gestart doordat de slaapdata laat binnenkwam, of een gemiste cron-tik),
+    // dan bleef de lamp anders de rest van de dag op dat lage tussenniveau
+    // staan -- in 1 keer afmaken naar 60% i.p.v. daarop te blijven hangen
+    // (ontdekt 29 okt 2026: lamp stond vast op 20%).
+    if (t.hour === 7 && typeof st.wake_ramp === "string" && st.wake_ramp.startsWith(t.date + "|")) {
+      const [, lv] = st.wake_ramp.split("|");
+      const level = parseInt(lv);
+      if (level < 60) {
+        const lights = (await listLights(key)).filter(hasBrightness);
+        let n = 0;
+        for (const d of lights) {
+          const s = await getState(key, d);
+          await sleep(700);
+          if (!s.on || s.brightness == null || s.brightness > level + 2) continue;
+          if (await setBrightness(key, d, Math.min(60, normal[d.device] ?? 100))) n++;
+          await sleep(700);
+        }
+        await log({ wake_ramp: `${t.date}|60|${t.hour * 60 + t.minute}` }, `ochtend-ramp afgerond naar 60% (${n} lampen)`);
+        return Response.json({ action: "wake-ramp-finish", lamps: n });
       }
     }
 
