@@ -1721,13 +1721,24 @@ async function loadPlannedTrainingForDate(owner, dateStr){
   try{
     const { data, error } = await supabaseClient
       .from('planned_trainings')
-      .select('description, estimated_distance_km')
+      .select('id, description, estimated_distance_km')
       .eq('owner', owner)
       .eq('training_date', dateStr)
       .maybeSingle();
     if(error) throw error;
     return data || null;
   }catch(e){ console.error('Laden geplande training', e); return null; }
+}
+// "x"-knop bij een voorgestelde training (auto-aangevuld of handmatig) om 'm
+// voor die dag weg te halen -- bv. als je 'm toch niet gaat lopen en de
+// voorlopige kcal-schatting niet in de weg wil hebben staan.
+async function dismissPlannedTraining(id){
+  if(!id) return;
+  try{
+    const { error } = await supabaseClient.from('planned_trainings').delete().eq('id', id);
+    if(error){ console.error('Verwijderen geplande training', error); return; }
+    renderDashboard();
+  }catch(e){ console.error('Verwijderen geplande training', e); }
 }
 // Vult lege dagen in planned_trainings automatisch met een eenvoudig
 // voorstel -- sinds de Garmin Personal API-migratie (okt 2026) bestaat er
@@ -3517,7 +3528,9 @@ async function renderDashboard(){
   if(!hasRealActivity && !training && burnedIsEstimate){
     const plannedRow = plannedTraining ? `
       <div class="stat-row">
-        <span class="stat-label">&#127939; Gepland: ${escapeHtml(plannedTraining.description)} (~${plannedTraining.estimated_distance_km} km)</span>
+        <span class="stat-label">&#127939; Gepland: ${escapeHtml(plannedTraining.description)} (~${plannedTraining.estimated_distance_km} km)
+          <button onclick="dismissPlannedTraining('${plannedTraining.id}')" title="Geplande training weghalen" style="margin-left:6px;border:none;background:none;color:var(--ink-soft);cursor:pointer;font-size:14px;line-height:1;">&times;</button>
+        </span>
         <span class="stat-val">~${plannedActivityKcal} kcal</span>
       </div>` : '';
     detailEl.innerHTML = `
@@ -3546,7 +3559,9 @@ async function renderDashboard(){
   } else {
     const plannedRow = (!hasRealActivity && plannedTraining) ? `
           <div class="stat-row">
-            <span class="stat-label">&#127939; Gepland: ${escapeHtml(plannedTraining.description)} (~${plannedTraining.estimated_distance_km} km)</span>
+            <span class="stat-label">&#127939; Gepland: ${escapeHtml(plannedTraining.description)} (~${plannedTraining.estimated_distance_km} km)
+              <button onclick="dismissPlannedTraining('${plannedTraining.id}')" title="Geplande training weghalen" style="margin-left:6px;border:none;background:none;color:var(--ink-soft);cursor:pointer;font-size:14px;line-height:1;">&times;</button>
+            </span>
             <span class="stat-val">~${plannedActivityKcal} kcal</span>
           </div>` : '';
     const actRows = hasRealActivity
