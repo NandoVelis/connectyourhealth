@@ -778,6 +778,25 @@
             <button class="btn-secondary defaultQuickAddRemove" data-key="winegum" title="Verwijderen uit Snel toevoegen" style="padding:6px 10px;flex-shrink:0;">&times;</button>
           </div>
         </div>
+        <div class="stat-row" data-default-key="pannenkoek" style="border-bottom:1px solid var(--line);flex-direction:column;align-items:stretch;gap:8px;">
+          <div>
+            <div class="meal-desc">🥞 Pannenkoek (Jumbo pannenkoekenmix, met water)</div>
+            <div class="meal-meta">~139 kcal, 28g koolh., 5g eiwit, 1g vet per stuk (1 portie = 1/6 van 200g mix + water) &middot; excl. bakvet/beleg</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:6px;flex-wrap:nowrap;">
+            <input type="number" id="pannenkoekQty" value="1" min="1" style="width:44px;padding:6px 4px;flex-shrink:0;">
+            <span style="font-size:11px;color:var(--ink-soft);flex-shrink:0;">stuks</span>
+            <select class="qaGroupSelect" data-key="pannenkoek" style="font-size:11px;padding:5px 2px;border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--ink-soft);width:76px;flex-shrink:0;">
+              <option value="Ontbijt">Ontbijt</option>
+              <option value="Lunch">Lunch</option>
+              <option value="Snack" selected>Snack</option>
+              <option value="Diner">Diner</option>
+              <option value="Drinken">Drinken</option>
+            </select>
+            <button class="btn-secondary" id="quickAddPannenkoek" style="flex-shrink:0;padding:8px 10px;">+ Toevoegen</button>
+            <button class="btn-secondary defaultQuickAddRemove" data-key="pannenkoek" title="Verwijderen uit Snel toevoegen" style="padding:6px 10px;flex-shrink:0;">&times;</button>
+          </div>
+        </div>
         <div id="customQuickAddList-Snack"></div>
         </div>
       </div>
@@ -5842,6 +5861,19 @@ document.getElementById('quickAddWinegum').addEventListener('click', (e)=>{
   quickAdd({
     desc: qty + 'x winegum',
     mealType: 'Snack', kcal: 15*qty, protein: 0, carbs: 3.5*qty, fat: 0, time: ''
+  }, document.getElementById('quickAddStatus'), e.target);
+});
+
+// Jumbo pannenkoekenmix: "bereid product" per 100g (139 kcal, 4,6g eiwit,
+// 27,6g koolh., 0,8g vet) komt toevallig precies overeen met 1 portie (200g
+// droge mix + water = ~600g beslag / 6 porties = 100g per pannenkoek) --
+// vandaar dat de "per 100g"-kolom hier ook de per-stuk-waarde is. Exclusief
+// bakvet en beleg, die wissel je apart toe.
+document.getElementById('quickAddPannenkoek').addEventListener('click', (e)=>{
+  const qty = numOrDefault('pannenkoekQty', 1, 0);
+  quickAdd({
+    desc: qty + 'x pannenkoek (Jumbo pannenkoekenmix)',
+    mealType: 'Snack', kcal: Math.round(139*qty), protein: Math.round(4.6*qty*10)/10, carbs: Math.round(27.6*qty*10)/10, fat: Math.round(0.8*qty*10)/10, time: ''
   }, document.getElementById('quickAddStatus'), e.target);
 });
 
