@@ -866,8 +866,60 @@ def build_shakeout_pre_race():
     )
 
 
+def build_hm_race_day_plan():
+    """Zaterdag 1 nov, wedstrijddag halve marathon Assen: vast tempo
+    3:50-3:56/km (3:53/km-doel, 1:22:00 over 21,1 km) in blokken van 3 km,
+    met een hartslag-referentie per blok die bewust onder 173 blijft tot
+    km 16 en daarna mag oplopen -- op verzoek 1 nov, als keuzeoptie naast
+    het losse pacing-schema in de chat."""
+    from garminconnect.workout import RunningWorkout, WorkoutSegment
+
+    INTERVAL_STEP_TYPE = 3
+
+    blocks = [
+        (3000, "158-164", "0-3 km"),
+        (3000, "161-166", "3-6 km"),
+        (3000, "163-168", "6-9 km"),
+        (3000, "165-170", "9-12 km"),
+        (3000, "167-172", "12-15 km"),
+        (1000, "169-172", "15-16 km"),
+        (2000, "173-178", "16-18 km"),
+        (3000, "176-181", "18-21 km"),
+    ]
+    steps = []
+    order = 1
+    for meters, hr_note, label in blocks:
+        steps.append(pace_step(order, INTERVAL_STEP_TYPE, "interval", 3, "distance", meters,
+                                slow_pace=(3, 56), fast_pace=(3, 50), hr_note=hr_note,
+                                description=f"Wedstrijdtempo {label}"))
+        order += 1
+    steps.append(pace_step(order, INTERVAL_STEP_TYPE, "interval", 3, "distance", 100,
+                            slow_pace=(3, 30), fast_pace=(2, 50), hr_note="alles wat je nog hebt",
+                            description="21-21,1 km (sprint naar de finish)"))
+
+    total_secs = int(sum(meters / pace_to_speed(3, 53) for meters, _, _ in blocks) + 100 / pace_to_speed(3, 10))
+
+    return RunningWorkout(
+        workoutName="Halve marathon Assen: wedstrijdplan (1:22:00, HS<173 tot km16)",
+        estimatedDurationInSecs=total_secs,
+        description=(
+            "Vast tempo 3:50-3:56/km door de hele race (doel 1:22:00 over 21,1 km), "
+            "in blokken van 3 km met een hartslag-referentie die onder 173 blijft tot "
+            "km 16 en daarna mag oplopen. Laatste 100m: sprint naar de finish."
+        ),
+        workoutSegments=[
+            WorkoutSegment(
+                segmentOrder=1,
+                sportType={"sportTypeId": 1, "sportTypeKey": "running"},
+                workoutSteps=steps,
+            )
+        ],
+    )
+
+
 WORKOUT_BUILDERS = {
     "progressive_15k": build_five_by_three_progressive,
+    "hm_race_day_plan": build_hm_race_day_plan,
     "interval_6x1000": build_interval_6x1000,
     "tempo_10k_355": build_tempo_10k_355,
     "long_run_24k": build_long_run_24k,
