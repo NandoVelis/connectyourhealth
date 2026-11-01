@@ -797,23 +797,23 @@
             <button class="btn-secondary defaultQuickAddRemove" data-key="pannenkoek" title="Verwijderen uit Snel toevoegen" style="padding:6px 10px;flex-shrink:0;">&times;</button>
           </div>
         </div>
-        <div class="stat-row" data-default-key="bagel" style="border-bottom:1px solid var(--line);flex-direction:column;align-items:stretch;gap:8px;">
+        <div class="stat-row" data-default-key="chocolade" style="border-bottom:1px solid var(--line);flex-direction:column;align-items:stretch;gap:8px;">
           <div>
-            <div class="meal-desc">🥯 Bagel</div>
-            <div class="meal-meta">~270 kcal, 53g koolh., 10g eiwit, 1,5g vet per stuk &middot; excl. beleg</div>
+            <div class="meal-desc">🍫 Pure chocolade (blokje)</div>
+            <div class="meal-meta">~29 kcal, 2g koolh., 2g vet per blokje (~5g)</div>
           </div>
           <div style="display:flex;align-items:center;gap:6px;flex-wrap:nowrap;">
-            <input type="number" id="bagelQty" value="1" min="1" style="width:44px;padding:6px 4px;flex-shrink:0;">
-            <span style="font-size:11px;color:var(--ink-soft);flex-shrink:0;">stuks</span>
-            <select class="qaGroupSelect" data-key="bagel" style="font-size:11px;padding:5px 2px;border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--ink-soft);width:76px;flex-shrink:0;">
+            <input type="number" id="chocoladeQty" value="4" min="1" style="width:44px;padding:6px 4px;flex-shrink:0;">
+            <span style="font-size:11px;color:var(--ink-soft);flex-shrink:0;">blokjes</span>
+            <select class="qaGroupSelect" data-key="chocolade" style="font-size:11px;padding:5px 2px;border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--ink-soft);width:76px;flex-shrink:0;">
               <option value="Ontbijt">Ontbijt</option>
               <option value="Lunch">Lunch</option>
               <option value="Snack" selected>Snack</option>
               <option value="Diner">Diner</option>
               <option value="Drinken">Drinken</option>
             </select>
-            <button class="btn-secondary" id="quickAddBagel" style="flex-shrink:0;padding:8px 10px;">+ Toevoegen</button>
-            <button class="btn-secondary defaultQuickAddRemove" data-key="bagel" title="Verwijderen uit Snel toevoegen" style="padding:6px 10px;flex-shrink:0;">&times;</button>
+            <button class="btn-secondary" id="quickAddChocolade" style="flex-shrink:0;padding:8px 10px;">+ Toevoegen</button>
+            <button class="btn-secondary defaultQuickAddRemove" data-key="chocolade" title="Verwijderen uit Snel toevoegen" style="padding:6px 10px;flex-shrink:0;">&times;</button>
           </div>
         </div>
         <div id="customQuickAddList-Snack"></div>
@@ -5896,11 +5896,11 @@ document.getElementById('quickAddPannenkoek').addEventListener('click', (e)=>{
   }, document.getElementById('quickAddStatus'), e.target);
 });
 
-document.getElementById('quickAddBagel').addEventListener('click', (e)=>{
-  const qty = numOrDefault('bagelQty', 1, 0);
+document.getElementById('quickAddChocolade').addEventListener('click', (e)=>{
+  const qty = numOrDefault('chocoladeQty', 4, 0);
   quickAdd({
-    desc: qty + 'x bagel',
-    mealType: 'Snack', kcal: 270*qty, protein: 10*qty, carbs: 53*qty, fat: Math.round(1.5*qty*10)/10, time: ''
+    desc: qty + 'x blokje pure chocolade',
+    mealType: 'Snack', kcal: Math.round(29*qty), protein: Math.round(0.4*qty*10)/10, carbs: Math.round(2*qty*10)/10, fat: Math.round(2*qty*10)/10, time: ''
   }, document.getElementById('quickAddStatus'), e.target);
 });
 
