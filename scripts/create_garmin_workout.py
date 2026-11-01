@@ -900,7 +900,7 @@ def build_hm_race_day_plan():
     total_secs = int(sum(meters / pace_to_speed(3, 53) for meters, _, _ in blocks) + 100 / pace_to_speed(3, 10))
 
     return RunningWorkout(
-        workoutName="Halve marathon Assen: wedstrijdplan (1:22:00, HS<173 tot km16)",
+        workoutName="Halve marathon PR 1.22 plan",
         estimatedDurationInSecs=total_secs,
         description=(
             "Vast tempo 3:50-3:56/km door de hele race (doel 1:22:00 over 21,1 km), "
