@@ -670,6 +670,33 @@ def build_long_run_18k():
     )
 
 
+def build_recovery_8k_z1():
+    """Maandag 2 nov: eerste loopje na de halve marathon Assen (recovery-
+    week) -- 8 km puur Z1, geen strides/kwaliteit. Op verzoek 1 nov."""
+    from garminconnect.workout import RunningWorkout, WorkoutSegment
+
+    INTERVAL_STEP_TYPE = 3
+
+    easy = pace_step(1, INTERVAL_STEP_TYPE, "interval", 1, "distance", 8000,
+                      slow_pace=(5, 15), fast_pace=(4, 45), hr_note="Z1, rustig",
+                      description="Rustig uitlopen (recovery-week)")
+
+    total_secs = int(8000 / pace_to_speed(5, 0))
+
+    return RunningWorkout(
+        workoutName="Hardlopen: 8 km Z1 (recovery na HM Assen)",
+        estimatedDurationInSecs=total_secs,
+        description="8 km puur Z1 op 4:45-5:15/km, geen strides of kwaliteit -- eerste loopje in de recovery-week na de halve marathon Assen.",
+        workoutSegments=[
+            WorkoutSegment(
+                segmentOrder=1,
+                sportType={"sportTypeId": 1, "sportTypeKey": "running"},
+                workoutSteps=[easy],
+            )
+        ],
+    )
+
+
 def build_4mile_pace_test():
     """4 mijl race-tempotest: 10 min inlopen, dan 4x 1 mijl op 6:00/mijl
     (3:44/km, doel sub 24 min -- zelfde tempo als het racedoel "4 Mijl,
@@ -920,6 +947,7 @@ def build_hm_race_day_plan():
 WORKOUT_BUILDERS = {
     "progressive_15k": build_five_by_three_progressive,
     "hm_race_day_plan": build_hm_race_day_plan,
+    "recovery_8k_z1": build_recovery_8k_z1,
     "interval_6x1000": build_interval_6x1000,
     "tempo_10k_355": build_tempo_10k_355,
     "long_run_24k": build_long_run_24k,
