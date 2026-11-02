@@ -498,6 +498,11 @@
       </details>
     </div>
 
+    <div class="card" style="margin-bottom:16px;display:none;" id="trainingAgendaCard">
+      <h3>&#128197; Trainingsagenda (2 weken)</h3>
+      <div id="trainingAgendaList" style="margin-top:10px;"></div>
+    </div>
+
     <div class="card" style="margin-bottom:16px;background:linear-gradient(115deg,#7A0A66 0%,#4B1F6B 40%,#1A1240 100%);border:none;">
       <div id="motivationQuote" style="font-family:'Archivo',sans-serif;font-size:16px;font-weight:600;color:#F5F1E8;text-align:center;line-height:1.5;"></div>
     </div>
@@ -3387,6 +3392,59 @@ async function renderTrainingPaceZones(owner){
     card.style.display = 'none';
   }
 }
+// Trainingsagenda (2 weken vooruit, incl. vandaag) uit planned_trainings --
+// zelfde tabel als de "Gepland: ..."-regel per dag, hier als overzichtelijk
+// paneel. Alleen zichtbaar voor Nando, zelfde afscherming als de andere
+// hardloop-kaarten. Op verzoek 2 nov.
+async function renderTrainingAgenda(owner){
+  const card = document.getElementById('trainingAgendaCard');
+  if(!card) return;
+  if(owner !== 'Nando'){ card.style.display = 'none'; return; }
+  try{
+    const today = new Date();
+    const startStr = fmtDate(today);
+    const end = new Date(today);
+    end.setDate(end.getDate() + 13);
+    const endStr = fmtDate(end);
+    const { data, error } = await supabaseClient
+      .from('planned_trainings')
+      .select('id, training_date, description, estimated_distance_km')
+      .eq('owner', owner)
+      .gte('training_date', startStr)
+      .lte('training_date', endStr)
+      .order('training_date', { ascending: true });
+    if(error || !data || !data.length){ card.style.display = 'none'; return; }
+    const dagNamen = ['zo','ma','di','wo','do','vr','za'];
+    const list = document.getElementById('trainingAgendaList');
+    list.innerHTML = `
+      <table style="width:100%;border-collapse:collapse;font-size:13px;">
+        <thead>
+          <tr style="text-align:left;border-bottom:1px solid var(--line);">
+            <th style="padding:4px 6px 8px 0;">Dag</th>
+            <th style="padding:4px 6px 8px 0;">Sessie</th>
+            <th style="padding:4px 0 8px 6px;text-align:right;">km</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${data.map(row=>{
+            const d = new Date(row.training_date + 'T00:00:00');
+            const label = `${dagNamen[d.getDay()]} ${d.getDate()}/${d.getMonth()+1}`;
+            const isToday = row.training_date === startStr;
+            return `
+          <tr style="border-bottom:1px solid var(--line);${isToday ? 'font-weight:700;' : ''}">
+            <td style="padding:6px 6px 6px 0;white-space:nowrap;">${label}</td>
+            <td style="padding:6px 6px 6px 0;">${escapeHtml(row.description)}</td>
+            <td style="padding:6px 0 6px 6px;text-align:right;white-space:nowrap;">${Number(row.estimated_distance_km) > 0 ? Number(row.estimated_distance_km) + ' km' : '&mdash;'}</td>
+          </tr>`;
+          }).join('')}
+        </tbody>
+      </table>`;
+    card.style.display = '';
+  }catch(e){
+    console.warn('Trainingsagenda laden mislukt', e);
+    card.style.display = 'none';
+  }
+}
 async function renderDashboard(){
 
   const dateStr = fmtDate(state.currentDate);
@@ -3405,6 +3463,7 @@ async function renderDashboard(){
 
   renderRaceGoals(owner);
   renderTrainingPaceZones(owner);
+  renderTrainingAgenda(owner);
 
   const meals = await loadMeals(dateStr);
   const totals = macroKcal(meals);
