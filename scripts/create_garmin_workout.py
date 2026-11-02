@@ -983,6 +983,79 @@ def build_threshold_marathon_block():
     )
 
 
+def build_threshold_marathon_block_2x5k():
+    """Verzwaarde wekelijkse drempelsessie in het Almgren-blok: 2km
+    inlopen, 2x5km op drempeltempo met korte jog-rust, 2km uitlopen --
+    verving de kortere 1x8km-versie (build_threshold_marathon_block) op
+    verzoek 2 nov (8km drempel was te mager voor een marathon-specifiek
+    blok)."""
+    from garminconnect.workout import RunningWorkout, WorkoutSegment
+
+    WARMUP_STEP_TYPE, INTERVAL_STEP_TYPE, RECOVERY_STEP_TYPE, COOLDOWN_STEP_TYPE = 1, 3, 4, 2
+
+    warmup = pace_step(1, WARMUP_STEP_TYPE, "warmup", 1, "distance", 2000,
+                        slow_pace=(5, 15), fast_pace=(4, 25), hr_note="< 140",
+                        description="Inlopen")
+    rep1 = pace_step(2, INTERVAL_STEP_TYPE, "interval", 3, "distance", 5000,
+                      slow_pace=(3, 56), fast_pace=(3, 50), hr_note="167-169 (drempel)",
+                      description="Herhaling 1/2 (drempeltempo)")
+    recovery = pace_step(3, RECOVERY_STEP_TYPE, "recovery", 4, "distance", 1000,
+                          slow_pace=(6, 0), fast_pace=(5, 20),
+                          description="Jog-herstel")
+    rep2 = pace_step(4, INTERVAL_STEP_TYPE, "interval", 3, "distance", 5000,
+                      slow_pace=(3, 56), fast_pace=(3, 50), hr_note="167-169 (drempel)",
+                      description="Herhaling 2/2 (drempeltempo)")
+    cooldown = pace_step(5, COOLDOWN_STEP_TYPE, "cooldown", 2, "distance", 2000,
+                          slow_pace=(5, 15), fast_pace=(4, 25), hr_note="< 140",
+                          description="Uitlopen")
+
+    total_secs = int(2000/pace_to_speed(4, 50) + 2*(5000/pace_to_speed(3, 53)) + 1000/pace_to_speed(5, 40) + 2000/pace_to_speed(4, 50))
+
+    return RunningWorkout(
+        workoutName="Hardlopen: drempelsessie 2x5km (3:50-3:56/km)",
+        estimatedDurationInSecs=total_secs,
+        description="2km inlopen (4:25-5:15/km, HS<140), 2x5km op 3:50-3:56/km (HS 167-169) met 1km jog-herstel, 2km uitlopen. Wekelijkse drempelsessie Almgren-blok (verzwaard t.o.v. de 1x8km-versie).",
+        workoutSegments=[
+            WorkoutSegment(
+                segmentOrder=1,
+                sportType={"sportTypeId": 1, "sportTypeKey": "running"},
+                workoutSteps=[warmup, rep1, recovery, rep2, cooldown],
+            )
+        ],
+    )
+
+
+def build_easy_10k_mp_finish():
+    """Rustige duurloop met marathontempo-afsluiting: 8km Z1 + 2km op
+    marathontempo (M, 4:06/km) -- tweede, lichtere kwaliteitsprikkel in de
+    week naast de drempelsessie, op verzoek 2 nov."""
+    from garminconnect.workout import RunningWorkout, WorkoutSegment
+
+    EASY_STEP_TYPE, INTERVAL_STEP_TYPE = 1, 3
+
+    easy = pace_step(1, EASY_STEP_TYPE, "warmup", 1, "distance", 8000,
+                      slow_pace=(5, 15), fast_pace=(4, 25), hr_note="< 140 (Z1)",
+                      description="Rustig")
+    mp_finish = pace_step(2, INTERVAL_STEP_TYPE, "interval", 3, "distance", 2000,
+                           slow_pace=(4, 10), fast_pace=(4, 2), hr_note="marathontempo",
+                           description="Marathontempo-afsluiting")
+
+    total_secs = int(8000/pace_to_speed(5, 0) + 2000/pace_to_speed(4, 6))
+
+    return RunningWorkout(
+        workoutName="Hardlopen: 10km, laatste 2km op marathontempo",
+        estimatedDurationInSecs=total_secs,
+        description="8km rustig (4:25-5:15/km, HS<140), laatste 2km op marathontempo (4:02-4:10/km) -- lichte tweede kwaliteitsprikkel, Almgren-blok.",
+        workoutSegments=[
+            WorkoutSegment(
+                segmentOrder=1,
+                sportType={"sportTypeId": 1, "sportTypeKey": "running"},
+                workoutSteps=[easy, mp_finish],
+            )
+        ],
+    )
+
+
 def build_hm_race_day_plan():
     """Zaterdag 1 nov, wedstrijddag halve marathon Assen: vast tempo
     3:50-3:56/km (3:53/km-doel, 1:22:00 over 21,1 km) in blokken van 3 km,
@@ -1041,6 +1114,8 @@ WORKOUT_BUILDERS = {
     "long_run_z2_27k": build_long_run_z2_27k,
     "monday_pm_12_5k_z1_eelde": build_monday_pm_12_5k_z1_eelde,
     "threshold_marathon_block": build_threshold_marathon_block,
+    "threshold_marathon_block_2x5k": build_threshold_marathon_block_2x5k,
+    "easy_10k_mp_finish": build_easy_10k_mp_finish,
     "interval_6x1000": build_interval_6x1000,
     "tempo_10k_355": build_tempo_10k_355,
     "long_run_24k": build_long_run_24k,

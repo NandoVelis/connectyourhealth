@@ -47,6 +47,8 @@ on:
           - long_run_z2_27k
           - monday_pm_12_5k_z1_eelde
           - threshold_marathon_block
+          - threshold_marathon_block_2x5k
+          - easy_10k_mp_finish
           - interval_6x1000
           - tempo_10k_355
           - long_run_24k
