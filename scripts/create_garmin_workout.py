@@ -893,6 +893,96 @@ def build_shakeout_pre_race():
     )
 
 
+def build_long_run_z2_27k():
+    """Lange duurloop Z2, 25-30km (middenpunt 27,5km) -- vaste zaterdag-
+    sessie in het Almgren-blok op 50% volume (zie training_plan.plan_json
+    key almgren_blok_50pct), op verzoek 2 nov."""
+    from garminconnect.workout import RunningWorkout, WorkoutSegment
+
+    INTERVAL_STEP_TYPE = 3
+
+    long_run = pace_step(1, INTERVAL_STEP_TYPE, "interval", 1, "distance", 27500,
+                          slow_pace=(4, 45), fast_pace=(4, 25), hr_note="140-155 (Z2)",
+                          description="Lange duurloop Z2")
+
+    total_secs = int(27500 / pace_to_speed(4, 35))
+
+    return RunningWorkout(
+        workoutName="Hardlopen: lange duurloop Z2 (25-30 km)",
+        estimatedDurationInSecs=total_secs,
+        description="25-30 km op 4:25-4:45/km, HS 140-155 (Z2) -- vaste zaterdagsessie Almgren-blok.",
+        workoutSegments=[
+            WorkoutSegment(
+                segmentOrder=1,
+                sportType={"sportTypeId": 1, "sportTypeKey": "running"},
+                workoutSteps=[long_run],
+            )
+        ],
+    )
+
+
+def build_monday_pm_12_5k_z1_eelde():
+    """Maandag-PM-run naar Eelde (ouders eten), onderdeel van de dubbele
+    Z1-dag in het Almgren-blok -- 12,5km Z1, aansluitend krachttraining.
+    Op verzoek 2 nov."""
+    from garminconnect.workout import RunningWorkout, WorkoutSegment
+
+    INTERVAL_STEP_TYPE = 3
+
+    easy = pace_step(1, INTERVAL_STEP_TYPE, "interval", 1, "distance", 12500,
+                      slow_pace=(5, 15), fast_pace=(4, 45), hr_note="< 140 (Z1)",
+                      description="Rustig naar Eelde")
+
+    total_secs = int(12500 / pace_to_speed(5, 0))
+
+    return RunningWorkout(
+        workoutName="Hardlopen: 12,5 km Z1 naar Eelde",
+        estimatedDurationInSecs=total_secs,
+        description="12,5 km rustig op 4:45-5:15/km, HS<140 (Z1) -- naar Eelde, aansluitend eten bij ouders + krachttraining.",
+        workoutSegments=[
+            WorkoutSegment(
+                segmentOrder=1,
+                sportType={"sportTypeId": 1, "sportTypeKey": "running"},
+                workoutSteps=[easy],
+            )
+        ],
+    )
+
+
+def build_threshold_marathon_block():
+    """Wekelijkse drempelsessie (T, 3:53/km) in het Almgren-blok -- 2km
+    inlopen, 8km aaneengesloten op drempeltempo, 2km uitlopen. Op verzoek
+    2 nov."""
+    from garminconnect.workout import RunningWorkout, WorkoutSegment
+
+    WARMUP_STEP_TYPE, INTERVAL_STEP_TYPE, COOLDOWN_STEP_TYPE = 1, 3, 2
+
+    warmup = pace_step(1, WARMUP_STEP_TYPE, "warmup", 1, "distance", 2000,
+                        slow_pace=(5, 15), fast_pace=(4, 25), hr_note="< 140",
+                        description="Inlopen")
+    threshold = pace_step(2, INTERVAL_STEP_TYPE, "interval", 3, "distance", 8000,
+                           slow_pace=(3, 56), fast_pace=(3, 50), hr_note="167-169 (drempel)",
+                           description="Drempeltempo")
+    cooldown = pace_step(3, COOLDOWN_STEP_TYPE, "cooldown", 2, "distance", 2000,
+                          slow_pace=(5, 15), fast_pace=(4, 25), hr_note="< 140",
+                          description="Uitlopen")
+
+    total_secs = int(2000/pace_to_speed(4, 50) + 8000/pace_to_speed(3, 53) + 2000/pace_to_speed(4, 50))
+
+    return RunningWorkout(
+        workoutName="Hardlopen: drempelsessie 8km (3:50-3:56/km)",
+        estimatedDurationInSecs=total_secs,
+        description="2km inlopen (4:25-5:15/km, HS<140), 8km aaneengesloten op 3:50-3:56/km (HS 167-169), 2km uitlopen. Wekelijkse drempelsessie Almgren-blok.",
+        workoutSegments=[
+            WorkoutSegment(
+                segmentOrder=1,
+                sportType={"sportTypeId": 1, "sportTypeKey": "running"},
+                workoutSteps=[warmup, threshold, cooldown],
+            )
+        ],
+    )
+
+
 def build_hm_race_day_plan():
     """Zaterdag 1 nov, wedstrijddag halve marathon Assen: vast tempo
     3:50-3:56/km (3:53/km-doel, 1:22:00 over 21,1 km) in blokken van 3 km,
@@ -948,6 +1038,9 @@ WORKOUT_BUILDERS = {
     "progressive_15k": build_five_by_three_progressive,
     "hm_race_day_plan": build_hm_race_day_plan,
     "recovery_8k_z1": build_recovery_8k_z1,
+    "long_run_z2_27k": build_long_run_z2_27k,
+    "monday_pm_12_5k_z1_eelde": build_monday_pm_12_5k_z1_eelde,
+    "threshold_marathon_block": build_threshold_marathon_block,
     "interval_6x1000": build_interval_6x1000,
     "tempo_10k_355": build_tempo_10k_355,
     "long_run_24k": build_long_run_24k,

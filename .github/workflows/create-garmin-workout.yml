@@ -44,6 +44,9 @@ on:
           - progressive_15k
           - hm_race_day_plan
           - recovery_8k_z1
+          - long_run_z2_27k
+          - monday_pm_12_5k_z1_eelde
+          - threshold_marathon_block
           - interval_6x1000
           - tempo_10k_355
           - long_run_24k
