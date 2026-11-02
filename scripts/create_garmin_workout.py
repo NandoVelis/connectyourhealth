@@ -1056,6 +1056,95 @@ def build_easy_10k_mp_finish():
     )
 
 
+def build_z2_z3_steady_13k():
+    """Dinsdag in het Almgren-blok: gecontroleerd Z2-Z3-tempo, geen vaste
+    rustdag maar ook geen drempel -- op verzoek 2 nov (herstructurering:
+    di/do/za op Z2-Z3, zo/ma/wo op Z1)."""
+    from garminconnect.workout import RunningWorkout, WorkoutSegment
+
+    INTERVAL_STEP_TYPE = 3
+
+    steady = pace_step(1, INTERVAL_STEP_TYPE, "interval", 1, "distance", 13000,
+                        slow_pace=(4, 25), fast_pace=(4, 5), hr_note="145-165 (Z2-Z3)",
+                        description="Gecontroleerd tempo Z2-Z3")
+
+    total_secs = int(13000 / pace_to_speed(4, 15))
+
+    return RunningWorkout(
+        workoutName="Hardlopen: 13km Z2-Z3 gecontroleerd tempo",
+        estimatedDurationInSecs=total_secs,
+        description="13km op 4:05-4:25/km, HS 145-165 (Z2-Z3) -- gecontroleerd, geen drempel.",
+        workoutSegments=[
+            WorkoutSegment(
+                segmentOrder=1,
+                sportType={"sportTypeId": 1, "sportTypeKey": "running"},
+                workoutSteps=[steady],
+            )
+        ],
+    )
+
+
+def build_easy_11k_z1():
+    """Woensdag in het Almgren-blok: pure Z1-rustdag (geen drempel meer,
+    die is verplaatst naar donderdag). Op verzoek 2 nov."""
+    from garminconnect.workout import RunningWorkout, WorkoutSegment
+
+    INTERVAL_STEP_TYPE = 3
+
+    easy = pace_step(1, INTERVAL_STEP_TYPE, "interval", 1, "distance", 11000,
+                      slow_pace=(5, 15), fast_pace=(4, 45), hr_note="< 140 (Z1)",
+                      description="Rustig")
+
+    total_secs = int(11000 / pace_to_speed(5, 0))
+
+    return RunningWorkout(
+        workoutName="Hardlopen: 11km Z1 rustig",
+        estimatedDurationInSecs=total_secs,
+        description="11km op 4:45-5:15/km, HS<140 (Z1).",
+        workoutSegments=[
+            WorkoutSegment(
+                segmentOrder=1,
+                sportType={"sportTypeId": 1, "sportTypeKey": "running"},
+                workoutSteps=[easy],
+            )
+        ],
+    )
+
+
+def build_thursday_z2z3_threshold_block():
+    """Donderdag in het Almgren-blok, vóór padel 19:00: Z2-Z3 met een
+    drempelblok erin -- 3km Z2-Z3 inlopen, 4km op drempeltempo, 3km
+    Z2-Z3 uitlopen. Op verzoek 2 nov."""
+    from garminconnect.workout import RunningWorkout, WorkoutSegment
+
+    WARMUP_STEP_TYPE, INTERVAL_STEP_TYPE, COOLDOWN_STEP_TYPE = 1, 3, 2
+
+    warmup = pace_step(1, WARMUP_STEP_TYPE, "warmup", 1, "distance", 3000,
+                        slow_pace=(4, 25), fast_pace=(4, 5), hr_note="145-165 (Z2-Z3)",
+                        description="Z2-Z3 inlopen")
+    threshold = pace_step(2, INTERVAL_STEP_TYPE, "interval", 3, "distance", 4000,
+                           slow_pace=(3, 56), fast_pace=(3, 50), hr_note="167-169 (drempel)",
+                           description="Drempelblok")
+    cooldown = pace_step(3, COOLDOWN_STEP_TYPE, "cooldown", 2, "distance", 3000,
+                          slow_pace=(4, 25), fast_pace=(4, 5), hr_note="145-165 (Z2-Z3)",
+                          description="Z2-Z3 uitlopen")
+
+    total_secs = int(3000/pace_to_speed(4, 15) + 4000/pace_to_speed(3, 53) + 3000/pace_to_speed(4, 15))
+
+    return RunningWorkout(
+        workoutName="Hardlopen: 10km Z2-Z3 met drempelblok (vóór padel)",
+        estimatedDurationInSecs=total_secs,
+        description="3km Z2-Z3 inlopen (4:05-4:25/km), 4km op drempeltempo (3:50-3:56/km, HS167-169), 3km Z2-Z3 uitlopen. Vóór padel 19:00.",
+        workoutSegments=[
+            WorkoutSegment(
+                segmentOrder=1,
+                sportType={"sportTypeId": 1, "sportTypeKey": "running"},
+                workoutSteps=[warmup, threshold, cooldown],
+            )
+        ],
+    )
+
+
 def build_hm_race_day_plan():
     """Zaterdag 1 nov, wedstrijddag halve marathon Assen: vast tempo
     3:50-3:56/km (3:53/km-doel, 1:22:00 over 21,1 km) in blokken van 3 km,
@@ -1116,6 +1205,9 @@ WORKOUT_BUILDERS = {
     "threshold_marathon_block": build_threshold_marathon_block,
     "threshold_marathon_block_2x5k": build_threshold_marathon_block_2x5k,
     "easy_10k_mp_finish": build_easy_10k_mp_finish,
+    "z2_z3_steady_13k": build_z2_z3_steady_13k,
+    "easy_11k_z1": build_easy_11k_z1,
+    "thursday_z2z3_threshold_block": build_thursday_z2z3_threshold_block,
     "interval_6x1000": build_interval_6x1000,
     "tempo_10k_355": build_tempo_10k_355,
     "long_run_24k": build_long_run_24k,
