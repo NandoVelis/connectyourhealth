@@ -3333,28 +3333,23 @@ async function renderRaceGoals(owner){
       .select('*')
       .eq('owner', owner)
       .order('race_date', { ascending: true });
-    if(error || !data || !data.length){ card.style.display = 'none'; return; }
     const now = new Date();
+    // Afgelopen wedstrijden horen hier niet meer thuis (op verzoek 3 nov
+    // 2026), alleen nog komende wedstrijden tonen.
+    const upcoming = (data||[]).filter(r => new Date(r.race_date + 'T00:00:00') - now >= 0);
+    if(error || !upcoming.length){ card.style.display = 'none'; return; }
     const list = document.getElementById('raceGoalsList');
-    list.innerHTML = data.map(r=>{
+    list.innerHTML = upcoming.map(r=>{
       const raceDate = new Date(r.race_date + 'T00:00:00');
       const diffMs = raceDate - now;
-      const isPast = diffMs < 0;
-      let countdownLabel;
-      if(isPast){
-        countdownLabel = r.actual_time_seconds ? formatSecondsAsClock(r.actual_time_seconds) : 'geweest';
-      } else {
-        const days = Math.floor(diffMs / (1000*60*60*24));
-        const hours = Math.floor((diffMs % (1000*60*60*24)) / (1000*60*60));
-        countdownLabel = `nog ${days}d ${hours}u`;
-      }
+      const days = Math.floor(diffMs / (1000*60*60*24));
+      const hours = Math.floor((diffMs % (1000*60*60*24)) / (1000*60*60));
+      const countdownLabel = `nog ${days}d ${hours}u`;
       const dateLabel = raceDate.toLocaleDateString('nl-NL', { day:'numeric', month:'long', year:'numeric' });
-      const goalLine = (isPast && r.actual_time_seconds)
-        ? `<br><span class="meal-meta">Doel was: ${formatSecondsAsClock(r.target_time_seconds)}${r.target_pace_per_km ? ' ('+r.target_pace_per_km+')' : ''}</span>`
-        : (r.target_time_seconds
-          ? `<br><span class="meal-meta">Doel: ${formatSecondsAsClock(r.target_time_seconds)}${r.target_pace_per_km ? ' ('+r.target_pace_per_km+')' : ''}</span>`
-          : '');
-      return `<div class="stat-row" style="${isPast?'opacity:0.5;':''}">
+      const goalLine = r.target_time_seconds
+        ? `<br><span class="meal-meta">Doel: ${formatSecondsAsClock(r.target_time_seconds)}${r.target_pace_per_km ? ' ('+r.target_pace_per_km+')' : ''}</span>`
+        : '';
+      return `<div class="stat-row">
         <span class="stat-label">${r.race_name}${r.distance_label ? ' ('+r.distance_label+')' : ''}<br><span class="meal-meta">${dateLabel}</span>${goalLine}</span>
         <span class="stat-val" style="font-size:15px;">${countdownLabel}</span>
       </div>`;
