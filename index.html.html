@@ -3431,7 +3431,7 @@ async function renderTrainingAgenda(owner){
         .order('week_start', { ascending: true }),
       supabaseClient
         .from('training')
-        .select('training_date, km')
+        .select('training_date, km, activity_name')
         .eq('owner', owner)
         .gte('training_date', startStr)
         .lte('training_date', endStr)
@@ -3440,7 +3440,7 @@ async function renderTrainingAgenda(owner){
     if(plannedRes.error || !data || !data.length){ card.style.display = 'none'; return; }
     const weeks = (weeksRes.data && weeksRes.data.length) ? weeksRes.data : null;
     const actualByDate = {};
-    (actualRes.data || []).forEach(r=>{ if(r.km) actualByDate[r.training_date] = Number(r.km); });
+    (actualRes.data || []).forEach(r=>{ if(r.km) actualByDate[r.training_date] = { km: Number(r.km), naam: r.activity_name }; });
     // Weekblokken bepalen: liefst uit training_plan_weeks (klopt met de
     // echte week-indeling van het schema), anders simpele 7-dagen-brokken
     // vanaf vandaag als fallback.
@@ -3461,7 +3461,7 @@ async function renderTrainingAgenda(owner){
       const rows = data.filter(r => r.training_date >= block.start && r.training_date <= block.end);
       if(!rows.length) return '';
       const plannedTotal = rows.reduce((s,r)=> s + (Number(r.estimated_distance_km) || 0), 0);
-      const actualTotal = rows.reduce((s,r)=> s + (actualByDate[r.training_date] || 0), 0);
+      const actualTotal = rows.reduce((s,r)=> s + ((actualByDate[r.training_date] && actualByDate[r.training_date].km) || 0), 0);
       const startD = new Date(block.start + 'T00:00:00');
       const endD = new Date(block.end + 'T00:00:00');
       const weekLabel = `${startD.getDate()}/${startD.getMonth()+1} - ${endD.getDate()}/${endD.getMonth()+1}`;
@@ -3471,17 +3471,28 @@ async function renderTrainingAgenda(owner){
         <span style="font-size:12px;color:var(--ink-soft);">gepland ${fmtKm(plannedTotal)} km${block.target ? ' (doel ' + block.target + ' km)' : ''} &middot; gedaan ${fmtKm(actualTotal)} km</span>
       </div>
       <table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:4px;">
+        <thead>
+          <tr style="font-size:11px;color:var(--ink-soft);">
+            <td style="padding:2px 6px 2px 0;"></td>
+            <td style="padding:2px 6px 2px 0;">Gepland</td>
+            <td style="padding:2px 0 2px 6px;">Gedaan</td>
+          </tr>
+        </thead>
         <tbody>
           ${rows.map(row=>{
             const d = new Date(row.training_date + 'T00:00:00');
             const label = `${dagNamen[d.getDay()]} ${d.getDate()}/${d.getMonth()+1}`;
             const isToday = row.training_date === todayStr;
-            const actualKm = actualByDate[row.training_date];
+            const actual = actualByDate[row.training_date];
+            const plannedCell = `${escapeHtml(row.description)}${Number(row.estimated_distance_km) > 0 ? ` <span style="color:var(--ink-soft);">(${Number(row.estimated_distance_km)} km)</span>` : ''}`;
+            const actualCell = actual
+              ? `${escapeHtml(actual.naam || 'Training')} <span style="color:var(--ink-soft);">(${fmtKm(actual.km)} km)</span>`
+              : `<span style="color:var(--ink-soft);">&mdash;</span>`;
             return `
           <tr style="border-bottom:1px solid var(--line);${isToday ? 'font-weight:700;' : ''}">
-            <td style="padding:6px 6px 6px 0;white-space:nowrap;">${label}</td>
-            <td style="padding:6px 6px 6px 0;">${escapeHtml(row.description)}</td>
-            <td style="padding:6px 0 6px 6px;text-align:right;white-space:nowrap;">${Number(row.estimated_distance_km) > 0 ? Number(row.estimated_distance_km) + ' km' : '&mdash;'}${actualKm ? ` <span style="color:var(--ink-soft);">(${fmtKm(actualKm)} gedaan)</span>` : ''}</td>
+            <td style="padding:6px 6px 6px 0;white-space:nowrap;vertical-align:top;">${label}</td>
+            <td style="padding:6px 6px 6px 0;vertical-align:top;">${plannedCell}</td>
+            <td style="padding:6px 0 6px 6px;vertical-align:top;">${actualCell}</td>
           </tr>`;
           }).join('')}
         </tbody>
