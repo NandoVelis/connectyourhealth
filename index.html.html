@@ -3402,8 +3402,16 @@ async function renderTrainingAgenda(owner){
   if(owner !== 'Nando'){ card.style.display = 'none'; return; }
   try{
     const today = new Date();
-    const startStr = fmtDate(today);
-    const end = new Date(today);
+    const todayStr = fmtDate(today);
+    // Toon de HELE huidige week (ook al voorbije dagen, bv. maandag als je
+    // er dinsdag naar kijkt) t/m de hele volgende week -- niet alleen
+    // "vandaag + 13 dagen", anders valt een voorbije dag uit beeld. Weken
+    // lopen ma-zo, zelfde als training_plan_weeks.
+    const monday = new Date(today);
+    const isoDow = (today.getDay() + 6) % 7; // 0=maandag
+    monday.setDate(monday.getDate() - isoDow);
+    const startStr = fmtDate(monday);
+    const end = new Date(monday);
     end.setDate(end.getDate() + 13);
     const endStr = fmtDate(end);
     const [plannedRes, weeksRes, actualRes] = await Promise.all([
@@ -3438,7 +3446,7 @@ async function renderTrainingAgenda(owner){
     // vanaf vandaag als fallback.
     const blocks = weeks ? weeks.map(w=>({ start: w.week_start, end: w.week_end, target: w.target_km })) : [];
     if(!weeks){
-      let cursor = new Date(today);
+      let cursor = new Date(monday);
       while(cursor <= end){
         const blockStart = fmtDate(cursor);
         const blockEndDate = new Date(cursor); blockEndDate.setDate(blockEndDate.getDate()+6);
@@ -3467,7 +3475,7 @@ async function renderTrainingAgenda(owner){
           ${rows.map(row=>{
             const d = new Date(row.training_date + 'T00:00:00');
             const label = `${dagNamen[d.getDay()]} ${d.getDate()}/${d.getMonth()+1}`;
-            const isToday = row.training_date === startStr;
+            const isToday = row.training_date === todayStr;
             const actualKm = actualByDate[row.training_date];
             return `
           <tr style="border-bottom:1px solid var(--line);${isToday ? 'font-weight:700;' : ''}">
