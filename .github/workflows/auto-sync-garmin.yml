@@ -44,7 +44,15 @@ on:
     - cron: '0 * * * *'
     # Wintertijd (sinds 25 okt 2026, UTC+1): 11-12 UTC = 12:00-13:59 lokaal, 5-6 UTC = 6:00-7:59 lokaal.
     # Bij terugschakelen naar zomertijd (eind maart) weer naar 10-11 resp. 4-5 UTC.
-    - cron: '*/15 11-12 * * *'
+    # Elke 5 min i.p.v. elke 15 min sinds 3 nov 2026 (Nando: "sync het dus
+    # automatisch na een activiteit") -- een echte event-trigger meteen na
+    # het einde van een activiteit bestaat niet (Garmin's Health API-webhooks
+    # zijn alleen voor partnerapps, niet voor een persoonlijke/onofficiele
+    # garminconnect-login); dit verkleint het gat tot max. 5 min i.p.v. 15.
+    # Garmin's EIGEN dagtotaal (steps/kcal) kan daarna nog wel wat minuten
+    # achterlopen op een net geuploade activiteit, los van onze syncfrequentie
+    # -- dat is Garmin-backend-vertraging, niet iets wat deze cron oplost.
+    - cron: '*/5 11-12 * * *'
     - cron: '*/10 5-6 * * 1-5'
   workflow_dispatch:
     inputs:
