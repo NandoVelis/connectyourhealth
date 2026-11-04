@@ -469,29 +469,19 @@
       <div id="nutritionTip" class="meal-meta" style="font-size:14px;color:var(--ink);"></div>
     </div>
 
-    <div class="card" style="margin-bottom:16px;">
-      <h3>&#127939; Trainingstip</h3>
-      <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:10px;">
-        <input type="text" id="trainingGoalInput" placeholder="Trainingsdoel, bijv. 24:00 op de 4 mijl" style="flex:1;min-width:180px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--ink);">
-        <button class="btn-secondary" id="trainingGoalSaveBtn" style="flex-shrink:0;padding:8px 12px;">Doel opslaan</button>
-      </div>
-      <div id="trainingGoalStatus" class="status-msg" style="margin-top:0;"></div>
-      <div id="trainingTip" class="meal-meta" style="font-size:14px;color:var(--ink);"></div>
-    </div>
-
-    <div class="card" style="margin-bottom:16px;">
+    <div class="card" style="margin-bottom:8px;">
       <details>
         <summary style="cursor:pointer;list-style:none;" class="h3-summary"><h3 style="display:inline;">&#128200; Trainingsvoortgang per type</h3></summary>
         <div id="trainingProgressTable" style="margin-top:10px;"></div>
       </details>
     </div>
 
-    <div class="card" style="margin-bottom:16px;display:none;" id="raceGoalsCard">
+    <div class="card" style="margin-bottom:8px;display:none;" id="raceGoalsCard">
       <h3>&#127942; Wedstrijden</h3>
       <div id="raceGoalsList"></div>
     </div>
 
-    <div class="card" style="margin-bottom:16px;display:none;" id="trainingPaceZonesCard">
+    <div class="card" style="margin-bottom:8px;display:none;" id="trainingPaceZonesCard">
       <details>
         <summary style="cursor:pointer;list-style:none;" class="h3-summary"><h3 style="display:inline;">&#9201;&#65039; Trainingstempo's (marathon-doel)</h3></summary>
         <div id="trainingPaceZonesList" style="margin-top:10px;"></div>
@@ -4032,22 +4022,11 @@ async function renderDashboard(){
   }
   showMotivationQuote();
 
-  const trainingTipDays = 28;
-  const recentTrainingForTip = await loadRecentTrainingForTip(trainingTipDays);
-  const trainingGoal = await loadTrainingGoal();
-  const trainingGoalInputEl = document.getElementById('trainingGoalInput');
-  if(trainingGoalInputEl && document.activeElement !== trainingGoalInputEl){
-    trainingGoalInputEl.value = trainingGoal ? trainingGoal.goal_text : '';
-  }
-  const plannedWorkoutToday = await loadPlannedWorkoutForDate(owner, currentAmsterdamDateStr());
-  const trainingTipEl = document.getElementById('trainingTip');
-  if(trainingTipEl) trainingTipEl.innerHTML = generateTrainingTip(recentTrainingForTip, trainingTipDays, recoveryConcern, trainingGoal, vitals, plannedWorkoutToday);
-
-  // Voortgangstabel kijkt verder terug (90 dagen) dan de dagelijkse tip
-  // (28 dagen), zodat een langzaam zichtbare trend niet steeds uit beeld
-  // valt zodra een run buiten de laatste 4 weken valt.
+  // Trainingstip-kaart (doel invullen + dagelijkse tip) verwijderd op
+  // verzoek 4 nov 2026 -- het weekschema erin stond dubbel met de
+  // Trainingsagenda-kaart hieronder, die de echte planning toont.
   const progressDays = 90;
-  const recentTrainingForProgress = progressDays===trainingTipDays ? recentTrainingForTip : await loadRecentTrainingForTip(progressDays);
+  const recentTrainingForProgress = await loadRecentTrainingForTip(progressDays);
   await renderTrainingProgressTable(recentTrainingForProgress, progressDays, owner);
 
   syncTeamEntry(dateStr, {
