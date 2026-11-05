@@ -521,10 +521,15 @@ def sync_planned_trainings(garmin, owner, today, window_days=14):
 
 
 def replace_training_for_date(owner, date_str, rows):
+    # manual_override=true rijen (bv. handmatig gelogde padel-sessies, die
+    # nooit via Garmin binnenkomen) NIET verwijderen -- anders veegt een
+    # latere Garmin-sync voor diezelfde datum zo'n handmatige rij stilletjes
+    # weg zodra de echte Garmin-activiteit (bv. een hardloop-sessie) alsnog
+    # binnenkomt. Bug gevonden 5 nov 2026.
     resp = requests.delete(
         f"{SUPABASE_URL}/rest/v1/training",
         headers=supabase_headers(),
-        params={"owner": f"eq.{owner}", "training_date": f"eq.{date_str}"},
+        params={"owner": f"eq.{owner}", "training_date": f"eq.{date_str}", "manual_override": "eq.false"},
         timeout=15,
     )
     if not resp.ok:
