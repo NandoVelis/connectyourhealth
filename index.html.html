@@ -3671,6 +3671,8 @@ async function renderDashboard(){
     if(candidate && candidate.estimated_distance_km && Number(candidate.estimated_distance_km) - loggedKmSoFar > 1){
       plannedTraining = candidate;
       plannedRemainingKm = Math.round((Number(candidate.estimated_distance_km) - loggedKmSoFar)*10)/10;
+      plannedActivityKcal = estimateActivityKcalFromDistance(plannedRemainingKm, stepsWeightKg);
+      if(plannedActivityKcal>0 && burned!=null) burned += plannedActivityKcal;
     }
   }
   // Zonder gesynchroniseerde training (bv. nog geen trainingsrij voor
@@ -3768,7 +3770,7 @@ async function renderDashboard(){
           </div>` : (hasRealActivity && plannedTraining && plannedRemainingKm>0) ? `
           <div class="stat-row">
             <span class="stat-label">&#127939; Nog gepland vandaag: ${escapeHtml(plannedTraining.description)} (~${plannedRemainingKm} km resterend)</span>
-            <span class="stat-val"></span>
+            <span class="stat-val">~${plannedActivityKcal} kcal</span>
           </div>` : '';
     const actRows = hasRealActivity
       ? training.activities.map(a=>{
