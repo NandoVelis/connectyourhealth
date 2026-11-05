@@ -811,6 +811,25 @@
             <button class="btn-secondary defaultQuickAddRemove" data-key="chocolade" title="Verwijderen uit Snel toevoegen" style="padding:6px 10px;flex-shrink:0;">&times;</button>
           </div>
         </div>
+        <div class="stat-row" data-default-key="mandarijn" style="border-bottom:1px solid var(--line);flex-direction:column;align-items:stretch;gap:8px;">
+          <div>
+            <div class="meal-desc">🍊 Mandarijn</div>
+            <div class="meal-meta">~40 kcal, 0,6g eiwit, 8g koolh., 0g vet per mandarijn (~75g)</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:6px;flex-wrap:nowrap;">
+            <input type="number" id="mandarijnQty" value="1" min="1" style="width:44px;padding:6px 4px;flex-shrink:0;">
+            <span style="font-size:11px;color:var(--ink-soft);flex-shrink:0;">stuks</span>
+            <select class="qaGroupSelect" data-key="mandarijn" style="font-size:11px;padding:5px 2px;border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--ink-soft);width:76px;flex-shrink:0;">
+              <option value="Ontbijt">Ontbijt</option>
+              <option value="Lunch">Lunch</option>
+              <option value="Snack" selected>Snack</option>
+              <option value="Diner">Diner</option>
+              <option value="Drinken">Drinken</option>
+            </select>
+            <button class="btn-secondary" id="quickAddMandarijn" style="flex-shrink:0;padding:8px 10px;">+ Toevoegen</button>
+            <button class="btn-secondary defaultQuickAddRemove" data-key="mandarijn" title="Verwijderen uit Snel toevoegen" style="padding:6px 10px;flex-shrink:0;">&times;</button>
+          </div>
+        </div>
         <div id="customQuickAddList-Snack"></div>
         </div>
       </div>
@@ -6042,6 +6061,14 @@ document.getElementById('quickAddChocolade').addEventListener('click', (e)=>{
   quickAdd({
     desc: qty + 'x blokje pure chocolade',
     mealType: 'Snack', kcal: Math.round(29*qty), protein: Math.round(0.4*qty*10)/10, carbs: Math.round(2*qty*10)/10, fat: Math.round(2*qty*10)/10, time: ''
+  }, document.getElementById('quickAddStatus'), e.target);
+});
+
+document.getElementById('quickAddMandarijn').addEventListener('click', (e)=>{
+  const qty = numOrDefault('mandarijnQty', 1, 0);
+  quickAdd({
+    desc: qty + 'x mandarijn',
+    mealType: 'Snack', kcal: Math.round(40*qty), protein: Math.round(0.6*qty*10)/10, carbs: Math.round(8*qty*10)/10, fat: 0, time: ''
   }, document.getElementById('quickAddStatus'), e.target);
 });
 
