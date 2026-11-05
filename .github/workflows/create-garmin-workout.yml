@@ -68,6 +68,7 @@ on:
           - 4x1000_taper
           - 3k_race_pace
           - shakeout_pre_race
+          - wisselduurloop_4x2km_1km
 
 jobs:
   create-workout:

@@ -1196,6 +1196,45 @@ def build_hm_race_day_plan():
     )
 
 
+def build_wisselduurloop_4x2km_1km():
+    """Spontane pauze-training, 5 nov: 4x (2km tempo 4:09/km + 1km rust op
+    hartslag <140) = 12km, i.p.v. de geplande rustdag (alleen padel 19:00).
+    Rust-stappen op verzoek van pace naar hartslag <140 omgezet (pace-rust
+    gaf geen echt herstel, ongeacht het gekozen tempo)."""
+    from garminconnect.workout import RunningWorkout, WorkoutSegment
+
+    INTERVAL_STEP_TYPE, RECOVERY_STEP_TYPE = 3, 4
+
+    steps = []
+    order = 1
+    for i in range(1, 5):
+        steps.append(pace_step(order, INTERVAL_STEP_TYPE, "interval", 3, "distance", 2000,
+                                slow_pace=(4, 20), fast_pace=(4, 0),
+                                description=f"Tempo {i}/4 (4:09/km)"))
+        order += 1
+        steps.append(hr_step(order, RECOVERY_STEP_TYPE, "recovery", 4, "distance", 1000,
+                              hr_low=120, hr_high=139,
+                              description=f"Rust {i}/4 (HS < 140)"))
+        order += 1
+
+    total_secs = int(4 * (2000 / pace_to_speed(4, 9) + 1000 / pace_to_speed(5, 0)))
+
+    return RunningWorkout(
+        workoutName="Hardlopen: wisselduurloop Z2-Z3 4x(2km tempo + 1km rust)",
+        estimatedDurationInSecs=total_secs,
+        description=(
+            "4x (2km op 4:09/km, Z2-Z3 + 1km rust op HS < 140) = 12km, pauze-training."
+        ),
+        workoutSegments=[
+            WorkoutSegment(
+                segmentOrder=1,
+                sportType={"sportTypeId": 1, "sportTypeKey": "running"},
+                workoutSteps=steps,
+            )
+        ],
+    )
+
+
 WORKOUT_BUILDERS = {
     "progressive_15k": build_five_by_three_progressive,
     "hm_race_day_plan": build_hm_race_day_plan,
@@ -1224,6 +1263,7 @@ WORKOUT_BUILDERS = {
     "4x1000_taper": build_4x1000_taper,
     "3k_race_pace": build_3k_race_pace,
     "shakeout_pre_race": build_shakeout_pre_race,
+    "wisselduurloop_4x2km_1km": build_wisselduurloop_4x2km_1km,
 }
 
 
