@@ -3434,8 +3434,21 @@ async function renderTrainingAgenda(owner){
     const data = plannedRes.data;
     if(plannedRes.error || !data || !data.length){ card.style.display = 'none'; return; }
     const weeks = (weeksRes.data && weeksRes.data.length) ? weeksRes.data : null;
+    // Dubbele-dagen (bv. 8km + 12,5km naar Eelde) geven 2 rijen voor dezelfde
+    // datum -- die werden voorheen overschreven i.p.v. opgeteld, waardoor de
+    // 2e activiteit uit beeld viel. Op verzoek 5 nov 2026: km optellen en
+    // beide namen tonen.
     const actualByDate = {};
-    (actualRes.data || []).forEach(r=>{ if(r.km) actualByDate[r.training_date] = { km: Number(r.km), naam: r.activity_name }; });
+    (actualRes.data || []).forEach(r=>{
+      if(!r.km) return;
+      const existing = actualByDate[r.training_date];
+      if(existing){
+        existing.km += Number(r.km);
+        existing.namen.push(r.activity_name);
+      } else {
+        actualByDate[r.training_date] = { km: Number(r.km), namen: [r.activity_name] };
+      }
+    });
     // Weekblokken bepalen: liefst uit training_plan_weeks (klopt met de
     // echte week-indeling van het schema), anders simpele 7-dagen-brokken
     // vanaf vandaag als fallback.
@@ -3486,7 +3499,7 @@ async function renderTrainingAgenda(owner){
               const actual = actualByDate[row.training_date];
               const plannedCell = `${escapeHtml(row.description)}${Number(row.estimated_distance_km) > 0 ? ` <span style="color:var(--ink-soft);">(${Number(row.estimated_distance_km)} km)</span>` : ''}`;
               const actualCell = actual
-                ? `${escapeHtml(actual.naam || 'Training')} <span style="color:var(--ink-soft);">(${fmtKm(actual.km)} km)</span>`
+                ? `${actual.namen.map(n=>escapeHtml(n || 'Training')).join('<br>')} <span style="color:var(--ink-soft);">(${fmtKm(actual.km)} km)</span>`
                 : `<span style="color:var(--ink-soft);">&mdash;</span>`;
               return `
             <tr style="border-bottom:1px solid var(--line);${isToday ? 'font-weight:700;' : ''}">
