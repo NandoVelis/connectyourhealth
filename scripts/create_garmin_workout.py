@@ -1235,6 +1235,68 @@ def build_wisselduurloop_4x2km_1km():
     )
 
 
+def build_long_run_33k_mp_floats():
+    """Zaterdag 14 nov, lange duurloop met MP-blokken: 2km WU Z1, 3km Z2,
+    dan 3x7km op marathontempo (4:09/km) met 2km Z2-floats tussen de
+    herhalingen (geen float na de laatste), 3km CD Z2 -- 33km totaal
+    (+10% t.o.v. de standaard ~30km lange duurloop). Op verzoek 12 nov."""
+    from garminconnect.workout import RunningWorkout, WorkoutSegment
+
+    WARMUP_STEP_TYPE, COOLDOWN_STEP_TYPE, INTERVAL_STEP_TYPE, RECOVERY_STEP_TYPE = 1, 2, 3, 4
+
+    steps = []
+    order = 1
+
+    steps.append(pace_step(order, WARMUP_STEP_TYPE, "warmup", 1, "distance", 2000,
+                            slow_pace=(5, 15), fast_pace=(4, 45), hr_note="< 140 (Z1)",
+                            description="Inlopen Z1"))
+    order += 1
+
+    steps.append(pace_step(order, INTERVAL_STEP_TYPE, "interval", 3, "distance", 3000,
+                            slow_pace=(4, 45), fast_pace=(4, 25), hr_note="140-155 (Z2)",
+                            description="Opbouw Z2"))
+    order += 1
+
+    for i in range(1, 4):
+        steps.append(pace_step(order, INTERVAL_STEP_TYPE, "interval", 3, "distance", 7000,
+                                slow_pace=(4, 13), fast_pace=(4, 5), hr_note="~165-170 (marathontempo)",
+                                description=f"MP-blok {i}/3 (4:09/km)"))
+        order += 1
+        if i < 3:
+            steps.append(pace_step(order, RECOVERY_STEP_TYPE, "recovery", 4, "distance", 2000,
+                                    slow_pace=(4, 45), fast_pace=(4, 25), hr_note="140-155 (Z2)",
+                                    description=f"Float {i}/2 (Z2)"))
+            order += 1
+
+    steps.append(pace_step(order, COOLDOWN_STEP_TYPE, "cooldown", 2, "distance", 3000,
+                            slow_pace=(4, 45), fast_pace=(4, 25), hr_note="140-155 (Z2)",
+                            description="Uitlopen Z2"))
+
+    total_secs = int(
+        2000 / pace_to_speed(5, 0)
+        + 3000 / pace_to_speed(4, 35)
+        + 3 * 7000 / pace_to_speed(4, 9)
+        + 2 * 2000 / pace_to_speed(4, 35)
+        + 3000 / pace_to_speed(4, 35)
+    )
+
+    return RunningWorkout(
+        workoutName="Hardlopen: lange duurloop 33km met 3x7km MP",
+        estimatedDurationInSecs=total_secs,
+        description=(
+            "2km WU Z1 (4:45-5:15/km) - 3km Z2 (4:25-4:45/km) - 3x7km op 4:05-4:13/km "
+            "(marathontempo) met 2km Z2-floats ertussen - 3km CD Z2. 33km totaal, +10%."
+        ),
+        workoutSegments=[
+            WorkoutSegment(
+                segmentOrder=1,
+                sportType={"sportTypeId": 1, "sportTypeKey": "running"},
+                workoutSteps=steps,
+            )
+        ],
+    )
+
+
 WORKOUT_BUILDERS = {
     "progressive_15k": build_five_by_three_progressive,
     "hm_race_day_plan": build_hm_race_day_plan,
@@ -1264,6 +1326,7 @@ WORKOUT_BUILDERS = {
     "3k_race_pace": build_3k_race_pace,
     "shakeout_pre_race": build_shakeout_pre_race,
     "wisselduurloop_4x2km_1km": build_wisselduurloop_4x2km_1km,
+    "long_run_33k_mp_floats": build_long_run_33k_mp_floats,
 }
 
 
