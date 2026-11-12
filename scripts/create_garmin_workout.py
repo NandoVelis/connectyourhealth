@@ -1297,6 +1297,52 @@ def build_long_run_33k_mp_floats():
     )
 
 
+def build_z2_z3_wisselduurloop_11k():
+    """Donderdag 12 nov: 2km WU Z2 (HS<140) - 3km Z3 op 4:10/km - 1km Z2
+    (HS<140) - 3km Z3 op 4:10/km - 2km CD Z2 = 11km. Op verzoek 12 nov."""
+    from garminconnect.workout import RunningWorkout, WorkoutSegment
+
+    WARMUP_STEP_TYPE, COOLDOWN_STEP_TYPE, INTERVAL_STEP_TYPE, RECOVERY_STEP_TYPE = 1, 2, 3, 4
+
+    warmup = hr_step(1, WARMUP_STEP_TYPE, "warmup", 1, "distance", 2000,
+                      hr_low=120, hr_high=139, description="Inlopen Z2 (HS < 140)")
+    tempo1 = pace_step(2, INTERVAL_STEP_TYPE, "interval", 3, "distance", 3000,
+                        slow_pace=(4, 14), fast_pace=(4, 6), hr_note="Z3",
+                        description="Tempo 1/2 (4:10/km)")
+    recovery = hr_step(3, RECOVERY_STEP_TYPE, "recovery", 4, "distance", 1000,
+                        hr_low=120, hr_high=139, description="Herstel Z2 (HS < 140)")
+    tempo2 = pace_step(4, INTERVAL_STEP_TYPE, "interval", 3, "distance", 3000,
+                        slow_pace=(4, 14), fast_pace=(4, 6), hr_note="Z3",
+                        description="Tempo 2/2 (4:10/km)")
+    cooldown = pace_step(5, COOLDOWN_STEP_TYPE, "cooldown", 2, "distance", 2000,
+                          slow_pace=(4, 45), fast_pace=(4, 25), hr_note="140-155 (Z2)",
+                          description="Uitlopen Z2")
+
+    total_secs = int(
+        2000 / pace_to_speed(5, 0)
+        + 3000 / pace_to_speed(4, 10)
+        + 1000 / pace_to_speed(5, 0)
+        + 3000 / pace_to_speed(4, 10)
+        + 2000 / pace_to_speed(4, 35)
+    )
+
+    return RunningWorkout(
+        workoutName="Hardlopen: Z2-Z3 wisselduurloop 11km",
+        estimatedDurationInSecs=total_secs,
+        description=(
+            "2km WU Z2 (HS<140) - 3km Z3 4:10/km - 1km Z2 (HS<140) - 3km Z3 4:10/km - "
+            "2km CD Z2 (4:25-4:45/km). 11km totaal."
+        ),
+        workoutSegments=[
+            WorkoutSegment(
+                segmentOrder=1,
+                sportType={"sportTypeId": 1, "sportTypeKey": "running"},
+                workoutSteps=[warmup, tempo1, recovery, tempo2, cooldown],
+            )
+        ],
+    )
+
+
 WORKOUT_BUILDERS = {
     "progressive_15k": build_five_by_three_progressive,
     "hm_race_day_plan": build_hm_race_day_plan,
@@ -1327,6 +1373,7 @@ WORKOUT_BUILDERS = {
     "shakeout_pre_race": build_shakeout_pre_race,
     "wisselduurloop_4x2km_1km": build_wisselduurloop_4x2km_1km,
     "long_run_33k_mp_floats": build_long_run_33k_mp_floats,
+    "z2_z3_wisselduurloop_11k": build_z2_z3_wisselduurloop_11k,
 }
 
 

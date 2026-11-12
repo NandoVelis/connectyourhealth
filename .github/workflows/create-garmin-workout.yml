@@ -70,6 +70,7 @@ on:
           - shakeout_pre_race
           - wisselduurloop_4x2km_1km
           - long_run_33k_mp_floats
+          - z2_z3_wisselduurloop_11k
 
 jobs:
   create-workout:
